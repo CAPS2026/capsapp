@@ -1,0 +1,13 @@
+{
+  "name": "CAPS App",
+  "short_name": "CAPS",
+  "description": "Cape Animal Protection Shelter — dogs, volunteers & homecare.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fdf8f2",
+  "theme_color": "#2c7bd4",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

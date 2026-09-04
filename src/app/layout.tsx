@@ -11,6 +11,11 @@ const nunito = Nunito({
 export const metadata: Metadata = {
   title: "CAPS App",
   description: "Cape Animal Protection Shelter — dogs, volunteers, homecare.",
+  manifest: "/manifest.json",
+};
+
+export const viewport = {
+  themeColor: "#2c7bd4",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
