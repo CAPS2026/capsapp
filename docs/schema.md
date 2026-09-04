@@ -30,12 +30,21 @@ create table people (
   email           citext unique,          -- nullable: staff-created records may have none
   phone           text,
   date_of_birth   date,
+  is_minor        boolean generated always as (
+                    date_of_birth is not null and date_of_birth > (current_date - interval '18 years')
+                  ) stored,
   address         text,
-  -- emergency contact (required to ACTIVATE an on-site role; see person_roles)
+  -- emergency contact (required to ACTIVATE any on-site role)
   ec_name         text,
   ec_phone        text,
   ec_email        text,
   ec_relationship text,
+  -- parent / guardian (required when is_minor)
+  parent_name           text,
+  parent_phone          text,
+  parent_email          text,
+  parental_consent      boolean not null default false,
+  parental_consent_date date,
   -- housekeeping
   legacy_volunteer_id  text,              -- 'V012'  — migration bridge, not shown
   legacy_homecarer_id  text,              -- 'HCR045'
@@ -52,7 +61,9 @@ create table people (
 ### `person_roles` — the hats
 ```sql
 create type person_role as enum
-  ('walker','feeder','jailbreak_carer','foster_carer','adopter','staff','committee');
+  ('volunteer','jailbreak_carer','foster_carer','adopter','staff','committee');
+--  'volunteer' covers all on-site helpers (walk / feed / clean / transport / …).
+--  What they actually do is captured by volunteer_profile.interests, not by role.
 
 create type role_status as enum ('pending','active','exited','declined');
 
@@ -69,12 +80,13 @@ create table person_roles (
   unique (person_id, role)
 );
 ```
-- **Walker / feeder** → created `active` on form submit (matches the current no-approval-gate behaviour).
-- **jailbreak_carer / foster_carer** → created `pending`; staff approve (any combination) or decline.
+- **volunteer** → created `active` on form submit (matches the current no-approval-gate behaviour).
+- **jailbreak_carer / foster_carer** → created `pending`; staff approve (either / both) or decline.
 - **staff / committee** → assigned by an admin only.
 - **Activation rules** (enforced at the API / app layer, some as triggers):
-  - `walker` / `feeder` can't go `active` without `date_of_birth` + emergency contact on `people`.
-  - `jailbreak_carer` / `foster_carer` can't go `active` without a completed `homecare_profile`.
+  - any role can't go `active` without `date_of_birth` + emergency contact on `people`.
+  - if `people.is_minor` → also needs `parental_consent = true`.
+  - `jailbreak_carer` / `foster_carer` → also needs a completed `homecare_profile` (and yard check).
 
 ### `homecare_profile` — carer property/household bundle (one per carer)
 ```sql
@@ -105,6 +117,24 @@ create table homecare_profile (
 ```
 Same info whether jailbreak or foster — the `person_roles` rows say which they're approved for.
 
+### `volunteer_profile` — on-site volunteer detail (one per volunteer)
+```sql
+create table volunteer_profile (
+  person_id      uuid primary key references people(id) on delete cascade,
+  interests      text[] not null default '{}',   -- 'dog_walking','feeding_cleaning','transport',
+                                                  -- 'pet_minding','cooking','social_media','fundraising',
+                                                  -- 'committee','wherever_useful'
+  experience     text,
+  medical_issues text,           -- conditions that affect what they can safely do on site
+  how_heard      text,
+  agree_terms    boolean,
+  signature_name text,
+  signature_date date,
+  updated_at     timestamptz not null default now()
+);
+```
+`interests` is a free set (seeded from a small `volunteer_interest` lookup so staff can extend without a migration). Emergency contact and parent/guardian live on `people` because they matter for *any* on-site role.
+
 ---
 
 ## 2. Dogs
@@ -127,6 +157,10 @@ create table dogs (
   ref             text unique not null,        -- 'D001' — live short code, kennel cards
   name            text not null,
   status          text not null references dog_statuses(code) default 'available',
+
+  -- handler guidance (volunteer-visible; NOT the confidential behaviour record)
+  handling_notes  text,                         -- free phrase: "nervous with men, pulls hard, loves other dogs"
+  experienced_handler_only boolean not null default false,
 
   -- intake / exit
   arrival_date    date,
@@ -240,6 +274,9 @@ create unique index one_open_activity_per_dog
 - Backdating `started_at` more than **48 h** → API requires a `reason` and/or `staff` role (app-layer).
 - Any row where `entered_late` or `edited_at` is set shows a **"logged late" / "edited"** badge in logs and reports.
 
+### `due_back`
+Set only for `jail_break`, `foster`, `bed_rest`. **Walks have no `due_back`** — the card shows a live "out for HH:MM" timer, and an alert fires if that exceeds `org_settings.walk_alert_after_minutes` (default 60). Yard has an alert too (`yard_alert_after_minutes`, default 120 — Weipa heat).
+
 ### Keeping `dogs` in sync (trigger)
 `AFTER INSERT/UPDATE/DELETE ON dog_activity`:
 - set `dogs.status` from the open row's `type` (or `available` if none; never touches `exited`);
@@ -346,8 +383,12 @@ Reuses `people` + role `adopter`. Adopter-facing "where's my application" view v
 
 ## 9. Config / reference
 - `dog_statuses` (§2).
-- `org_settings` (single row): rescue group name, adoption-policy body text, donate URL, SavourLife defaults, alert recipients, `days_since_walk` threshold for "needs a walk".
-- `enum` lookups for arrival/exit types, reasons, medical types — small reference tables so staff can extend without a migration.
+- `org_settings` (single row): rescue group name, adoption-policy body text, donate URL, SavourLife defaults, alert recipient list, and thresholds:
+  - `walk_alert_after_minutes` (default 60) — a walk still open past this fires an alert.
+  - `yard_alert_after_minutes` (default 120) — a dog left in the yard past this fires an alert.
+  - `needs_walk_after_days` (default 3) — drives the "dogs not walked recently" report.
+- `enum` lookups: `volunteer_interest`, arrival/exit types, site-visit reasons, medical types — small reference tables so staff can extend without a migration.
+- **Overdue-alert job** (scheduled): open `dog_activity` rows where — `type in (jail_break,foster,bed_rest)` and `due_back < now()`, OR `type='walk'` and `now()-started_at > walk_alert_after_minutes`, OR `type='yard'` and `now()-started_at > yard_alert_after_minutes` — with no alert already sent → one email to the recipient list; mark sent.
 
 ---
 
@@ -355,9 +396,9 @@ Reuses `people` + role `adopter`. Adopter-facing "where's my application" view v
 
 | Current | → | New |
 |---|---|---|
-| `Dogs` tab | → | `dogs` (+ `dog_confidential` from `Medical Notes`/behaviour, `dog_media` empty) |
-| `Volunteers` tab | → | `people` + `person_roles(walker[/feeder])`; `V0xx` → `legacy_volunteer_id`; `ec_*` → `people` |
-| `Homecarers` tab | → | `people` (merge on email/name with volunteers!) + `person_roles(jailbreak_carer/foster_carer)` + `homecare_profile`; `HCR0xx` → `legacy_homecarer_id` |
+| `Dogs` tab | → | `dogs` (+ `dog_confidential` from behaviour; `Medical Notes` → first `medical_events` row; `Level` **dropped** — `handling_notes` starts blank; `dog_media` empty) |
+| `Volunteers` tab | → | `people` (+ `ec_*`, parent fields, DOB) + `person_roles(volunteer)` + `volunteer_profile` (`experience`, `medical_issues`, interests from the walking/feeding/etc. flags); `V0xx` → `legacy_volunteer_id` |
+| `Homecarers` tab | → | `people` (**merge on email then name with volunteers**) + `person_roles(jailbreak_carer/foster_carer)` + `homecare_profile`; `HCR0xx` → `legacy_homecarer_id` |
 | `Walks` tab | → | `dog_activity` type `walk` (map `Volunteer_ID` → person via `legacy_volunteer_id`) |
 | `Homecare` tab | → | `dog_activity` type `jail_break` / `foster` (map `homecarer_id`/`Volunteer_ID` → person) |
 | Bed Rest columns on `Dogs` | → | `dog_activity` type `bed_rest` (latest episode only; no history exists) |
@@ -369,9 +410,13 @@ Reuses `people` + role `adopter`. Adopter-facing "where's my application" view v
 
 ---
 
-## 11. Open questions
-1. `feeder` as a distinct role now, or add later? (cheap to include now.)
-2. Does a **walk** ever have a `due_back` (expected duration), or only homecare/bed rest? Current app doesn't set one for walks.
-3. `dog_media` — one primary photo enough for v1, or full gallery? (SavourLife uses several.)
-4. Committee vs staff — same access, or committee = read-only + reports only?
-5. Keep `Level` (Beginner/Intermediate/Advanced walk difficulty) — yes? It's used for matching walkers to dogs.
+## 11. Resolved (§11 answers, Sep 2026)
+1. **No `feeder` role.** One `volunteer` role; walk / feed / clean / transport etc. are `volunteer_profile.interests`.
+2. **Walks have no `due_back`** — live timer + alert after 60 min (`org_settings`). Yard alert after 120 min.
+3. **Full photo gallery** — Supabase Storage (actual files, ~1 GB free), compressed on upload.
+4. **Committee = staff access for v1.** Both role values kept so they can diverge later (e.g. committee-only staff-punctuality review) without a migration.
+5. **`Level` dropped** — replaced by `handling_notes` (free descriptive phrase, volunteer-visible) + `experienced_handler_only` flag.
+
+### Still open
+- `volunteer_profile` — is `medical_issues` still collected, or dropped like `Level`? (kept for now.)
+- Does `bed_rest` need a `due_back`, or is it open-ended until a vet clears the dog? (assumed `due_back` optional.)
