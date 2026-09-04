@@ -60,26 +60,42 @@ This file is the *where do the accounts live and how do I get back in* reference
 - **Project:** **`capsapp`**, under `consult-8760`, linked to this repo —
   `vercel link` created it, `vercel git connect` wired it to
   `github.com/CAPS2026/capsapp` for **auto-deploy on every push to `main`**.
-- **Live URLs:**
-  - Production alias: `https://capsapp-five.vercel.app`
+- **Live URLs (public, working):**
+  - Production alias: **`https://capsapp-five.vercel.app`** — the `-five` is
+    just Vercel disambiguating because plain `capsapp.vercel.app` is taken by
+    someone else globally; cosmetic, fixed properly by adding a real custom
+    domain later (Settings → Domains) when ready.
   - Also aliased: `https://capsapp-consult-8760.vercel.app`
   - Per-deploy URLs look like `https://capsapp-<hash>-consult-8760.vercel.app`
-- **⚠ Outstanding — Deployment Protection:** the project currently has Vercel's
-  default protection enabled, which returns **404 to the public** on the
-  production alias (and an SSO redirect on per-deploy URLs) instead of serving
-  the site. This is fine for a private in-progress project but **must be
-  turned off before real users need the public registration pages**. Fix:
-  Vercel dashboard → project `capsapp` → Settings → Deployment Protection →
-  set Production to not require authentication (or scope protection to Preview
-  only). One click, needs a human in the dashboard.
+    (these stay behind Vercel Authentication/SSO by design — that's normal
+    for preview/per-deploy URLs, not a bug)
+- **Two setup bugs fixed 4–5 Sep 2026** (both were silently breaking the
+  public site — build succeeded, but every Next-rendered route 404'd while
+  `public/` static files served fine):
+  1. **Deployment Protection (Vercel Authentication)** was on for all
+     deployments including production → disabled via the API
+     (`ssoProtection: null`). If it's ever back on and you need it off:
+     Settings → Deployment Protection in the dashboard, or the same API call.
+  2. **Framework Preset was never set** (`vercel link` created the project
+     without Vercel's normal "detected Next.js" step, so it was `null` and
+     requests never reached Next's routing layer). Fixed via the API
+     (`framework: "nextjs"`) + a redeploy. If a project is ever linked this
+     way again, check Settings → General → Framework Preset says "Next.js".
+  3. Also downgraded `next` 16.3.4 → **15.5.25** while diagnosing (16 is very
+     new) and kept it — 15.x is the well-trodden Vercel pairing.
 - **Resuming CLI access on a new machine:** `npm install --global vercel@latest`,
   `vercel login --github` (or whichever method — opens a device-flow URL,
   visit it and approve), `vercel link` inside the cloned repo will find the
   existing `capsapp` project automatically.
-- **The Vercel *connector* in Claude** (separate from the CLI) still needs
-  authorization if you want a Claude session driving deploys directly via MCP
-  — do that in claude.ai connector settings. Not required for normal work:
-  pushing to `main` auto-deploys regardless.
+- **The Vercel *connector* in Claude** (separate from the CLI) needs
+  authorization per-session if you want a Claude session driving deploys/
+  settings directly via MCP — claude.ai connector settings, signed in as the
+  CAPS `consult-8760` account. Not required for normal work: pushing to
+  `main` auto-deploys regardless, and the CLI (already logged in as
+  `consult-8760` on this machine) can do everything the MCP connector can —
+  including project-settings changes like the two bugs above, via
+  `https://api.vercel.com` with the token in
+  `%APPDATA%\xdg.data\com.vercel.cli\auth.json` (never print or commit it).
 
 ## 4. Local development
 
@@ -97,8 +113,9 @@ This file is the *where do the accounts live and how do I get back in* reference
 - ✅ Phases 0–3 documented (`docs/`): features, schema, UI flows, design.
 - ✅ Supabase schema live and verified (migrations 01–09).
 - ✅ Next.js app scaffolded, branded (logo/favicon/manifest from the assets
-  CAPS2026 added), builds clean, **deployed to Vercel** (blocked from public
-  view by Deployment Protection — see §3).
+  CAPS2026 added), builds clean, **deployed to Vercel and publicly live** at
+  `https://capsapp-five.vercel.app` (see §3 for the two setup bugs found and
+  fixed along the way).
 - ⏳ Not yet built: Supabase client wiring, auth, and any real screens (Phase 4
   — see `ui-flows.md` §15 for the build order, starting with the dogs list and
   the take-out/bring-in flow).
