@@ -49,7 +49,7 @@ The most-used screen. A single scrolling list, **grouped by status in fixed orde
 
 - Card also shows: name, `ref`, primary photo thumb, and an **⚠ badge** if `experienced_handler_only`.
 - **Tap card → dog detail (§3).**
-- **Primary action on the card** depends on status: Available → **Take out**; anything out → **Bring in**. (Long-press / secondary → the full type menu.)
+- **Primary action on the card:** Available → a one-tap **"Walk"** button (the fast path, §4); anything out → **"Bring in"** (fast path, §5). A secondary **"···"** opens the full flow (other types, another walker, a past time).
 - Filter chips at top: *Needs a walk* (Available + `last walk > needs_walk_after_days`), *Out now*, *My dogs* (volunteer: dogs I currently have).
 
 ---
@@ -80,43 +80,50 @@ Elapsed since arrival (or "Time unknown" if no arrival date).
 
 ## 4. The canonical flow — Take a dog out
 
-One flow. Entry points: card **Take out** button, dog detail, or the nav **Take out / Bring in**.
+One flow, but the common case is **one tap**. Friction is only added where there's something to get wrong.
 
-**Step 1 — Dog.** Skipped if you came from a dog. Otherwise a searchable list of **Available** dogs: name, ref, "last walk N days", ⚠ experienced-only. Picking a dog that's **already out** → *"{Dog} is already out — {status} with {person} since {time}. Did they come back?"* → routes to **Bring in** (§5).
+### The fast path (most walks)
+On an **Available** dog's card, tap **"Walk"**. That's it:
+- person = you (if you're a volunteer), or the kiosk name-picker's current person
+- `started_at` = now, no due-back
+- row inserted → status flips → the card immediately shows *"Walking · with you · 0:00"*
 
-**Step 2 — Type.** Walk · Yard · Jail Break · Foster · Bed Rest. (A card's **Take out** on an Available dog defaults to Walk and skips to step 3; long-press picks the type first.)
+No wizard, no confirm screen. Undo is available for a few seconds via the toast.
 
-**Step 3 — Person.** *Walk / Jail Break / Foster only. Skipped for Yard & Bed Rest* (those record `placed_by` = you, the logged-in staffer).
-- **Walk:** default **"Me"** if you're a volunteer. Else search active volunteers. Volunteers missing DOB / emergency contact, or minors without consent, are **not selectable** (shown greyed with the reason — staff can fix on the spot).
-- **Jail Break / Foster:** only homecarers with an **active** role for that type appear.
+### The full path (everything else)
+Used when: you're not the walker · a different type (yard / jail break / foster / bed rest) · a backdated time · from the nav rather than a dog card.
 
-**Step 4 — Times & details.**
-- **Walk:** `started_at` = now. No due-back. A **"This already happened"** toggle reveals start + end fields → this becomes a completed retrospective walk (`entered_late`).
-- **Yard:** `started_at` = now.
-- **Jail Break / Foster:** `started_at` = now (editable). **Due back** required (date + time). Optional notes.
-- **Bed Rest:** `started_at` = now (editable). **Due back** required (date + time). **Reason** required.
+1. **Dog** — skipped if you came from a card. Else a searchable list of **Available** dogs (name, ref, "last walk N days", ⚠ experienced-only). Picking one that's **already out** → *"{Dog} is out — {status} with {person} since {time}. Did they come back?"* → routes to **Bring in** (§5).
+2. **Type** — Walk · Yard · Jail Break · Foster · Bed Rest.
+3. **Person** — *walk / jail break / foster only* (yard & bed rest record `placed_by` = you).
+   - Walk: default **"Me"**, else search active volunteers. Everyone active is selectable — **missing DOB / emergency contact does not block** (§ activation note); such volunteers just show a small "details needed" tag.
+   - Jail break / foster: only people with an **active** carer role for that type.
+4. **Times & details**
+   - Walk: `started_at` = now. A **"This already happened"** toggle (styled `--warm`, the non-default path) reveals start + end → completed retrospective walk (`entered_late`).
+   - Yard: `started_at` = now.
+   - Jail break / foster: `started_at` = now (editable). **Due back** (date + time) required. Optional notes.
+   - Bed rest: `started_at` = now (editable). **Due back** (date + time) required. **Reason** required.
+5. **Submit** — the button is *labelled with what it does*, no separate screen:
+   > **Start — {Dog} out with {person}{, due back {time}}**
+   This read-back is the whole point: it catches wrong-dog / wrong-person / wrong-time before the status flips for everyone.
 
-**Step 5 — Confirm.** One sentence + one button:
-> *"Take **{Dog}** out for a **{type}** with **{person}**, from **{time}**{, due back **{time}**}. Confirm."*
+**Result:** `dog_activity` row → trigger flips `dogs.status` → toast → back to Dogs.
 
-**Result:** `dog_activity` row inserted → trigger flips `dogs.status` → toast *"{Dog} is now {Status}"* → back to Dogs, that dog now in its new group.
-
-**Guardrails surfaced here:** future start time → blocked with a message; backdating start > 48 h → asks for a reason (or requires staff).
+**Guardrails surfaced here:** future start → blocked with a message; backdating start > 48 h → asks for a reason (or `staff`).
 
 ---
 
 ## 5. The canonical flow — Bring a dog in
 
-Entry: card **Bring in**, dog detail, the "End Walk / End Homecare" lists, or a link in the overdue-alert email.
+### Fast path
+On an **out** dog's card, tap **"Bring in"** → `ended_at` = now → status → Available → toast (with a few-second undo). Done.
 
-**Step 1 — Which activity.** Auto-selected if one open row (the normal case). Shows dog, type, person, out-since, due-back, live elapsed.
-
-**Step 2 — Return time.** Defaults to **now**. **"Came back earlier"** reveals a time field — must be ≥ start and ≤ now (enforced; message if not). A non-now value flags the row `edited` / `entered_late`.
-
-**Step 3 — Notes (optional).** Free text. For Jail Break / Foster / Bed Rest also: *"Anything medical from this stay?"* → optional quick **medical event** (date, type, detail).
-
-**Step 4 — Confirm.**
-> *"Bring **{Dog}** back in? Out for **{duration}**. Confirm."*
+### Full path
+Used when the return wasn't now, or there's a note / medical to add.
+1. **Which activity** — auto-selected if one open row (the normal case). Shows dog, type, person, out-since, due-back, live elapsed.
+2. **Return time** — defaults to **now**. **"Came back earlier"** reveals a time field — must be ≥ start and ≤ now (message if not). A non-now value flags the row `edited`.
+3. **Notes (optional)** — free text. For jail break / foster / bed rest also: *"Anything medical from this stay?"* → optional quick **medical event**.
+4. **Submit** — labelled: **"Bring {Dog} in — out for {duration}"**.
 
 **Result:** `ended_at` set → trigger → `dogs.status = available` → toast → back to Dogs.
 
@@ -144,12 +151,28 @@ Soft rule (app): backdating start > 48 h needs a reason or `staff`.
 
 One page: **"Get involved with CAPS"**.
 
-1. **What would you like to do?** — checkboxes: Walk dogs · Feeding & cleaning · Transport · Pet minding · Cooking · Social media · Fundraising · Foster · Jail break · *Wherever most useful*.
-2. **About you** (everyone): name, email *(required; the shelter's own address is rejected)*, phone, DOB, address.
-3. **Emergency contact** (everyone): name, phone, email, relationship.
-4. **If under 18:** parent/guardian name, phone, email + consent tick.
-5. **If Foster or Jail break ticked:** the property/household section (ownership, fence type & height, people at home, children under 16, other animals + details, vaccinations current, experience, availability, agree to terms, signature).
-6. Submit.
+**Section — On-site help**
+Checkboxes: Walk dogs · Feeding & cleaning · Transport · Pet minding · Cooking · Social media · Fundraising · *Wherever most useful*.
+
+**Section — Homecare**
+> *Hosting a dog in your own home for the short or long term.*
+
+- ☐ **Jail break** — a dog stays with you for a night, a weekend, a short break from the kennels.
+- ☐ **Foster** — a dog lives with you longer term while it waits for adoption.
+
+(Ticking either opens the property/household section and starts an approval process — a yard check and staff sign-off.)
+
+**Section — About you** (everyone)
+Name, email *(required; the shelter's own address is rejected)*, phone, DOB, address.
+
+**Section — Emergency contact** (everyone, encouraged not enforced)
+Name, phone, email, relationship. *If you skip it we'll ask again later.*
+
+**If under 18:** parent/guardian name, phone, email + consent tick.
+
+**If Jail break or Foster ticked — Homecare details:** ownership, fence type & height, people at home, children under 16, other animals + details, vaccinations current, experience, availability, agree to terms, signature.
+
+Submit.
 
 **On submit** (API route, service role):
 - Match on email → existing `people` row, or create one.
@@ -157,7 +180,19 @@ One page: **"Get involved with CAPS"**.
 - Create `volunteer_profile` and/or `homecare_profile` from the relevant sections.
 - No second form, no matching step — **one identity, keyed on email.**
 
+### Activation & missing details (soft, not gates)
+- A `volunteer` role is **active immediately** and can log walks **even without DOB / emergency contact**. We chase those, we don't block on them.
+- Missing DOB **or** emergency contact → a **dismissible-but-persistent banner** on the person's profile and on the check-out screen ("Add your emergency contact — 30 seconds"), plus a staff report *"volunteers missing details"*.
+- **Parental consent for a minor:** a strong prompt, not currently a hard gate — **flagged for CAPS to decide** (insurance implications). Easy to switch to a gate later.
+- **Carer approval stays a gate:** a `jailbreak_carer` / `foster_carer` role can't be approved until `homecare_profile` is complete and a yard check is recorded.
+
 A returning person who already exists just gets the new role added.
+
+### An existing volunteer wants to foster / jail break
+No re-registration. Either:
+- **They do it** — their own **profile → "Apply for homecare"** opens *only* the Homecare section + property/household details (identity/contact already known). Submit → a `foster_carer` / `jailbreak_carer` role, `pending`, on their existing record.
+- **Staff do it** — People → the person → **Add role → Foster / Jail break carer**; fill the property section (or send them the link). → `pending`.
+Then staff approve (§8). Same form section as registration, reached from inside the app.
 
 ---
 

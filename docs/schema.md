@@ -33,7 +33,7 @@ create table people (
   -- is_minor is computed in the app from date_of_birth (Postgres won't allow a
   -- generated column over current_date). Activation checks it at the API.
   address         text,
-  -- emergency contact (required to ACTIVATE any on-site role)
+  -- emergency contact (chased, not enforced — see Activation rules)
   ec_name         text,
   ec_phone        text,
   ec_email        text,
@@ -82,9 +82,10 @@ create table person_roles (
 - **volunteer** → created `active` on form submit (matches the current no-approval-gate behaviour).
 - **jailbreak_carer / foster_carer** → created `pending`; staff approve (either / both) or decline.
 - **staff / committee** → assigned by an admin only.
-- **Activation rules** (enforced at the API / app layer, some as triggers):
-  - any role can't go `active` without `date_of_birth` + emergency contact on `people`.
-  - if the person is under 18 (from `date_of_birth`) → also needs `parental_consent = true`.
+- **Activation rules** (app layer):
+  - `volunteer` → `active` immediately on registration. **Missing `date_of_birth` / emergency contact does NOT block** walking — the app nags for it (persistent dismissible banner) and staff have a "missing details" report. (CAPS decision: chase, don't gate.)
+  - minor + no `parental_consent` → strong prompt, **not currently a hard gate** — flagged for CAPS to firm up (insurance).
+  - `jailbreak_carer` / `foster_carer` → stays a real gate: not approvable until `homecare_profile` complete + yard check recorded.
   - `jailbreak_carer` / `foster_carer` → also needs a completed `homecare_profile` (and yard check).
 
 ### `homecare_profile` — carer property/household bundle (one per carer)
