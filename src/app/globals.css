@@ -1,17 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  /* brand — cornflower blue, from the CAPS logo */
-  --brand: #2c7bd4;
-  --brand-ink: #1f5da8;
-  --brand-tint: #eaf2fc;
+  /* brand — the CAPS website's approved palette (capeanimalprotectionshelter.org.au),
+     not just the logo. Source of truth for these six: docs/design.md. */
+  --brand: #1a7abf;
+  --brand-ink: #0f5a8f;
+  --brand-tint: #e6f3fb;
 
-  /* warm accent — coral/peach watercolour */
-  --warm: #f2955c;
-  --warm-ink: #d9703b;
-  --warm-tint: #fdeee3;
+  /* warm accent — the site's orange */
+  --warm: #f4a324;
+  --warm-ink: #c1800f;
+  --warm-tint: #fef3dc;
 
-  /* highlight — the cap yellow, used sparingly */
+  /* highlight — a yellow distinct from --warm, app-only (not on the site) */
   --sun: #f6c445;
   --sun-tint: #fef6de;
 
@@ -27,13 +28,14 @@
   --ok: #3f9d6b;
   --danger: #d64545;
 
-  /* surfaces & ink */
-  --background: #fdf8f2;
+  /* surfaces & ink — from the site's caps-cream / caps-charcoal / caps-gray / caps-border */
+  --background: #fdfaf5;
   --card: #ffffff;
-  --foreground: #172a44;
-  --ink-muted: #5a6b82;
-  --line: #e7dece;
-  --line-cool: #d9e2ee;
+  --foreground: #2c2c2a;
+  --ink-muted: #6b6b68;
+  --line: #e0ddd6;
+  --line-cool: #dbeaf3;
+  --gray-tint: #f4f2ed;
 
   --radius: 0.75rem;
 }

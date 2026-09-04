@@ -10,34 +10,41 @@ variables, so the tokens below drop straight in.
 
 ## 1. Colour tokens
 
-From the logo: cornflower blue (ring text + "C.A.P.S"), coral/peach watercolour,
-sunny yellow (the cap), tan dog, cream paper.
+**Source of truth: the live website's approved palette**
+(`capeanimalprotectionshelter.org.au`, repo `CAPS2026/CAPS2026.github.io`),
+not the logo in isolation — the site already has a deliberate, approved brand
+system (including Nunito, which we'd independently picked). Updated 5 Sep 2026
+to match it exactly rather than run two near-but-different blues/oranges
+across CAPS's digital presence. `--sun`, the status colours, and `--ok`/`--danger`
+have no website equivalent — they're app-only additions for things a marketing
+site doesn't need.
 
 ```css
 :root {
-  /* brand */
-  --brand:        #2C7BD4;  /* cornflower blue — primary actions, links, active nav, "Walking" */
-  --brand-ink:    #1F5DA8;  /* darker blue — hover, text on tint */
-  --brand-tint:   #EAF2FC;  /* pale blue surface */
+  /* brand — the website's --caps-blue family */
+  --brand:        #1A7ABF;  /* primary actions, links, active nav, "Walking" */
+  --brand-ink:    #0F5A8F;  /* hover, text on tint */
+  --brand-tint:   #E6F3FB;  /* pale blue surface */
 
-  /* warm accent (watercolour) */
-  --warm:         #F2955C;  /* coral/peach — secondary accent, timers going long, "Jail Break" */
-  --warm-ink:     #D9703B;
-  --warm-tint:    #FDEEE3;
+  /* warm accent — the website's --caps-orange family */
+  --warm:         #F4A324;  /* secondary accent, timers going long, "Jail Break" */
+  --warm-ink:     #C1800F;
+  --warm-tint:    #FEF3DC;
 
-  /* highlight (the cap) — use sparingly */
+  /* highlight — app-only, not on the website. Use sparingly */
   --sun:          #F6C445;  /* yellow — "Yard", small highlights, the energy accent */
   --sun-tint:     #FEF6DE;
 
-  /* surfaces & ink */
-  --paper:        #FDF8F2;  /* page background — warm cream */
+  /* surfaces & ink — the website's --caps-cream / --caps-charcoal / --caps-gray / --caps-border */
+  --paper:        #FDFAF5;  /* page background — warm cream */
   --card:         #FFFFFF;
-  --ink:          #172A44;  /* body text — dark blue-charcoal */
-  --ink-muted:    #5A6B82;  /* secondary text */
-  --line:         #E7DECF;  /* borders on cream */
-  --line-cool:    #D9E2EE;  /* borders on white/blue */
+  --ink:          #2C2C2A;  /* body text — warm charcoal */
+  --ink-muted:    #6B6B68;  /* secondary text */
+  --line:         #E0DDD6;  /* borders on cream */
+  --line-cool:    #DBEAF3;  /* borders on white/blue, tinted from --brand */
+  --gray-tint:    #F4F2ED;  /* alternate light surface */
 
-  /* semantic (not in the logo, needed) */
+  /* semantic (not on the website, needed) */
   --ok:           #3F9D6B;  /* green — "Available", success */
   --danger:       #D64545;  /* red — overdue, destructive, validation errors */
 
