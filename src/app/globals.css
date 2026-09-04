@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+:root {
+  /* brand — cornflower blue, from the CAPS logo */
+  --brand: #2c7bd4;
+  --brand-ink: #1f5da8;
+  --brand-tint: #eaf2fc;
+
+  /* warm accent — coral/peach watercolour */
+  --warm: #f2955c;
+  --warm-ink: #d9703b;
+  --warm-tint: #fdeee3;
+
+  /* highlight — the cap yellow, used sparingly */
+  --sun: #f6c445;
+  --sun-tint: #fef6de;
+
+  /* per-status colours */
+  --status-walking: var(--brand);
+  --status-yard: var(--sun);
+  --status-available: #3f9d6b;
+  --status-bed-rest: #6b7a99;
+  --status-jail-break: var(--warm);
+  --status-fostered: #d98ba8;
+
+  /* semantic */
+  --ok: #3f9d6b;
+  --danger: #d64545;
+
+  /* surfaces & ink */
+  --background: #fdf8f2;
+  --card: #ffffff;
+  --foreground: #172a44;
+  --ink-muted: #5a6b82;
+  --line: #e7dece;
+  --line-cool: #d9e2ee;
+
+  --radius: 0.75rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-tint: var(--brand-tint);
+  --color-warm: var(--warm);
+  --color-warm-ink: var(--warm-ink);
+  --color-warm-tint: var(--warm-tint);
+  --color-sun: var(--sun);
+  --color-sun-tint: var(--sun-tint);
+  --color-ok: var(--ok);
+  --color-danger: var(--danger);
+  --color-card: var(--card);
+  --color-ink-muted: var(--ink-muted);
+  --color-line: var(--line);
+  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+  --radius-brand: var(--radius);
+}
+
+/* light-only for v1 — see docs/design.md */
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
