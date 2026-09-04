@@ -30,9 +30,8 @@ create table people (
   email           citext unique,          -- nullable: staff-created records may have none
   phone           text,
   date_of_birth   date,
-  is_minor        boolean generated always as (
-                    date_of_birth is not null and date_of_birth > (current_date - interval '18 years')
-                  ) stored,
+  -- is_minor is computed in the app from date_of_birth (Postgres won't allow a
+  -- generated column over current_date). Activation checks it at the API.
   address         text,
   -- emergency contact (required to ACTIVATE any on-site role)
   ec_name         text,
@@ -85,7 +84,7 @@ create table person_roles (
 - **staff / committee** → assigned by an admin only.
 - **Activation rules** (enforced at the API / app layer, some as triggers):
   - any role can't go `active` without `date_of_birth` + emergency contact on `people`.
-  - if `people.is_minor` → also needs `parental_consent = true`.
+  - if the person is under 18 (from `date_of_birth`) → also needs `parental_consent = true`.
   - `jailbreak_carer` / `foster_carer` → also needs a completed `homecare_profile` (and yard check).
 
 ### `homecare_profile` — carer property/household bundle (one per carer)
@@ -275,7 +274,7 @@ create unique index one_open_activity_per_dog
 - Any row where `entered_late` or `edited_at` is set shows a **"logged late" / "edited"** badge in logs and reports.
 
 ### `due_back`
-Set only for `jail_break`, `foster`, `bed_rest`. **Walks have no `due_back`** — the card shows a live "out for HH:MM" timer, and an alert fires if that exceeds `org_settings.walk_alert_after_minutes` (default 60). Yard has an alert too (`yard_alert_after_minutes`, default 120 — Weipa heat).
+`timestamptz` (date **and** time — fixes the current app, where Bed Rest Due Back is date-only). Set for `jail_break`, `foster`, `bed_rest`. **Walks have no `due_back`** — the card shows a live "out for HH:MM" timer, and an alert fires if that exceeds `org_settings.walk_alert_after_minutes` (default 60). Yard has an alert too (`yard_alert_after_minutes`, default 120 — Weipa heat). `started_at` and `ended_at` are also full `timestamptz` for every type, bed rest included.
 
 ### Keeping `dogs` in sync (trigger)
 `AFTER INSERT/UPDATE/DELETE ON dog_activity`:
@@ -417,6 +416,6 @@ Reuses `people` + role `adopter`. Adopter-facing "where's my application" view v
 4. **Committee = staff access for v1.** Both role values kept so they can diverge later (e.g. committee-only staff-punctuality review) without a migration.
 5. **`Level` dropped** — replaced by `handling_notes` (free descriptive phrase, volunteer-visible) + `experienced_handler_only` flag.
 
-### Still open
-- `volunteer_profile` — is `medical_issues` still collected, or dropped like `Level`? (kept for now.)
-- Does `bed_rest` need a `due_back`, or is it open-ended until a vet clears the dog? (assumed `due_back` optional.)
+### Resolved (round 2)
+- `volunteer_profile.medical_issues` — **kept.** Needed to know if a volunteer is at risk while out with a dog.
+- `bed_rest` — **gets a `due_back` (date + time)**, plus full date+time `started_at` / `ended_at`. Fixes the current app where bed-rest dates are date-only and start/end times are missing.
