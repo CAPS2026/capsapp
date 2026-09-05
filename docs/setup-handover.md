@@ -102,23 +102,45 @@ This file is the *where do the accounts live and how do I get back in* reference
 - **Node** v22, **npm** v10 (whatever's current is fine; no exotic version pin).
 - `cd capsapp && npm install && npm run dev` → `http://localhost:3000`.
 - `npm run build` to check it compiles before pushing anything significant.
-- Stack: Next.js 16 (App Router, Turbopack), TypeScript, Tailwind v4, design
-  tokens in `src/app/globals.css` (mirrors `docs/design.md`).
-- No `.env.local` committed — recreate it locally with the Supabase URL +
-  publishable key (see §2) once API routes / the Supabase client are wired in
-  (not yet done as of this doc).
+- Stack: **Next.js 15.5.x** (App Router — downgraded from 16 after it broke
+  Vercel routing, see §3), TypeScript, Tailwind v4, design tokens in
+  `src/app/globals.css` (mirrors `docs/design.md`, matched to the live
+  website's palette as of 5 Sep).
+- `.env.local` exists locally (gitignored) with `NEXT_PUBLIC_SUPABASE_URL`
+  already filled in (derivable from the project ref) but **the two keys are
+  still blank** — see the box below. `.env.local.example` in the repo is the
+  committed template.
 
-## 5. Where things stand (4 Sep 2026)
+### ⚠ Blocking: Supabase keys not wired in yet
+Auth/data code is written (`src/lib/supabase/*`, `src/lib/auth.ts`,
+`src/middleware.ts`, `/login`, `/auth/callback`) and **degrades gracefully**
+without the keys — public pages serve, protected pages redirect to `/login`,
+nothing 500s — but none of it actually works (no real sign-in, no data) until:
+1. `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are fetched
+   (Supabase MCP `get_publishable_keys`/dashboard → Project Settings → API,
+   project `amozcnlvfcxzeaukgbjb`) and put in `.env.local` **and** as Vercel
+   project env vars (dashboard → Settings → Environment Variables, or
+   `vercel env add`). The service-role key is server-only — never
+   `NEXT_PUBLIC_*`, never in a browser bundle.
+2. Someone's `people` row exists with `staff` role active — otherwise even a
+   successful sign-in lands with no roles (bootstrapping needs DB write
+   access, i.e. the Supabase MCP connector reconnected, or the CLI-token
+   method used for Vercel doesn't have an equivalent here yet).
+
+## 5. Where things stand (5 Sep 2026)
 
 - ✅ Phases 0–3 documented (`docs/`): features, schema, UI flows, design.
 - ✅ Supabase schema live and verified (migrations 01–09).
-- ✅ Next.js app scaffolded, branded (logo/favicon/manifest from the assets
-  CAPS2026 added), builds clean, **deployed to Vercel and publicly live** at
-  `https://capsapp-five.vercel.app` (see §3 for the two setup bugs found and
-  fixed along the way).
-- ⏳ Not yet built: Supabase client wiring, auth, and any real screens (Phase 4
-  — see `ui-flows.md` §15 for the build order, starting with the dogs list and
-  the take-out/bring-in flow).
+- ✅ Next.js app scaffolded, branded, builds clean, **deployed to Vercel and
+  publicly live** at `https://capsapp-five.vercel.app` (§3 has the two setup
+  bugs found and fixed).
+- ✅ **Phase 4 slice 1 built**: Supabase Auth wiring (magic link + Google),
+  session middleware, the auth-callback that links a sign-in to an existing
+  `people` row by email, and a role-gated app shell (bottom nav: Dogs/Site
+  always, People/Reports staff-only). Placeholder pages prove the pipeline.
+  **Not yet live-tested** — blocked on the keys above.
+- ⏳ Next: slice 2, the real Dogs list, once the keys are in and there's at
+  least one staff person to sign in as.
 - The **old AppSheet system stays live and frozen** in parallel — see
   `docs/caps-system-review.md` and `docs/caps-rebuild-plan.md` §6 for the
   cutover plan. Nothing about this rebuild has touched AppSheet.
