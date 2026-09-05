@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 export default function Home() {
   return (
@@ -18,6 +19,12 @@ export default function Home() {
         Cape Animal Protection Shelter — dogs, volunteers &amp; homecare.
         Under construction.
       </p>
+      <Link
+        href="/login"
+        className="mt-2 h-11 px-6 inline-flex items-center rounded-[var(--radius)] bg-brand text-white font-bold"
+      >
+        Staff &amp; volunteer sign in
+      </Link>
     </main>
   );
 }
