@@ -28,8 +28,11 @@ This file is the *where do the accounts live and how do I get back in* reference
 ## 2. Supabase (database)
 
 - **Account/org:** a CAPS-owned Supabase account (not Paul's personal one —
-  that was deliberately separated on 4 Sep 2026). Org name **"CAPS2026's Org"**,
-  org id `llduokiodtecjyvhzfdh`, plan **free**.
+  that was deliberately separated on 4 Sep 2026). Account email is
+  **`consult@capeanimalprotectionshelter.org.au`** (changed 5 Sep 2026 from
+  the old placeholder `capeanimalprotectionshelter@gmail.com`, which is being
+  deprecated — same account/org/project, just an email change, no migration).
+  Org name **"CAPS2026's Org"**, org id `llduokiodtecjyvhzfdh`, plan **free**.
 - **Project:** **"CAPS App"**, ref **`amozcnlvfcxzeaukgbjb`**, region
   `ap-southeast-2` (Sydney), status ACTIVE_HEALTHY. This is **production** —
   a second free-tier project (`CAPS App staging`) is planned but not yet created.
@@ -148,9 +151,39 @@ nothing 500s — but none of it actually works (no real sign-in, no data) until:
 ## 6. Quick sanity check for a fresh session
 
 1. `gh auth status` — can it push to `CAPS2026/capsapp`?
-2. Supabase MCP `list_organizations` — does it show "CAPS2026's Org" only?
+2. Supabase MCP `list_organizations` — does it show **only** "CAPS2026's Org"
+   (`llduokiodtecjyvhzfdh`)? `list_projects` should show "CAPS App"
+   (`amozcnlvfcxzeaukgbjb`) — **not** `Plumb`/`greenlight-website`/`step-up`
+   (those are Paul's personal projects; seeing them means the connector is
+   still bound to the wrong account — see §7 below).
 3. `vercel whoami` (after `vercel login`) — does it say `consult-8760`?
+   Vercel MCP `list_teams` should return a real team, not `[]`.
 4. `git -C capsapp log --oneline -5` — matches what's on
    `github.com/CAPS2026/capsapp/commits/main`?
 
 If all four check out, you're fully back in context.
+
+## 7. MCP connector account-mismatch — history, in case it recurs
+
+Spent a long stretch across 4–5 Sep 2026 with the Supabase and Vercel MCP
+connectors resolving to Paul's **personal** accounts no matter how many times
+he re-authorized them in claude.ai's connector settings (Supabase kept
+showing org `bjiewzffyxrrxssdxhhd` "easybeinggreen"; Vercel `list_teams`
+stayed `[]`). Claude's own "Your connectors" settings page shows no
+account/org/email identity — just a generic connected checkmark — so that's
+not a useful diagnostic if this happens again.
+
+**Actual root cause turned out to be simpler than an OAuth bug:** the
+Supabase account was still sitting on the old placeholder email
+`capeanimalprotectionshelter@gmail.com` (from before the org had its own
+domain). Fixed by changing that account's email in place to
+`consult@capeanimalprotectionshelter.org.au` — no new account, no project
+migration, same org/project IDs throughout.
+
+**One real gotcha to remember:** after fixing the account, the *same*
+Claude Code conversation that had already connected kept showing the old
+wrong data even after re-running `/mcp` — it had the token cached from
+connect-time. A genuinely **fresh conversation** (not just `/mcp` in the
+same one) was needed to pick up the corrected account. If connectors ever
+look wrong again, always verify in a brand-new session before assuming
+something's still broken upstream.
