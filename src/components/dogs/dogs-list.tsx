@@ -7,6 +7,7 @@ import { STATUS_COLOR_VAR, endActionLabel } from "@/lib/dogs";
 import { daysAgoLabel, daysSince, formatDate, formatElapsed, minutesSince, timerColor } from "@/lib/format";
 import { DogActionButton } from "@/components/dogs/dog-action-button";
 import { ManualWalkDialog } from "@/components/dogs/manual-walk-dialog";
+import { BringInAtDialog } from "@/components/dogs/bring-in-at-dialog";
 
 type FilterKey = "needs_walk" | "out_now" | "mine";
 
@@ -163,7 +164,10 @@ function DogCard({
       <div className="flex flex-col items-end gap-1 shrink-0">
         {dog.status === "available" && <DogActionButton dogId={dog.id} mode="walk" label="Start Walk" />}
         {isOut && canBringIn && (
-          <DogActionButton dogId={dog.id} mode="bring_in" label={endActionLabel(dog.status)} />
+          <>
+            <DogActionButton dogId={dog.id} mode="bring_in" label={endActionLabel(dog.status)} />
+            <BringInAtDialog dogId={dog.id} />
+          </>
         )}
         <ManualWalkDialog dogId={dog.id} isStaff={isStaff} currentPersonId={currentPersonId} />
       </div>

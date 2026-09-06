@@ -3,6 +3,8 @@ import { STATUS_COLOR_VAR, endActionLabel } from "@/lib/dogs";
 import { daysSince, formatDate, formatYearsMonths } from "@/lib/format";
 import { DogActionButton } from "@/components/dogs/dog-action-button";
 import { ManualWalkDialog } from "@/components/dogs/manual-walk-dialog";
+import { BringInAtDialog } from "@/components/dogs/bring-in-at-dialog";
+import { EditActivityDialog } from "@/components/dogs/edit-activity-dialog";
 
 const ACTIVITY_TYPE_LABEL: Record<string, string> = {
   walk: "Walk",
@@ -99,7 +101,10 @@ export function DogDetailView({
         <div className="flex flex-col items-end gap-1">
           {dog.status === "available" && <DogActionButton dogId={dog.id} mode="walk" label="Start Walk" />}
           {currentActivity && canBringIn && (
-            <DogActionButton dogId={dog.id} mode="bring_in" label={endActionLabel(dog.status)} />
+            <>
+              <DogActionButton dogId={dog.id} mode="bring_in" label={endActionLabel(dog.status)} />
+              <BringInAtDialog dogId={dog.id} />
+            </>
           )}
           <ManualWalkDialog dogId={dog.id} isStaff={isStaff} currentPersonId={currentPersonId} />
         </div>
@@ -177,14 +182,19 @@ export function DogDetailView({
           <h3 className="text-sm font-bold text-ink-muted">Last {activities.length || 0} activities</h3>
           {activities.length === 0 && <p className="text-sm text-ink-muted">No activity yet.</p>}
           {activities.map((a) => (
-            <p key={a.id} className="text-sm">
-              {ACTIVITY_TYPE_LABEL[a.type] ?? a.type} — <ActivityLine entry={a} />
-              {(a.enteredLate || a.editedAt) && (
-                <span className="ml-1 text-xs text-warm-ink font-semibold">
-                  {a.enteredLate ? "late entry" : "edited"}
-                </span>
+            <div key={a.id} className="flex items-center justify-between gap-2">
+              <p className="text-sm">
+                {ACTIVITY_TYPE_LABEL[a.type] ?? a.type} — <ActivityLine entry={a} />
+                {(a.enteredLate || a.editedAt) && (
+                  <span className="ml-1 text-xs text-warm-ink font-semibold">
+                    {a.enteredLate ? "late entry" : "edited"}
+                  </span>
+                )}
+              </p>
+              {(isStaff || a.personId === currentPersonId) && (
+                <EditActivityDialog dogId={dog.id} activityId={a.id} startedAt={a.startedAt} endedAt={a.endedAt} />
               )}
-            </p>
+            </div>
           ))}
         </div>
       </Section>

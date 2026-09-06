@@ -62,6 +62,92 @@ export async function bringDogIn(dogId: string): Promise<ActionResult> {
   return {};
 }
 
+/**
+ * Bring in, but at a time other than now — the dog actually came back
+ * earlier and nobody tapped End Walk/End Homecare at the time
+ * (docs/ui-flows.md §5 full path, step 2: "Came back earlier"). Unlike the
+ * one-tap fast path, this always flags the row `edited` since a non-now
+ * time is exactly what that flag is for.
+ */
+export async function bringDogInAt(dogId: string, endedAtInput: string, notes: string): Promise<ActionResult> {
+  const person = await getCurrentPerson();
+  if (!person || !person.id) return { error: "Not signed in." };
+
+  const endedAt = new Date(endedAtInput);
+  const now = new Date();
+  if (Number.isNaN(endedAt.getTime())) return { error: "Enter a return time." };
+  if (endedAt > now) return { error: "Return time can't be in the future." };
+
+  const supabase = await createClient();
+  const { data: open } = await supabase
+    .from("dog_activity")
+    .select("id, started_at")
+    .eq("dog_id", dogId)
+    .is("ended_at", null)
+    .maybeSingle();
+
+  if (!open) return { error: "Nothing to bring in — no open activity for this dog." };
+  if (endedAt < new Date(open.started_at)) return { error: "Return time can't be before it went out." };
+
+  const { error } = await supabase
+    .from("dog_activity")
+    .update({
+      ended_at: endedAt.toISOString(),
+      notes: notes.trim() || null,
+      edited_at: now.toISOString(),
+      edited_by: person.id,
+    })
+    .eq("id", open.id);
+
+  if (error) return { error: friendlyError(error) };
+
+  revalidatePath("/dogs");
+  revalidatePath(`/dogs/${dogId}`);
+  return {};
+}
+
+/**
+ * Fix the times on an existing activity row (docs/ui-flows.md §6, "Wrong
+ * time on an existing record"). RLS (`da_update`) allows this for staff on
+ * any row, or a volunteer on their own. Always flags the row `edited`.
+ */
+export async function editActivityTimes(input: {
+  activityId: string;
+  dogId: string;
+  startedAt: string;
+  endedAt: string | null;
+  notes: string;
+}): Promise<ActionResult> {
+  const person = await getCurrentPerson();
+  if (!person || !person.id) return { error: "Not signed in." };
+
+  const startedAt = new Date(input.startedAt);
+  const endedAt = input.endedAt ? new Date(input.endedAt) : null;
+  const now = new Date();
+  if (Number.isNaN(startedAt.getTime())) return { error: "Enter a valid start time." };
+  if (endedAt && Number.isNaN(endedAt.getTime())) return { error: "Enter a valid end time." };
+  if (startedAt > now || (endedAt && endedAt > now)) return { error: "Times can't be in the future." };
+  if (endedAt && endedAt < startedAt) return { error: "The end time must be after the start time." };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("dog_activity")
+    .update({
+      started_at: startedAt.toISOString(),
+      ended_at: endedAt ? endedAt.toISOString() : null,
+      notes: input.notes.trim() || null,
+      edited_at: now.toISOString(),
+      edited_by: person.id,
+    })
+    .eq("id", input.activityId);
+
+  if (error) return { error: friendlyError(error) };
+
+  revalidatePath("/dogs");
+  revalidatePath(`/dogs/${input.dogId}`);
+  return {};
+}
+
 /** Active volunteers, for the Manual entry form's person picker (staff only). */
 export async function listActiveVolunteers(): Promise<{ id: string; name: string }[]> {
   const person = await getCurrentPerson();

@@ -21,6 +21,13 @@ export function daysAgoLabel(iso: string): string {
   return `${days} days ago`;
 }
 
+/** ISO timestamp -> local "YYYY-MM-DDTHH:mm" for pre-filling a datetime-local input. */
+export function toDatetimeLocalValue(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short" });
 }
