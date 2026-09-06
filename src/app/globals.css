@@ -56,6 +56,8 @@
   --color-card: var(--card);
   --color-ink-muted: var(--ink-muted);
   --color-line: var(--line);
+  --color-line-cool: var(--line-cool);
+  --color-gray-tint: var(--gray-tint);
   --font-sans: var(--font-nunito), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
   --radius-brand: var(--radius);

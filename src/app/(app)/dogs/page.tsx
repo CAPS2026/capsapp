@@ -1,38 +1,35 @@
 import { getCurrentPerson } from "@/lib/auth";
+import { getDogsListData } from "@/lib/dogs";
+import { DogsList } from "@/components/dogs/dogs-list";
 
-// Slice 2 replaces this with the real status-grouped Dogs home base
-// (docs/ui-flows.md §2). For now this proves the auth + role pipeline:
-// sign-in, the people/person_roles join, and role-gated nav all work.
+// The status-grouped Dogs home base (docs/ui-flows.md §2). Read-only for now —
+// the take-out/bring-in actions and the dog detail card are later slices
+// (build order in docs/ui-flows.md §15).
 export default async function DogsPage() {
   const person = await getCurrentPerson();
 
-  return (
-    <div className="p-6 flex flex-col gap-4">
-      <h1 className="text-2xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
-        Dogs
-      </h1>
-
-      {person && !person.id ? (
+  if (!person || !person.id) {
+    return (
+      <div className="p-6">
         <div className="rounded-[var(--radius)] border border-warm bg-warm-tint p-4 text-sm">
-          Signed in as <strong>{person.email}</strong>, but there&apos;s no CAPS
+          Signed in as <strong>{person?.email}</strong>, but there&apos;s no CAPS
           registration on file for that email yet — nothing to show until a
           staff member links your account, or you register.
         </div>
-      ) : (
-        <div className="rounded-[var(--radius)] border border-line bg-card p-4 text-sm flex flex-col gap-1">
-          <p>
-            Signed in as <strong>{person?.firstName} {person?.surname}</strong>
-          </p>
-          <p className="text-ink-muted">{person?.email}</p>
-          <p className="text-ink-muted">
-            Roles: {person?.roles.length ? person.roles.join(", ") : "none yet"}
-          </p>
-        </div>
-      )}
+      </div>
+    );
+  }
 
-      <p className="text-ink-muted text-sm">
-        The status-grouped dogs list lands here in the next build slice.
-      </p>
+  const { dogs, statusMeta, orgSettings } = await getDogsListData();
+
+  return (
+    <div>
+      <div className="px-4 pt-4">
+        <h1 className="text-2xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
+          Dogs
+        </h1>
+      </div>
+      <DogsList dogs={dogs} statusMeta={statusMeta} orgSettings={orgSettings} currentPersonId={person.id} />
     </div>
   );
 }
