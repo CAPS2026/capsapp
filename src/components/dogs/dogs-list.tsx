@@ -6,6 +6,7 @@ import type { DogListItem, OrgSettings, StatusMeta } from "@/lib/dogs";
 import { STATUS_COLOR_VAR, endActionLabel } from "@/lib/dogs";
 import { daysAgoLabel, daysSince, formatDate, formatElapsed, minutesSince, timerColor } from "@/lib/format";
 import { DogActionButton } from "@/components/dogs/dog-action-button";
+import { ManualWalkDialog } from "@/components/dogs/manual-walk-dialog";
 
 type FilterKey = "needs_walk" | "out_now" | "mine";
 
@@ -95,6 +96,8 @@ export function DogsList({
                   orgSettings={orgSettings}
                   isOut={status.isOut}
                   canBringIn={isStaff || dog.current?.personId === currentPersonId}
+                  isStaff={isStaff}
+                  currentPersonId={currentPersonId}
                 />
               ))}
             </div>
@@ -128,11 +131,15 @@ function DogCard({
   orgSettings,
   isOut,
   canBringIn,
+  isStaff,
+  currentPersonId,
 }: {
   dog: DogListItem;
   orgSettings: OrgSettings;
   isOut: boolean;
   canBringIn: boolean;
+  isStaff: boolean;
+  currentPersonId: string;
 }) {
   return (
     <div className="flex items-center gap-3 bg-card border border-line rounded-[var(--radius)] p-3">
@@ -153,10 +160,13 @@ function DogCard({
         </div>
       </Link>
 
-      {dog.status === "available" && <DogActionButton dogId={dog.id} mode="walk" label="Start Walk" />}
-      {isOut && canBringIn && (
-        <DogActionButton dogId={dog.id} mode="bring_in" label={endActionLabel(dog.status)} />
-      )}
+      <div className="flex flex-col items-end gap-1 shrink-0">
+        {dog.status === "available" && <DogActionButton dogId={dog.id} mode="walk" label="Start Walk" />}
+        {isOut && canBringIn && (
+          <DogActionButton dogId={dog.id} mode="bring_in" label={endActionLabel(dog.status)} />
+        )}
+        <ManualWalkDialog dogId={dog.id} isStaff={isStaff} currentPersonId={currentPersonId} />
+      </div>
     </div>
   );
 }

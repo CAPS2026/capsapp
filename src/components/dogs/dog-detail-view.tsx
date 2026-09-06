@@ -2,6 +2,7 @@ import type { DogConfidential, DogDetail, MedicalEvent, ActivityEntry, NoteEntry
 import { STATUS_COLOR_VAR, endActionLabel } from "@/lib/dogs";
 import { daysSince, formatDate, formatYearsMonths } from "@/lib/format";
 import { DogActionButton } from "@/components/dogs/dog-action-button";
+import { ManualWalkDialog } from "@/components/dogs/manual-walk-dialog";
 
 const ACTIVITY_TYPE_LABEL: Record<string, string> = {
   walk: "Walk",
@@ -95,10 +96,13 @@ export function DogDetailView({
           )}
         </div>
 
-        {dog.status === "available" && <DogActionButton dogId={dog.id} mode="walk" label="Start Walk" />}
-        {currentActivity && canBringIn && (
-          <DogActionButton dogId={dog.id} mode="bring_in" label={endActionLabel(dog.status)} />
-        )}
+        <div className="flex flex-col items-end gap-1">
+          {dog.status === "available" && <DogActionButton dogId={dog.id} mode="walk" label="Start Walk" />}
+          {currentActivity && canBringIn && (
+            <DogActionButton dogId={dog.id} mode="bring_in" label={endActionLabel(dog.status)} />
+          )}
+          <ManualWalkDialog dogId={dog.id} isStaff={isStaff} currentPersonId={currentPersonId} />
+        </div>
       </div>
 
       <Section title="About">

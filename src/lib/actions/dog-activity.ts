@@ -61,3 +61,71 @@ export async function bringDogIn(dogId: string): Promise<ActionResult> {
   revalidatePath(`/dogs/${dogId}`);
   return {};
 }
+
+/** Active volunteers, for the Manual entry form's person picker (staff only). */
+export async function listActiveVolunteers(): Promise<{ id: string; name: string }[]> {
+  const person = await getCurrentPerson();
+  if (!person || !person.isStaff) return [];
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("person_roles")
+    .select("person:people!person_roles_person_id_fkey(id, first_name, surname)")
+    .eq("role", "volunteer")
+    .eq("status", "active");
+
+  return ((data ?? []) as unknown as Array<{ person: { id: string; first_name: string; surname: string } }>)
+    .map((r) => ({ id: r.person.id, name: `${r.person.first_name} ${r.person.surname}` }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Manual entry (docs/ui-flows.md §6, "Dog was walked, never checked out") —
+ * the old app's own name for this (`Is_Manual_Entry` on the Walks table) is
+ * kept here rather than inventing new wording. Always recorded as
+ * `entered_late` since by definition it's added after the fact.
+ */
+export async function logManualWalk(input: {
+  dogId: string;
+  personId: string;
+  checkOut: string;
+  checkIn: string;
+  notes: string;
+}): Promise<ActionResult> {
+  const person = await getCurrentPerson();
+  if (!person || !person.id) return { error: "Not signed in." };
+  if (!person.isStaff && input.personId !== person.id) {
+    return { error: "You can only log a walk for yourself." };
+  }
+
+  const checkOut = new Date(input.checkOut);
+  const checkIn = new Date(input.checkIn);
+  const now = new Date();
+  if (Number.isNaN(checkOut.getTime()) || Number.isNaN(checkIn.getTime())) {
+    return { error: "Enter both a Check Out and a Check In time." };
+  }
+  if (checkIn < checkOut) return { error: "Check In must be after Check Out." };
+  if (checkOut > now || checkIn > now) return { error: "Times can't be in the future." };
+
+  const hoursBack = (now.getTime() - checkOut.getTime()) / 3_600_000;
+  if (hoursBack > 48 && !person.isStaff && !input.notes.trim()) {
+    return { error: "That's more than 48 hours ago — add a note explaining why, or ask a staff member to log it." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("dog_activity").insert({
+    dog_id: input.dogId,
+    type: "walk",
+    person_id: input.personId,
+    started_at: checkOut.toISOString(),
+    ended_at: checkIn.toISOString(),
+    entered_late: true,
+    notes: input.notes.trim() || null,
+  });
+
+  if (error) return { error: friendlyError(error) };
+
+  revalidatePath("/dogs");
+  revalidatePath(`/dogs/${input.dogId}`);
+  return {};
+}
