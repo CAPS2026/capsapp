@@ -12,8 +12,7 @@ import {
   timerColor,
 } from "@/lib/format";
 import { DogActionButton } from "@/components/dogs/dog-action-button";
-import { ManualWalkDialog } from "@/components/dogs/manual-walk-dialog";
-import { StartPlacementDialog } from "@/components/dogs/start-placement-dialog";
+import { ActionMenu } from "@/components/dogs/action-menu";
 
 type FilterKey = "needs_walk" | "out_now" | "mine";
 
@@ -149,16 +148,16 @@ function DogCard({
   const isAvailable = dog.status === "available";
 
   return (
-    <div className="flex items-center gap-3 bg-card border border-line rounded-[var(--radius)] p-3">
-      <Link href={`/dogs/${dog.id}`} className="flex items-center gap-3 flex-1 min-w-0">
+    <div className="flex items-center gap-2 bg-card border border-line rounded-[var(--radius)] p-2">
+      <Link href={`/dogs/${dog.id}`} className="flex items-center gap-2 flex-1 min-w-0">
         <Avatar photoUrl={dog.photoUrl} name={dog.name} />
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="font-bold truncate">{dog.name}</span>
-            <span className="text-xs text-ink-muted">{dog.ref}</span>
+          <div className="flex items-center gap-1">
+            <span className="font-bold text-sm truncate">{dog.name}</span>
+            <span className="text-xs text-ink-muted shrink-0">{dog.ref}</span>
             {dog.experiencedHandlerOnly && (
-              <span title="Experienced handlers only" aria-label="Experienced handlers only">
+              <span className="shrink-0" title="Experienced handlers only" aria-label="Experienced handlers only">
                 ⚠️
               </span>
             )}
@@ -167,13 +166,12 @@ function DogCard({
         </div>
       </Link>
 
-      {/* Only the action relevant to the dog's current state — no clutter
-          from options that only make sense before or after this moment
-          (Paul's feedback, 2026-09-06). */}
-      <div className="flex flex-col items-end gap-1 shrink-0">
+      {/* Only ONE primary action visible per card, plus the "⋯" menu for
+          everything else relevant to an Available dog — keeps the card
+          narrow enough for a phone (Paul's feedback, 2026-09-06). */}
+      <div className="flex items-center gap-1.5 shrink-0">
         {isAvailable && <DogActionButton dogId={dog.id} mode="walk" label="Start Walk" />}
-        {isAvailable && isStaff && <StartPlacementDialog dogId={dog.id} />}
-        {isAvailable && <ManualWalkDialog dogId={dog.id} isStaff={isStaff} currentPersonId={currentPersonId} />}
+        {isAvailable && <ActionMenu dogId={dog.id} isStaff={isStaff} currentPersonId={currentPersonId} />}
         {isOut && canBringIn && <DogActionButton dogId={dog.id} mode="bring_in" label={endActionLabel(dog.status)} />}
       </div>
     </div>
@@ -183,10 +181,10 @@ function DogCard({
 function Avatar({ photoUrl, name }: { photoUrl: string | null; name: string }) {
   if (photoUrl) {
     // eslint-disable-next-line @next/next/no-img-element -- external Supabase Storage URL, count is small
-    return <img src={photoUrl} alt={name} className="w-12 h-12 rounded-full object-cover shrink-0" />;
+    return <img src={photoUrl} alt={name} className="w-10 h-10 rounded-full object-cover shrink-0" />;
   }
   return (
-    <div className="w-12 h-12 rounded-full bg-gray-tint flex items-center justify-center text-ink-muted font-bold shrink-0">
+    <div className="w-10 h-10 rounded-full bg-gray-tint flex items-center justify-center text-ink-muted font-bold shrink-0">
       {name.charAt(0).toUpperCase()}
     </div>
   );
@@ -211,7 +209,7 @@ function CardLine({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSett
       if (!c) return null;
       const minutes = minutesSince(c.startedAt);
       return (
-        <p className="text-sm" style={{ color: timerColor(minutes, orgSettings.walkAlertAfterMinutes) }}>
+        <p className="text-xs truncate" style={{ color: timerColor(minutes, orgSettings.walkAlertAfterMinutes) }}>
           With {c.personName ?? "someone"} · {formatStartedLine("Started", c.startedAt)}
         </p>
       );
@@ -220,7 +218,7 @@ function CardLine({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSett
       if (!c) return null;
       const minutes = minutesSince(c.startedAt);
       return (
-        <p className="text-sm" style={{ color: timerColor(minutes, orgSettings.yardAlertAfterMinutes) }}>
+        <p className="text-xs truncate" style={{ color: timerColor(minutes, orgSettings.yardAlertAfterMinutes) }}>
           {c.reason ?? "Yard"} · {formatStartedLine("Started", c.startedAt)}
           {c.dueBack && <OverdueFlag dueBack={c.dueBack} />}
         </p>
@@ -228,14 +226,14 @@ function CardLine({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSett
     }
     case "available":
       return (
-        <p className="text-sm text-ink-muted">
+        <p className="text-xs truncate text-ink-muted">
           {dog.lastWalkAt ? `Last walk ${daysAgoLabel(dog.lastWalkAt)}` : "Never walked"}
         </p>
       );
     case "bed_rest":
       if (!c) return null;
       return (
-        <p className="text-sm text-ink-muted">
+        <p className="text-xs truncate text-ink-muted">
           {formatStartedLine("Start", c.startedAt)}
           {c.dueBack && <> · {formatStartedLine("Expected end", c.dueBack)}</>}
           {c.reason ? ` · ${c.reason}` : ""}
@@ -246,7 +244,7 @@ function CardLine({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSett
     case "fostered":
       if (!c) return null;
       return (
-        <p className="text-sm text-ink-muted">
+        <p className="text-xs truncate text-ink-muted">
           With {c.personName ?? "someone"} · {formatStartedLine("Start", c.startedAt)}
           {c.dueBack && <> · {formatStartedLine("Expected end", c.dueBack)}</>}
           {c.dueBack && <OverdueFlag dueBack={c.dueBack} />}
