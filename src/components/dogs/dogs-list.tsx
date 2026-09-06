@@ -219,9 +219,11 @@ function CardLine({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSett
     }
     case "yard": {
       if (!c) return null;
+      const minutes = minutesSince(c.startedAt);
       return (
-        <p className="text-xs text-ink-muted">
-          {c.reason ?? "Yard"} · {formatStartedLine("Started", c.startedAt)}
+        <p className="text-xs" style={{ color: timerColor(minutes, orgSettings.yardAlertAfterMinutes) }}>
+          {c.reason ?? "Yard"} · {formatStartedLine("Started", c.startedAt)} · Time in Yard{" "}
+          {formatMinutesOut(c.startedAt)}
           {c.dueBack && <> · {formatStartedLine("Due End", c.dueBack)}</>}
           {c.dueBack && <OverdueFlag dueBack={c.dueBack} />}
         </p>

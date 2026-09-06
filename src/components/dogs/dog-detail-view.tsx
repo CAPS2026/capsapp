@@ -231,9 +231,11 @@ function CurrentStatusLine({ status, current }: { status: DogDetail["status"]; c
   const timeOut =
     status === "walking"
       ? ` · Time Out ${formatMinutesOut(current.startedAt)}`
-      : status === "bed_rest" || status === "jail_break" || status === "fostered"
-        ? ` · Time out: ${formatDaysHoursOut(current.startedAt)}`
-        : "";
+      : status === "yard"
+        ? ` · Time in Yard ${formatMinutesOut(current.startedAt)}`
+        : status === "bed_rest" || status === "jail_break" || status === "fostered"
+          ? ` · Time out: ${formatDaysHoursOut(current.startedAt)}`
+          : "";
   return (
     <p className="text-sm text-ink-muted mt-1">
       {who}
