@@ -32,6 +32,28 @@ export type OrgSettings = {
   needsWalkAfterDays: number;
 };
 
+/**
+ * Button label for closing out whichever activity is currently open —
+ * kept matching the old AppSheet app's own action names (End Walk / End
+ * Homecare) so staff aren't relearning terms for the same action.
+ * Yard has no legacy equivalent (a new status this rebuild introduced).
+ */
+export function endActionLabel(status: DogStatus): string {
+  switch (status) {
+    case "walking":
+      return "End Walk";
+    case "yard":
+      return "End Yard";
+    case "bed_rest":
+      return "End Bed Rest";
+    case "jail_break":
+    case "fostered":
+      return "End Homecare";
+    case "available":
+      return "End"; // unreachable in practice — only out dogs get this button
+  }
+}
+
 /** CSS custom property (docs/design.md) holding each status's accent colour. */
 export const STATUS_COLOR_VAR: Record<DogStatus, string> = {
   walking: "--status-walking",

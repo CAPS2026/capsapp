@@ -1,5 +1,5 @@
 import type { DogConfidential, DogDetail, MedicalEvent, ActivityEntry, NoteEntry } from "@/lib/dog-detail";
-import { STATUS_COLOR_VAR } from "@/lib/dogs";
+import { STATUS_COLOR_VAR, endActionLabel } from "@/lib/dogs";
 import { daysSince, formatDate, formatYearsMonths } from "@/lib/format";
 import { DogActionButton } from "@/components/dogs/dog-action-button";
 
@@ -95,8 +95,10 @@ export function DogDetailView({
           )}
         </div>
 
-        {dog.status === "available" && <DogActionButton dogId={dog.id} mode="walk" />}
-        {currentActivity && canBringIn && <DogActionButton dogId={dog.id} mode="bring_in" />}
+        {dog.status === "available" && <DogActionButton dogId={dog.id} mode="walk" label="Start Walk" />}
+        {currentActivity && canBringIn && (
+          <DogActionButton dogId={dog.id} mode="bring_in" label={endActionLabel(dog.status)} />
+        )}
       </div>
 
       <Section title="About">

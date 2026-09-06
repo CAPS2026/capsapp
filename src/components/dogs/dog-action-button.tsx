@@ -7,7 +7,15 @@ import { startWalk, bringDogIn } from "@/lib/actions/dog-activity";
 // The one-tap fast paths from docs/ui-flows.md §4/§5. The fuller wizard
 // (different walker, other activity types, backdated entries) is a later
 // slice — this only ever inserts "walk, me, now" or closes whatever's open.
-export function DogActionButton({ dogId, mode }: { dogId: string; mode: "walk" | "bring_in" }) {
+export function DogActionButton({
+  dogId,
+  mode,
+  label,
+}: {
+  dogId: string;
+  mode: "walk" | "bring_in";
+  label: string;
+}) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -33,7 +41,7 @@ export function DogActionButton({ dogId, mode }: { dogId: string; mode: "walk" |
           mode === "walk" ? "bg-brand" : "bg-ok"
         }`}
       >
-        {isPending ? "…" : mode === "walk" ? "Walk" : "Bring in"}
+        {isPending ? "…" : label}
       </button>
       {error && <p className="text-xs text-danger max-w-40 text-right">{error}</p>}
     </div>

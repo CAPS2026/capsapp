@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { DogListItem, OrgSettings, StatusMeta } from "@/lib/dogs";
-import { STATUS_COLOR_VAR } from "@/lib/dogs";
+import { STATUS_COLOR_VAR, endActionLabel } from "@/lib/dogs";
 import { daysAgoLabel, daysSince, formatDate, formatElapsed, minutesSince, timerColor } from "@/lib/format";
 import { DogActionButton } from "@/components/dogs/dog-action-button";
 
@@ -153,8 +153,10 @@ function DogCard({
         </div>
       </Link>
 
-      {dog.status === "available" && <DogActionButton dogId={dog.id} mode="walk" />}
-      {isOut && canBringIn && <DogActionButton dogId={dog.id} mode="bring_in" />}
+      {dog.status === "available" && <DogActionButton dogId={dog.id} mode="walk" label="Start Walk" />}
+      {isOut && canBringIn && (
+        <DogActionButton dogId={dog.id} mode="bring_in" label={endActionLabel(dog.status)} />
+      )}
     </div>
   );
 }
