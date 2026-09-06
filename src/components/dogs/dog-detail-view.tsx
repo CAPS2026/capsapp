@@ -4,6 +4,7 @@ import { daysSince, formatDate, formatYearsMonths } from "@/lib/format";
 import { DogActionButton } from "@/components/dogs/dog-action-button";
 import { ManualWalkDialog } from "@/components/dogs/manual-walk-dialog";
 import { BringInAtDialog } from "@/components/dogs/bring-in-at-dialog";
+import { StartPlacementDialog } from "@/components/dogs/start-placement-dialog";
 import { EditActivityDialog } from "@/components/dogs/edit-activity-dialog";
 
 const ACTIVITY_TYPE_LABEL: Record<string, string> = {
@@ -100,6 +101,7 @@ export function DogDetailView({
 
         <div className="flex flex-col items-end gap-1">
           {dog.status === "available" && <DogActionButton dogId={dog.id} mode="walk" label="Start Walk" />}
+          {dog.status === "available" && isStaff && <StartPlacementDialog dogId={dog.id} />}
           {currentActivity && canBringIn && (
             <>
               <DogActionButton dogId={dog.id} mode="bring_in" label={endActionLabel(dog.status)} />

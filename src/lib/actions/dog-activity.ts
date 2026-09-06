@@ -165,6 +165,80 @@ export async function listActiveVolunteers(): Promise<{ id: string; name: string
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** Active carers of the given type, for the Start Yard/Bed Rest/Homecare form (staff only). */
+export async function listActiveCarers(type: "jail_break" | "foster"): Promise<{ id: string; name: string }[]> {
+  const person = await getCurrentPerson();
+  if (!person || !person.isStaff) return [];
+
+  const role = type === "jail_break" ? "jailbreak_carer" : "foster_carer";
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("person_roles")
+    .select("person:people!person_roles_person_id_fkey(id, first_name, surname)")
+    .eq("role", role)
+    .eq("status", "active");
+
+  return ((data ?? []) as unknown as Array<{ person: { id: string; first_name: string; surname: string } }>)
+    .map((r) => ({ id: r.person.id, name: `${r.person.first_name} ${r.person.surname}` }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Start Yard / Bed Rest / Homecare (jail break or foster) — docs/ui-flows.md
+ * §4 full path, for the activity types the one-tap fast path doesn't cover.
+ * Staff only: RLS (`da_insert`) only allows non-walk types for staff, so
+ * this checks the same thing up front for a clean error rather than a raw
+ * RLS rejection.
+ */
+export async function startPlacement(input: {
+  dogId: string;
+  type: "yard" | "bed_rest" | "jail_break" | "foster";
+  personId?: string;
+  dueBack?: string;
+  reason?: string;
+  notes?: string;
+}): Promise<ActionResult> {
+  const person = await getCurrentPerson();
+  if (!person || !person.id) return { error: "Not signed in." };
+  if (!person.isStaff) return { error: "Only staff can start this." };
+
+  if ((input.type === "jail_break" || input.type === "foster") && !input.personId) {
+    return { error: "Pick a carer." };
+  }
+  if ((input.type === "bed_rest" || input.type === "jail_break" || input.type === "foster") && !input.dueBack) {
+    return { error: "Due back is required." };
+  }
+  if (input.type === "bed_rest" && !input.reason?.trim()) {
+    return { error: "Reason is required for bed rest." };
+  }
+
+  let dueBackIso: string | null = null;
+  if (input.dueBack) {
+    const dueBack = new Date(input.dueBack);
+    if (Number.isNaN(dueBack.getTime())) return { error: "Enter a valid due-back date/time." };
+    if (dueBack <= new Date()) return { error: "Due back must be in the future." };
+    dueBackIso = dueBack.toISOString();
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("dog_activity").insert({
+    dog_id: input.dogId,
+    type: input.type,
+    person_id: input.personId ?? null,
+    placed_by: person.id,
+    started_at: new Date().toISOString(),
+    due_back: dueBackIso,
+    reason: input.reason?.trim() || null,
+    notes: input.notes?.trim() || null,
+  });
+
+  if (error) return { error: friendlyError(error) };
+
+  revalidatePath("/dogs");
+  revalidatePath(`/dogs/${input.dogId}`);
+  return {};
+}
+
 /**
  * Manual entry (docs/ui-flows.md §6, "Dog was walked, never checked out") —
  * the old app's own name for this (`Is_Manual_Entry` on the Walks table) is
