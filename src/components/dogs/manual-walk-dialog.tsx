@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { listActiveVolunteers, logManualWalk } from "@/lib/actions/dog-activity";
+import { DateTimeField } from "@/components/dogs/datetime-field";
 
 // "Manual entry" is the old AppSheet app's own term (Is_Manual_Entry on the
 // Walks table) for logging a walk that already happened — kept rather than
@@ -99,24 +100,12 @@ export function ManualWalkDialog({
 
         <label className="flex flex-col gap-1 text-sm">
           Check Out
-          <input
-            type="datetime-local"
-            required
-            value={checkOut}
-            onChange={(e) => setCheckOut(e.target.value)}
-            className="h-11 px-3 rounded-[var(--radius)] border border-line-cool bg-white"
-          />
+          <DateTimeField required value={checkOut} onChange={setCheckOut} />
         </label>
 
         <label className="flex flex-col gap-1 text-sm">
           Check In
-          <input
-            type="datetime-local"
-            required
-            value={checkIn}
-            onChange={(e) => setCheckIn(e.target.value)}
-            className="h-11 px-3 rounded-[var(--radius)] border border-line-cool bg-white"
-          />
+          <DateTimeField required value={checkIn} onChange={setCheckIn} />
         </label>
 
         <label className="flex flex-col gap-1 text-sm">

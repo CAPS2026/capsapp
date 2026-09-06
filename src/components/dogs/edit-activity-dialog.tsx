@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { editActivityTimes } from "@/lib/actions/dog-activity";
 import { toDatetimeLocalValue } from "@/lib/format";
+import { DateTimeField } from "@/components/dogs/datetime-field";
 
 // docs/ui-flows.md §6, "Wrong time on an existing record" — for a row that
 // already exists (open or closed) but was logged with the wrong time(s).
@@ -51,9 +52,12 @@ export function EditActivityDialog({
     dialogRef.current?.showModal();
   }
 
+  // Only ever closes via the native <dialog> "close" event (wired to
+  // onClose below) — Escape, a backdrop click, and this call all funnel
+  // through the same path, so the parent is notified exactly once instead
+  // of this and the dialog's own onClose both firing.
   function close() {
     dialogRef.current?.close();
-    onClose?.();
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -69,8 +73,8 @@ export function EditActivityDialog({
       });
       if (result.error) setError(result.error);
       else {
-        close();
         router.refresh();
+        close();
       }
     });
   }
@@ -102,23 +106,12 @@ export function EditActivityDialog({
 
           <label className="flex flex-col gap-1 text-sm">
             Check Out
-            <input
-              type="datetime-local"
-              required
-              value={checkOut}
-              onChange={(e) => setCheckOut(e.target.value)}
-              className="h-11 px-3 rounded-[var(--radius)] border border-line-cool bg-white"
-            />
+            <DateTimeField required value={checkOut} onChange={setCheckOut} />
           </label>
 
           <label className="flex flex-col gap-1 text-sm">
             Check In {!endedAt && <span className="text-ink-muted">(leave blank if still out)</span>}
-            <input
-              type="datetime-local"
-              value={checkIn}
-              onChange={(e) => setCheckIn(e.target.value)}
-              className="h-11 px-3 rounded-[var(--radius)] border border-line-cool bg-white"
-            />
+            <DateTimeField value={checkIn} onChange={setCheckIn} />
           </label>
 
           <label className="flex flex-col gap-1 text-sm">

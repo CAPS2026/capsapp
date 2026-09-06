@@ -14,9 +14,16 @@ export function daysSince(iso: string): number {
   return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
 }
 
+/**
+ * Calendar-day difference in the viewer's local timezone — "today"/
+ * "yesterday" as a person means it, not a rolling 24-hour window. A walk
+ * at 11pm yesterday should say "yesterday" even though under 24 raw hours
+ * have elapsed (bug caught 2026-09-06: it was showing "today").
+ */
 export function daysAgoLabel(iso: string): string {
-  const days = daysSince(iso);
-  if (days === 0) return "today";
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOfDay(new Date()) - startOfDay(new Date(iso))) / 86_400_000);
+  if (days <= 0) return "today";
   if (days === 1) return "1 day ago";
   return `${days} days ago`;
 }

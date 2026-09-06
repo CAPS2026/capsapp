@@ -178,34 +178,34 @@ export function DogDetailView({
       <Section title="Activity">
         <div className="flex flex-col gap-1 pb-2 border-b border-line">
           {latestOfEachType.map(({ type, entry }) => (
-            <div key={type} className="flex items-center justify-between gap-2">
-              <p className="text-sm">
-                <span className="font-semibold">{ACTIVITY_TYPE_LABEL[type]}: </span>
-                {entry ? <ActivityLine entry={entry} /> : <span className="text-ink-muted">None yet</span>}
-              </p>
+            <p key={type} className="text-sm">
+              <span className="font-semibold">{ACTIVITY_TYPE_LABEL[type]}: </span>
+              {entry ? <ActivityLine entry={entry} /> : <span className="text-ink-muted">None yet</span>}
               {entry && (isStaff || entry.personId === currentPersonId) && (
-                <EditActivityDialog dogId={dog.id} activityId={entry.id} startedAt={entry.startedAt} endedAt={entry.endedAt} />
+                <span className="ml-2">
+                  <EditActivityDialog dogId={dog.id} activityId={entry.id} startedAt={entry.startedAt} endedAt={entry.endedAt} />
+                </span>
               )}
-            </div>
+            </p>
           ))}
         </div>
         <div className="flex flex-col gap-1 pt-1">
           <h3 className="text-sm font-bold text-ink-muted">Last {activities.length || 0} activities</h3>
           {activities.length === 0 && <p className="text-sm text-ink-muted">No activity yet.</p>}
           {activities.map((a) => (
-            <div key={a.id} className="flex items-center justify-between gap-2">
-              <p className="text-sm">
-                {ACTIVITY_TYPE_LABEL[a.type] ?? a.type} — <ActivityLine entry={a} />
-                {(a.enteredLate || a.editedAt) && (
-                  <span className="ml-1 text-xs text-warm-ink font-semibold">
-                    {a.enteredLate ? "late entry" : "edited"}
-                  </span>
-                )}
-              </p>
-              {(isStaff || a.personId === currentPersonId) && (
-                <EditActivityDialog dogId={dog.id} activityId={a.id} startedAt={a.startedAt} endedAt={a.endedAt} />
+            <p key={a.id} className="text-sm">
+              {ACTIVITY_TYPE_LABEL[a.type] ?? a.type} — <ActivityLine entry={a} />
+              {(a.enteredLate || a.editedAt) && (
+                <span className="ml-1 text-xs text-warm-ink font-semibold">
+                  {a.enteredLate ? "late entry" : "edited"}
+                </span>
               )}
-            </div>
+              {(isStaff || a.personId === currentPersonId) && (
+                <span className="ml-2">
+                  <EditActivityDialog dogId={dog.id} activityId={a.id} startedAt={a.startedAt} endedAt={a.endedAt} />
+                </span>
+              )}
+            </p>
           ))}
         </div>
       </Section>

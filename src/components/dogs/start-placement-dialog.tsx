@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { listActiveCarers, startPlacement } from "@/lib/actions/dog-activity";
+import { DateTimeField } from "@/components/dogs/datetime-field";
 
 export type PlacementType = "yard" | "bed_rest" | "jail_break" | "foster";
 
@@ -130,13 +131,7 @@ export function StartPlacementDialog({
 
         <label className="flex flex-col gap-1 text-sm">
           Due End
-          <input
-            type="datetime-local"
-            required
-            value={dueBack}
-            onChange={(e) => setDueBack(e.target.value)}
-            className="h-11 px-3 rounded-[var(--radius)] border border-line-cool bg-white"
-          />
+          <DateTimeField required value={dueBack} onChange={setDueBack} />
         </label>
 
         {needsReason && (
