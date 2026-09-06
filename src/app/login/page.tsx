@@ -15,19 +15,27 @@ function LoginForm() {
   const supabase = useMemo(() => (supabaseReady ? createClient() : null), [supabaseReady]);
 
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error" | "not_registered">("idle");
+
+  const callbackError = searchParams.get("error");
 
   async function sendMagicLink(e: React.FormEvent) {
     e.preventDefault();
     if (!supabase) return setStatus("error");
     setStatus("sending");
+    // shouldCreateUser: false — a magic link only works for someone CAPS has
+    // already registered. Without this, Supabase silently creates a working
+    // login for any email typed in, which makes "register" meaningless.
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        shouldCreateUser: false,
       },
     });
-    setStatus(error ? "error" : "sent");
+    if (!error) setStatus("sent");
+    else if (/signup|not allowed/i.test(error.message)) setStatus("not_registered");
+    else setStatus("error");
   }
 
   async function signInWithGoogle() {
@@ -56,6 +64,13 @@ function LoginForm() {
           </p>
         )}
 
+        {callbackError === "not_registered" && status === "idle" && (
+          <p className="text-sm text-danger text-center">
+            No CAPS account found for that sign-in — register below, or ask a
+            staff member to add you.
+          </p>
+        )}
+
         {status === "sent" ? (
           <p className="text-center text-sm text-ink-muted">
             Check <strong>{email}</strong> for a sign-in link.
@@ -80,6 +95,12 @@ function LoginForm() {
             >
               {status === "sending" ? "Sending…" : "Send sign-in link"}
             </button>
+            {status === "not_registered" && (
+              <p className="text-sm text-danger">
+                No CAPS account found for that email — register below, or ask
+                a staff member to add you.
+              </p>
+            )}
             {status === "error" && (
               <p className="text-sm text-danger">
                 Couldn&apos;t send that link — check the address and try again.
