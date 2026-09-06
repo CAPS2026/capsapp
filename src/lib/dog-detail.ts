@@ -59,6 +59,7 @@ export type MedicalEvent = {
 export type ActivityEntry = {
   id: string;
   type: string;
+  personId: string | null;
   personName: string | null;
   startedAt: string;
   endedAt: string | null;
@@ -168,13 +169,13 @@ export async function getDogDetail(dogId: string, isStaff: boolean) {
   const { data: activityRows } = await supabase
     .from("dog_activity")
     .select(
-      "id, type, started_at, ended_at, due_back, reason, entered_late, edited_at, person:people!dog_activity_person_id_fkey(first_name, surname)",
+      "id, type, started_at, ended_at, due_back, reason, entered_late, edited_at, person:people!dog_activity_person_id_fkey(id, first_name, surname)",
     )
     .eq("dog_id", dogId)
     .order("started_at", { ascending: false })
     .limit(20);
 
-  const activities: ActivityEntry[] = ((activityRows ?? []) as unknown as Array<{
+  const allActivities: ActivityEntry[] = ((activityRows ?? []) as unknown as Array<{
     id: string;
     type: string;
     started_at: string;
@@ -183,10 +184,11 @@ export async function getDogDetail(dogId: string, isStaff: boolean) {
     reason: string | null;
     entered_late: boolean;
     edited_at: string | null;
-    person: { first_name: string; surname: string } | null;
+    person: { id: string; first_name: string; surname: string } | null;
   }>).map((a) => ({
     id: a.id,
     type: a.type,
+    personId: a.person?.id ?? null,
     personName: a.person ? `${a.person.first_name} ${a.person.surname}` : null,
     startedAt: a.started_at,
     endedAt: a.ended_at,
@@ -196,9 +198,12 @@ export async function getDogDetail(dogId: string, isStaff: boolean) {
     editedAt: a.edited_at,
   }));
 
+  const currentActivity = allActivities.find((a) => !a.endedAt) ?? null;
+  const activities = allActivities.slice(0, 5);
+
   const latestOfEachType = (["walk", "yard", "bed_rest", "foster"] as const).map((type) => ({
     type,
-    entry: activities.find((a) => a.type === type || (type === "foster" && a.type === "jail_break")) ?? null,
+    entry: allActivities.find((a) => a.type === type || (type === "foster" && a.type === "jail_break")) ?? null,
   }));
 
   let notesQuery = supabase
@@ -224,5 +229,5 @@ export async function getDogDetail(dogId: string, isStaff: boolean) {
     authorName: n.author ? `${n.author.first_name} ${n.author.surname}` : null,
   }));
 
-  return { dog, confidential, medicalEvents, activities: activities.slice(0, 5), latestOfEachType, notes };
+  return { dog, confidential, medicalEvents, activities, currentActivity, latestOfEachType, notes };
 }

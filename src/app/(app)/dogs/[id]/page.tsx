@@ -4,8 +4,8 @@ import { getCurrentPerson } from "@/lib/auth";
 import { getDogDetail } from "@/lib/dog-detail";
 import { DogDetailView } from "@/components/dogs/dog-detail-view";
 
-// Read-only dog detail card (docs/ui-flows.md §3). Take-out/bring-in, add-note
-// and edit actions are the next build slices per §15.
+// Dog detail card (docs/ui-flows.md §3) with the take-out/bring-in fast
+// paths in the header. Add-note and edit are still to come.
 export default async function DogDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const person = await getCurrentPerson();
@@ -19,7 +19,7 @@ export default async function DogDetailPage({ params }: { params: Promise<{ id: 
       <Link href="/dogs" className="text-sm font-semibold text-brand-ink">
         ← Dogs
       </Link>
-      <DogDetailView {...detail} isStaff={person.isStaff} />
+      <DogDetailView {...detail} isStaff={person.isStaff} currentPersonId={person.id} />
     </div>
   );
 }

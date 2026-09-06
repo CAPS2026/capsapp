@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { DogListItem, OrgSettings, StatusMeta } from "@/lib/dogs";
 import { STATUS_COLOR_VAR } from "@/lib/dogs";
 import { daysAgoLabel, daysSince, formatDate, formatElapsed, minutesSince, timerColor } from "@/lib/format";
+import { DogActionButton } from "@/components/dogs/dog-action-button";
 
 type FilterKey = "needs_walk" | "out_now" | "mine";
 
@@ -13,11 +14,13 @@ export function DogsList({
   statusMeta,
   orgSettings,
   currentPersonId,
+  isStaff,
 }: {
   dogs: DogListItem[];
   statusMeta: StatusMeta[];
   orgSettings: OrgSettings;
   currentPersonId: string;
+  isStaff: boolean;
 }) {
   const [activeFilters, setActiveFilters] = useState<Set<FilterKey>>(new Set());
   const [, setTick] = useState(0);
@@ -86,7 +89,13 @@ export function DogsList({
             </h2>
             <div className="flex flex-col gap-2">
               {groupDogs.map((dog) => (
-                <DogCard key={dog.id} dog={dog} orgSettings={orgSettings} />
+                <DogCard
+                  key={dog.id}
+                  dog={dog}
+                  orgSettings={orgSettings}
+                  isOut={status.isOut}
+                  canBringIn={isStaff || dog.current?.personId === currentPersonId}
+                />
               ))}
             </div>
           </section>
@@ -114,27 +123,39 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
   );
 }
 
-function DogCard({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSettings }) {
+function DogCard({
+  dog,
+  orgSettings,
+  isOut,
+  canBringIn,
+}: {
+  dog: DogListItem;
+  orgSettings: OrgSettings;
+  isOut: boolean;
+  canBringIn: boolean;
+}) {
   return (
-    <Link
-      href={`/dogs/${dog.id}`}
-      className="flex items-center gap-3 bg-card border border-line rounded-[var(--radius)] p-3"
-    >
-      <Avatar photoUrl={dog.photoUrl} name={dog.name} />
+    <div className="flex items-center gap-3 bg-card border border-line rounded-[var(--radius)] p-3">
+      <Link href={`/dogs/${dog.id}`} className="flex items-center gap-3 flex-1 min-w-0">
+        <Avatar photoUrl={dog.photoUrl} name={dog.name} />
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className="font-bold truncate">{dog.name}</span>
-          <span className="text-xs text-ink-muted">{dog.ref}</span>
-          {dog.experiencedHandlerOnly && (
-            <span title="Experienced handlers only" aria-label="Experienced handlers only">
-              ⚠️
-            </span>
-          )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="font-bold truncate">{dog.name}</span>
+            <span className="text-xs text-ink-muted">{dog.ref}</span>
+            {dog.experiencedHandlerOnly && (
+              <span title="Experienced handlers only" aria-label="Experienced handlers only">
+                ⚠️
+              </span>
+            )}
+          </div>
+          <CardLine dog={dog} orgSettings={orgSettings} />
         </div>
-        <CardLine dog={dog} orgSettings={orgSettings} />
-      </div>
-    </Link>
+      </Link>
+
+      {dog.status === "available" && <DogActionButton dogId={dog.id} mode="walk" />}
+      {isOut && canBringIn && <DogActionButton dogId={dog.id} mode="bring_in" />}
+    </div>
   );
 }
 

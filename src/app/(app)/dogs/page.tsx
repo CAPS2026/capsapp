@@ -2,9 +2,9 @@ import { getCurrentPerson } from "@/lib/auth";
 import { getDogsListData } from "@/lib/dogs-data";
 import { DogsList } from "@/components/dogs/dogs-list";
 
-// The status-grouped Dogs home base (docs/ui-flows.md §2). Read-only for now —
-// the take-out/bring-in actions and the dog detail card are later slices
-// (build order in docs/ui-flows.md §15).
+// The status-grouped Dogs home base (docs/ui-flows.md §2), with the one-tap
+// take-out/bring-in fast paths (§4/§5). The fuller wizard (other walker,
+// other activity types, backdated entries) is still to come.
 export default async function DogsPage() {
   const person = await getCurrentPerson();
 
@@ -29,7 +29,13 @@ export default async function DogsPage() {
           Dogs
         </h1>
       </div>
-      <DogsList dogs={dogs} statusMeta={statusMeta} orgSettings={orgSettings} currentPersonId={person.id} />
+      <DogsList
+        dogs={dogs}
+        statusMeta={statusMeta}
+        orgSettings={orgSettings}
+        currentPersonId={person.id}
+        isStaff={person.isStaff}
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import type { DogConfidential, DogDetail, MedicalEvent, ActivityEntry, NoteEntry } from "@/lib/dog-detail";
 import { STATUS_COLOR_VAR } from "@/lib/dogs";
 import { daysSince, formatDate, formatYearsMonths } from "@/lib/format";
+import { DogActionButton } from "@/components/dogs/dog-action-button";
 
 const ACTIVITY_TYPE_LABEL: Record<string, string> = {
   walk: "Walk",
@@ -44,21 +45,26 @@ export function DogDetailView({
   confidential,
   medicalEvents,
   activities,
+  currentActivity,
   latestOfEachType,
   notes,
   isStaff,
+  currentPersonId,
 }: {
   dog: DogDetail;
   confidential: DogConfidential | null;
   medicalEvents: MedicalEvent[];
   activities: ActivityEntry[];
+  currentActivity: ActivityEntry | null;
   latestOfEachType: { type: string; entry: ActivityEntry | null }[];
   notes: NoteEntry[];
   isStaff: boolean;
+  currentPersonId: string;
 }) {
   const primaryPhoto = dog.photos.find((p) => p.isPrimary) ?? dog.photos[0];
   const age = dog.dateOfBirth ? formatYearsMonths(dog.dateOfBirth) : dog.ageOverride;
   const timeWithCaps = dog.arrivalDate ? formatYearsMonths(dog.arrivalDate) : "Time unknown";
+  const canBringIn = isStaff || currentActivity?.personId === currentPersonId;
 
   return (
     <div className="flex flex-col gap-4">
@@ -71,7 +77,7 @@ export function DogDetailView({
             {dog.name.charAt(0).toUpperCase()}
           </div>
         )}
-        <div>
+        <div className="flex-1">
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
               {dog.name}
@@ -88,6 +94,9 @@ export function DogDetailView({
             <span className="ml-2 text-xs font-semibold text-warm-ink">⚠️ Experienced handlers only</span>
           )}
         </div>
+
+        {dog.status === "available" && <DogActionButton dogId={dog.id} mode="walk" />}
+        {currentActivity && canBringIn && <DogActionButton dogId={dog.id} mode="bring_in" />}
       </div>
 
       <Section title="About">
