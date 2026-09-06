@@ -31,3 +31,17 @@ export function timerColor(minutesElapsed: number, alertAfterMinutes: number): s
   if (minutesElapsed >= alertAfterMinutes) return "var(--warm)";
   return "var(--ink-muted)";
 }
+
+/** "2y 3m" / "5 months" style span between two dates — used for age and time-with-CAPS. */
+export function formatYearsMonths(fromIso: string, toIso?: string): string {
+  const from = new Date(fromIso);
+  const to = toIso ? new Date(toIso) : new Date();
+  let months = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
+  if (to.getDate() < from.getDate()) months -= 1;
+  months = Math.max(0, months);
+  const years = Math.floor(months / 12);
+  const remMonths = months % 12;
+  if (years === 0) return `${remMonths} month${remMonths === 1 ? "" : "s"}`;
+  if (remMonths === 0) return `${years} year${years === 1 ? "" : "s"}`;
+  return `${years}y ${remMonths}m`;
+}

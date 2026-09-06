@@ -1,5 +1,5 @@
 import { getCurrentPerson } from "@/lib/auth";
-import { getDogsListData } from "@/lib/dogs";
+import { getDogsListData } from "@/lib/dogs-data";
 import { DogsList } from "@/components/dogs/dogs-list";
 
 // The status-grouped Dogs home base (docs/ui-flows.md §2). Read-only for now —

@@ -1,17 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import type { DogListItem, OrgSettings, StatusMeta } from "@/lib/dogs";
+import { STATUS_COLOR_VAR } from "@/lib/dogs";
 import { daysAgoLabel, daysSince, formatDate, formatElapsed, minutesSince, timerColor } from "@/lib/format";
-
-const STATUS_COLOR_VAR: Record<string, string> = {
-  walking: "--status-walking",
-  yard: "--status-yard",
-  available: "--status-available",
-  bed_rest: "--status-bed-rest",
-  jail_break: "--status-jail-break",
-  fostered: "--status-fostered",
-};
 
 type FilterKey = "needs_walk" | "out_now" | "mine";
 
@@ -123,7 +116,10 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
 
 function DogCard({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSettings }) {
   return (
-    <div className="flex items-center gap-3 bg-card border border-line rounded-[var(--radius)] p-3">
+    <Link
+      href={`/dogs/${dog.id}`}
+      className="flex items-center gap-3 bg-card border border-line rounded-[var(--radius)] p-3"
+    >
       <Avatar photoUrl={dog.photoUrl} name={dog.name} />
 
       <div className="flex-1 min-w-0">
@@ -138,7 +134,7 @@ function DogCard({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSetti
         </div>
         <CardLine dog={dog} orgSettings={orgSettings} />
       </div>
-    </div>
+    </Link>
   );
 }
 
