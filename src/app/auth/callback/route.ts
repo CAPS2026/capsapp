@@ -24,6 +24,10 @@ export async function GET(request: Request) {
       await linkPersonToAuthUser(data.user.id, data.user.email);
       return NextResponse.redirect(`${origin}${next}`);
     }
+
+    console.error("auth/callback: exchangeCodeForSession failed", error);
+  } else {
+    console.error("auth/callback: no code in query params", request.url);
   }
 
   return NextResponse.redirect(`${origin}/login?error=auth`);
