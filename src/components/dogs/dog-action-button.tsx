@@ -4,23 +4,31 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { startWalk, bringDogIn } from "@/lib/actions/dog-activity";
 import { EditActivityDialog } from "@/components/dogs/edit-activity-dialog";
+import { StartWalkDialog } from "@/components/dogs/start-walk-dialog";
 
 type ClosedRecord = { id: string; startedAt: string; endedAt: string };
 
-// The one-tap fast paths from docs/ui-flows.md §4/§5. The fuller wizard
-// (different walker, other activity types, backdated entries) is a later
-// slice — this only ever inserts "walk, me, now" or closes whatever's open.
+// The fast paths from docs/ui-flows.md §4/§5. Bring-in doesn't need to know
+// who's operating it (it just closes whatever's open), but Start Walk does:
+// staff get a person-picker (the kiosk case, the real common one — see
+// StartWalkDialog) instead of the instant "it's me" tap, which stays as-is
+// for the rare self-serve volunteer.
 export function DogActionButton({
   dogId,
   mode,
   label,
+  isStaff,
+  currentPersonId,
 }: {
   dogId: string;
   mode: "walk" | "bring_in";
   label: string;
+  isStaff: boolean;
+  currentPersonId: string;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   // After "End X", the real return time is very often not "now" — offer an
   // immediate edit right here rather than making it a scavenger hunt
   // through the activity log (Paul's real case, 2026-09-06: brought Lassie
@@ -34,6 +42,10 @@ export function DogActionButton({
   function handleClick(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
+    if (mode === "walk" && isStaff) {
+      setPickerOpen(true);
+      return;
+    }
     setError(null);
     startTransition(async () => {
       if (mode === "walk") {
@@ -93,6 +105,14 @@ export function DogActionButton({
         {isPending ? "…" : label}
       </button>
       {error && <p className="text-xs text-danger max-w-40 text-right">{error}</p>}
+      {mode === "walk" && isStaff && (
+        <StartWalkDialog
+          dogId={dogId}
+          currentPersonId={currentPersonId}
+          isOpen={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </div>
   );
 }

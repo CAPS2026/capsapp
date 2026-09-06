@@ -106,12 +106,26 @@ export function DogDetailView({
         </div>
 
         <div className="flex items-center gap-1.5">
-          {dog.status === "available" && <DogActionButton dogId={dog.id} mode="walk" label="Start Walk" />}
+          {dog.status === "available" && (
+            <DogActionButton
+              dogId={dog.id}
+              mode="walk"
+              label="Start Walk"
+              isStaff={isStaff}
+              currentPersonId={currentPersonId}
+            />
+          )}
           {dog.status === "available" && (
             <ActionMenu dogId={dog.id} isStaff={isStaff} currentPersonId={currentPersonId} />
           )}
           {currentActivity && canBringIn && (
-            <DogActionButton dogId={dog.id} mode="bring_in" label={endActionLabel(dog.status)} />
+            <DogActionButton
+              dogId={dog.id}
+              mode="bring_in"
+              label={endActionLabel(dog.status)}
+              isStaff={isStaff}
+              currentPersonId={currentPersonId}
+            />
           )}
         </div>
       </div>

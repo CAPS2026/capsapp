@@ -165,7 +165,15 @@ function DogCard({
           everything else relevant to an Available dog — keeps the card
           narrow enough for a phone (Paul's feedback, 2026-09-06). */}
       <div className="flex items-center gap-1.5 shrink-0">
-        {isAvailable && <DogActionButton dogId={dog.id} mode="walk" label="Start Walk" />}
+        {isAvailable && (
+          <DogActionButton
+            dogId={dog.id}
+            mode="walk"
+            label="Start Walk"
+            isStaff={isStaff}
+            currentPersonId={currentPersonId}
+          />
+        )}
         {isAvailable && <ActionMenu dogId={dog.id} isStaff={isStaff} currentPersonId={currentPersonId} />}
         {/* Whether the End button shows is about "is there an open activity
             to close", not the dog_statuses.is_out flag — bed_rest is
@@ -173,7 +181,13 @@ function DogCard({
             closing (bug fixed 2026-09-06: this used to check isOut and
             silently hid End Bed Rest). */}
         {dog.current && canBringIn && (
-          <DogActionButton dogId={dog.id} mode="bring_in" label={endActionLabel(dog.status)} />
+          <DogActionButton
+            dogId={dog.id}
+            mode="bring_in"
+            label={endActionLabel(dog.status)}
+            isStaff={isStaff}
+            currentPersonId={currentPersonId}
+          />
         )}
       </div>
     </div>

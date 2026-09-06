@@ -13,12 +13,17 @@ function friendlyError(error: { code?: string; message: string }): string {
 }
 
 /**
- * The one-tap fast path (docs/ui-flows.md §4): walk out, right now, with the
- * signed-in person as the walker. RLS (`da_insert`) is what actually enforces
- * "a volunteer can only log a walk for themselves" — this just supplies the
- * values; a rejected insert surfaces as a normal Postgres error.
+ * Walk out, right now (docs/ui-flows.md §4). `walkerId` lets staff log it
+ * for whoever's actually taking the dog — the real primary case, per
+ * Paul (2026-09-07): one staff member on a shared kiosk iPad checks people
+ * in/out; ordinary volunteers essentially never sign into the app
+ * themselves. Defaults to the signed-in person (the fast "it's me" path,
+ * for the minority who do self-serve). RLS (`da_insert`) is what actually
+ * enforces "a non-staff volunteer can only log a walk for themselves" —
+ * this just supplies the values; a rejected insert surfaces as a normal
+ * Postgres error.
  */
-export async function startWalk(dogId: string): Promise<ActionResult> {
+export async function startWalk(dogId: string, walkerId?: string): Promise<ActionResult> {
   const person = await getCurrentPerson();
   if (!person || !person.id) return { error: "Not signed in." };
 
@@ -26,7 +31,7 @@ export async function startWalk(dogId: string): Promise<ActionResult> {
   const { error } = await supabase.from("dog_activity").insert({
     dog_id: dogId,
     type: "walk",
-    person_id: person.id,
+    person_id: person.isStaff && walkerId ? walkerId : person.id,
     started_at: new Date().toISOString(),
   });
 
