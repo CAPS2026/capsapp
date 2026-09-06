@@ -22,6 +22,8 @@ export type DogListItem = {
   photoUrl: string | null;
   current: CurrentActivity | null;
   lastWalkAt: string | null;
+  /** Total minutes walked in the trailing 28 days (completed walks only). */
+  fourWeekWalkMinutes: number;
 };
 
 export type StatusMeta = { code: DogStatus; label: string; sortOrder: number; isOut: boolean };

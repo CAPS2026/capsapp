@@ -1,6 +1,13 @@
 import type { DogConfidential, DogDetail, MedicalEvent, ActivityEntry, NoteEntry } from "@/lib/dog-detail";
 import { STATUS_COLOR_VAR, endActionLabel } from "@/lib/dogs";
-import { daysSince, formatDate, formatStartedLine, formatYearsMonths } from "@/lib/format";
+import {
+  daysSince,
+  formatDate,
+  formatDaysHoursOut,
+  formatMinutesOut,
+  formatStartedLine,
+  formatYearsMonths,
+} from "@/lib/format";
 import { DogActionButton } from "@/components/dogs/dog-action-button";
 import { ActionMenu } from "@/components/dogs/action-menu";
 import { EditActivityDialog } from "@/components/dogs/edit-activity-dialog";
@@ -219,12 +226,19 @@ export function DogDetailView({
 
 function CurrentStatusLine({ status, current }: { status: DogDetail["status"]; current: ActivityEntry }) {
   const overdue = current.dueBack ? new Date(current.dueBack) < new Date() : false;
-  const who = current.personName ? `With ${current.personName} · ` : status === "yard" ? `${current.reason ?? "Yard"} · ` : "";
+  const who = current.personName ? `With: ${current.personName} · ` : status === "yard" ? `${current.reason ?? "Yard"} · ` : "";
+  const startLabel = status === "walking" || status === "yard" ? "Started" : "Start";
+  const timeOut =
+    status === "walking"
+      ? ` · Time Out ${formatMinutesOut(current.startedAt)}`
+      : status === "bed_rest" || status === "jail_break" || status === "fostered"
+        ? ` · Time out: ${formatDaysHoursOut(current.startedAt)}`
+        : "";
   return (
     <p className="text-sm text-ink-muted mt-1">
       {who}
-      {formatStartedLine("Start", current.startedAt)}
-      {current.dueBack && <> · {formatStartedLine("Expected end", current.dueBack)}</>}
+      {formatStartedLine(startLabel, current.startedAt)}
+      {current.dueBack && <> · {formatStartedLine("Due End", current.dueBack)}</>}
       {status === "bed_rest" && current.reason ? ` · ${current.reason}` : ""}
       {overdue && (
         <span className="text-danger font-semibold" title="Overdue">
@@ -232,6 +246,7 @@ function CurrentStatusLine({ status, current }: { status: DogDetail["status"]; c
           ⏰ Overdue
         </span>
       )}
+      {timeOut}
     </p>
   );
 }

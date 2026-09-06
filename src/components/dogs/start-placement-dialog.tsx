@@ -129,7 +129,7 @@ export function StartPlacementDialog({
         )}
 
         <label className="flex flex-col gap-1 text-sm">
-          Expected end
+          Due End
           <input
             type="datetime-local"
             required
@@ -173,7 +173,7 @@ export function StartPlacementDialog({
           <button
             type="submit"
             disabled={isPending}
-            className="h-10 px-4 rounded-[var(--radius)] bg-brand text-white font-bold disabled:opacity-60"
+            className="h-10 px-4 rounded-[var(--radius)] bg-ok text-white font-bold disabled:opacity-60"
           >
             {isPending ? "Saving…" : `Start ${TYPE_LABEL[type]}`}
           </button>

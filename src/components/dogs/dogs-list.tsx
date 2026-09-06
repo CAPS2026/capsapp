@@ -6,7 +6,9 @@ import type { DogListItem, OrgSettings, StatusMeta } from "@/lib/dogs";
 import { STATUS_COLOR_VAR, endActionLabel } from "@/lib/dogs";
 import {
   daysAgoLabel,
-  daysSince,
+  formatDaysHoursOut,
+  formatHoursMinutes,
+  formatMinutesOut,
   formatStartedLine,
   minutesSince,
   timerColor,
@@ -14,7 +16,7 @@ import {
 import { DogActionButton } from "@/components/dogs/dog-action-button";
 import { ActionMenu } from "@/components/dogs/action-menu";
 
-type FilterKey = "needs_walk" | "out_now" | "mine";
+type FilterKey = "available" | "out_now" | "mine";
 
 export function DogsList({
   dogs,
@@ -48,16 +50,12 @@ export function DogsList({
 
   const filteredDogs = useMemo(() => {
     return dogs.filter((dog) => {
-      if (activeFilter === "needs_walk") {
-        const isAvailable = dog.status === "available";
-        const overdue = !dog.lastWalkAt || daysSince(dog.lastWalkAt) > orgSettings.needsWalkAfterDays;
-        if (!isAvailable || !overdue) return false;
-      }
+      if (activeFilter === "available" && dog.status !== "available") return false;
       if (activeFilter === "out_now" && !statusByCode.get(dog.status)?.isOut) return false;
       if (activeFilter === "mine" && dog.current?.personId !== currentPersonId) return false;
       return true;
     });
-  }, [dogs, activeFilter, orgSettings.needsWalkAfterDays, statusByCode, currentPersonId]);
+  }, [dogs, activeFilter, statusByCode, currentPersonId]);
 
   const groups = useMemo(() => {
     return statusMeta.map((status) => {
@@ -76,7 +74,7 @@ export function DogsList({
   return (
     <div className="flex flex-col gap-6 p-4 pb-6">
       <div className="flex gap-2 flex-wrap">
-        <FilterChip label="Needs a walk" active={activeFilter === "needs_walk"} onClick={() => toggleFilter("needs_walk")} />
+        <FilterChip label="Available" active={activeFilter === "available"} onClick={() => toggleFilter("available")} />
         <FilterChip label="Out now" active={activeFilter === "out_now"} onClick={() => toggleFilter("out_now")} />
         <FilterChip label="My dogs" active={activeFilter === "mine"} onClick={() => toggleFilter("mine")} />
       </div>
@@ -98,7 +96,6 @@ export function DogsList({
                   key={dog.id}
                   dog={dog}
                   orgSettings={orgSettings}
-                  isOut={status.isOut}
                   canBringIn={isStaff || dog.current?.personId === currentPersonId}
                   isStaff={isStaff}
                   currentPersonId={currentPersonId}
@@ -133,14 +130,12 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
 function DogCard({
   dog,
   orgSettings,
-  isOut,
   canBringIn,
   isStaff,
   currentPersonId,
 }: {
   dog: DogListItem;
   orgSettings: OrgSettings;
-  isOut: boolean;
   canBringIn: boolean;
   isStaff: boolean;
   currentPersonId: string;
@@ -172,7 +167,14 @@ function DogCard({
       <div className="flex items-center gap-1.5 shrink-0">
         {isAvailable && <DogActionButton dogId={dog.id} mode="walk" label="Start Walk" />}
         {isAvailable && <ActionMenu dogId={dog.id} isStaff={isStaff} currentPersonId={currentPersonId} />}
-        {isOut && canBringIn && <DogActionButton dogId={dog.id} mode="bring_in" label={endActionLabel(dog.status)} />}
+        {/* Whether the End button shows is about "is there an open activity
+            to close", not the dog_statuses.is_out flag — bed_rest is
+            deliberately is_out=false (on-site, not away) but still needs
+            closing (bug fixed 2026-09-06: this used to check isOut and
+            silently hid End Bed Rest). */}
+        {dog.current && canBringIn && (
+          <DogActionButton dogId={dog.id} mode="bring_in" label={endActionLabel(dog.status)} />
+        )}
       </div>
     </div>
   );
@@ -209,17 +211,18 @@ function CardLine({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSett
       if (!c) return null;
       const minutes = minutesSince(c.startedAt);
       return (
-        <p className="text-xs truncate" style={{ color: timerColor(minutes, orgSettings.walkAlertAfterMinutes) }}>
-          With {c.personName ?? "someone"} · {formatStartedLine("Started", c.startedAt)}
+        <p className="text-xs" style={{ color: timerColor(minutes, orgSettings.walkAlertAfterMinutes) }}>
+          With: {c.personName ?? "someone"} · {formatStartedLine("Started", c.startedAt)} · Time Out{" "}
+          {formatMinutesOut(c.startedAt)}
         </p>
       );
     }
     case "yard": {
       if (!c) return null;
-      const minutes = minutesSince(c.startedAt);
       return (
-        <p className="text-xs truncate" style={{ color: timerColor(minutes, orgSettings.yardAlertAfterMinutes) }}>
+        <p className="text-xs text-ink-muted">
           {c.reason ?? "Yard"} · {formatStartedLine("Started", c.startedAt)}
+          {c.dueBack && <> · {formatStartedLine("Due End", c.dueBack)}</>}
           {c.dueBack && <OverdueFlag dueBack={c.dueBack} />}
         </p>
       );
@@ -227,27 +230,29 @@ function CardLine({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSett
     case "available":
       return (
         <p className="text-xs truncate text-ink-muted">
-          {dog.lastWalkAt ? `Last walk ${daysAgoLabel(dog.lastWalkAt)}` : "Never walked"}
+          {dog.lastWalkAt
+            ? `Last walk: ${daysAgoLabel(dog.lastWalkAt)}, 4wk time: ${formatHoursMinutes(dog.fourWeekWalkMinutes)}`
+            : "Never walked"}
         </p>
       );
     case "bed_rest":
       if (!c) return null;
       return (
-        <p className="text-xs truncate text-ink-muted">
+        <p className="text-xs text-ink-muted">
           {formatStartedLine("Start", c.startedAt)}
-          {c.dueBack && <> · {formatStartedLine("Expected end", c.dueBack)}</>}
-          {c.reason ? ` · ${c.reason}` : ""}
+          {c.dueBack && <> · {formatStartedLine("Due End", c.dueBack)}</>}
           {c.dueBack && <OverdueFlag dueBack={c.dueBack} />}
+          {c.reason ? ` · ${c.reason}` : ""} · Time out: {formatDaysHoursOut(c.startedAt)}
         </p>
       );
     case "jail_break":
     case "fostered":
       if (!c) return null;
       return (
-        <p className="text-xs truncate text-ink-muted">
-          With {c.personName ?? "someone"} · {formatStartedLine("Start", c.startedAt)}
-          {c.dueBack && <> · {formatStartedLine("Expected end", c.dueBack)}</>}
-          {c.dueBack && <OverdueFlag dueBack={c.dueBack} />}
+        <p className="text-xs text-ink-muted">
+          With: {c.personName ?? "someone"} · {formatStartedLine("Start", c.startedAt)}
+          {c.dueBack && <> · {formatStartedLine("Due End", c.dueBack)}</>}
+          {c.dueBack && <OverdueFlag dueBack={c.dueBack} />} · Time out: {formatDaysHoursOut(c.startedAt)}
         </p>
       );
     default:

@@ -45,17 +45,37 @@ function ordinal(n: number): string {
   return `${n}th`;
 }
 
-/** "Saturday 14th Aug" — the friendly date format Paul asked for. */
-export function formatFriendlyDate(iso: string): string {
+/** "Sat, 6th Sep" — the short date format from Paul's 2026-09-06 text review. */
+export function formatShortDate(iso: string): string {
   const d = new Date(iso);
-  const weekday = d.toLocaleDateString("en-AU", { weekday: "long" });
+  const weekday = d.toLocaleDateString("en-AU", { weekday: "short" });
   const month = d.toLocaleDateString("en-AU", { month: "short" });
-  return `${weekday} ${ordinal(d.getDate())} ${month}`;
+  return `${weekday}, ${ordinal(d.getDate())} ${month}`;
 }
 
-/** "Started 14:32, Saturday 14th Aug" / "Expected End 09:00, Sunday 15th Aug". */
+/** "Started 10:51 Sat, 6th Sep" / "Due End 12:00 Sun, 7th Sep". */
 export function formatStartedLine(label: string, iso: string): string {
-  return `${label} ${formatTime24(iso)}, ${formatFriendlyDate(iso)}`;
+  return `${label} ${formatTime24(iso)} ${formatShortDate(iso)}`;
+}
+
+/** "45 min" elapsed — for Walking's "Time Out" (alarm past the org's walk threshold). */
+export function formatMinutesOut(startedAt: string): string {
+  return `${minutesSince(startedAt)} min`;
+}
+
+/** "3d 4h" elapsed — for Bed Rest/Jail Break/Foster's "Time out" (multi-day stays). */
+export function formatDaysHoursOut(startedAt: string): string {
+  const totalMinutes = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 60000));
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  return `${days}d ${hours}h`;
+}
+
+/** Minutes -> "H:MM", for the trailing-4-week walk total on Available cards. */
+export function formatHoursMinutes(totalMinutes: number): string {
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${h}:${String(m).padStart(2, "0")}`;
 }
 
 /** Timer colour per docs/design.md: muted -> warm past the alert threshold -> danger at ~2x. */

@@ -38,7 +38,7 @@ export function DogActionButton({
         onClick={handleClick}
         disabled={isPending}
         className={`h-9 px-4 rounded-full text-sm font-bold text-white disabled:opacity-60 ${
-          mode === "walk" ? "bg-brand" : "bg-ok"
+          mode === "walk" ? "bg-ok" : "bg-danger"
         }`}
       >
         {isPending ? "…" : label}

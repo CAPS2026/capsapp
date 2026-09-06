@@ -56,6 +56,26 @@ export async function getDogsListData() {
     if (m.is_primary || !photoPathByDog.has(m.dog_id)) photoPathByDog.set(m.dog_id, m.path);
   }
 
+  // "4wk time" on Available cards: total minutes walked in the trailing 28
+  // days, completed walks only (an open one hasn't contributed its minutes
+  // yet).
+  const fourWeeksAgo = new Date(Date.now() - 28 * 86_400_000).toISOString();
+  const { data: recentWalkRows } = dogIds.length
+    ? await supabase
+        .from("dog_activity")
+        .select("dog_id, started_at, ended_at")
+        .eq("type", "walk")
+        .not("ended_at", "is", null)
+        .gte("started_at", fourWeeksAgo)
+        .in("dog_id", dogIds)
+    : { data: [] as { dog_id: string; started_at: string; ended_at: string }[] };
+
+  const fourWeekMinutesByDog = new Map<string, number>();
+  for (const w of recentWalkRows ?? []) {
+    const minutes = Math.round((new Date(w.ended_at).getTime() - new Date(w.started_at).getTime()) / 60000);
+    fourWeekMinutesByDog.set(w.dog_id, (fourWeekMinutesByDog.get(w.dog_id) ?? 0) + minutes);
+  }
+
   const items: DogListItem[] = dogs.map((d) => {
     const currentRow = d.current_activity_id ? activityById.get(d.current_activity_id) : undefined;
     const lastWalkRow = d.latest_walk_id ? activityById.get(d.latest_walk_id) : undefined;
@@ -79,6 +99,7 @@ export async function getDogsListData() {
           }
         : null,
       lastWalkAt: lastWalkRow?.started_at ?? null,
+      fourWeekWalkMinutes: fourWeekMinutesByDog.get(d.id) ?? 0,
     };
   });
 
