@@ -45,18 +45,16 @@ export async function getCurrentPerson(): Promise<CurrentPerson | null> {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data: person, error } = await supabase
+  // `person_roles` has two FKs to `people` (person_id, approved_by) — the
+  // embed needs the explicit constraint name or PostgREST can't tell which
+  // relationship to use (PGRST201).
+  const { data: person } = await supabase
     .from("people")
-    .select("id, first_name, surname, email, person_roles(role, status)")
+    .select("id, first_name, surname, email, person_roles!person_roles_person_id_fkey(role, status)")
     .eq("auth_user_id", user.id)
     .maybeSingle();
 
-  if (error) {
-    console.error("getCurrentPerson: people query failed", { userId: user.id, error });
-  }
-
   if (!person) {
-    console.error("getCurrentPerson: no linked people row", { userId: user.id, userEmail: user.email });
     // Signed in via Supabase Auth, but no `people` row is linked yet —
     // either the auth callback hasn't run the link step, or this email
     // never went through registration. Treat as a bare, roleless account.
