@@ -32,6 +32,32 @@ export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short" });
 }
 
+/** 24-hour "HH:mm", per Paul's request (not 12-hour AM/PM). */
+export function formatTime24(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function ordinal(n: number): string {
+  if (n % 10 === 1 && n % 100 !== 11) return `${n}st`;
+  if (n % 10 === 2 && n % 100 !== 12) return `${n}nd`;
+  if (n % 10 === 3 && n % 100 !== 13) return `${n}rd`;
+  return `${n}th`;
+}
+
+/** "Saturday 14th Aug" — the friendly date format Paul asked for. */
+export function formatFriendlyDate(iso: string): string {
+  const d = new Date(iso);
+  const weekday = d.toLocaleDateString("en-AU", { weekday: "long" });
+  const month = d.toLocaleDateString("en-AU", { month: "short" });
+  return `${weekday} ${ordinal(d.getDate())} ${month}`;
+}
+
+/** "Started 14:32, Saturday 14th Aug" / "Expected End 09:00, Sunday 15th Aug". */
+export function formatStartedLine(label: string, iso: string): string {
+  return `${label} ${formatTime24(iso)}, ${formatFriendlyDate(iso)}`;
+}
+
 /** Timer colour per docs/design.md: muted -> warm past the alert threshold -> danger at ~2x. */
 export function timerColor(minutesElapsed: number, alertAfterMinutes: number): string {
   if (minutesElapsed >= alertAfterMinutes * 2) return "var(--danger)";

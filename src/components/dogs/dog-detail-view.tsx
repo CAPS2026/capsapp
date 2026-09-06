@@ -1,9 +1,8 @@
 import type { DogConfidential, DogDetail, MedicalEvent, ActivityEntry, NoteEntry } from "@/lib/dog-detail";
 import { STATUS_COLOR_VAR, endActionLabel } from "@/lib/dogs";
-import { daysSince, formatDate, formatYearsMonths } from "@/lib/format";
+import { daysSince, formatDate, formatStartedLine, formatYearsMonths } from "@/lib/format";
 import { DogActionButton } from "@/components/dogs/dog-action-button";
 import { ManualWalkDialog } from "@/components/dogs/manual-walk-dialog";
-import { BringInAtDialog } from "@/components/dogs/bring-in-at-dialog";
 import { StartPlacementDialog } from "@/components/dogs/start-placement-dialog";
 import { EditActivityDialog } from "@/components/dogs/edit-activity-dialog";
 
@@ -97,18 +96,18 @@ export function DogDetailView({
           {dog.experiencedHandlerOnly && (
             <span className="ml-2 text-xs font-semibold text-warm-ink">⚠️ Experienced handlers only</span>
           )}
+          {currentActivity && <CurrentStatusLine status={dog.status} current={currentActivity} />}
         </div>
 
         <div className="flex flex-col items-end gap-1">
           {dog.status === "available" && <DogActionButton dogId={dog.id} mode="walk" label="Start Walk" />}
           {dog.status === "available" && isStaff && <StartPlacementDialog dogId={dog.id} />}
-          {currentActivity && canBringIn && (
-            <>
-              <DogActionButton dogId={dog.id} mode="bring_in" label={endActionLabel(dog.status)} />
-              <BringInAtDialog dogId={dog.id} />
-            </>
+          {dog.status === "available" && (
+            <ManualWalkDialog dogId={dog.id} isStaff={isStaff} currentPersonId={currentPersonId} />
           )}
-          <ManualWalkDialog dogId={dog.id} isStaff={isStaff} currentPersonId={currentPersonId} />
+          {currentActivity && canBringIn && (
+            <DogActionButton dogId={dog.id} mode="bring_in" label={endActionLabel(dog.status)} />
+          )}
         </div>
       </div>
 
@@ -217,6 +216,25 @@ export function DogDetailView({
         <p className="text-sm">{timeWithCaps}</p>
       </Section>
     </div>
+  );
+}
+
+function CurrentStatusLine({ status, current }: { status: DogDetail["status"]; current: ActivityEntry }) {
+  const overdue = current.dueBack ? new Date(current.dueBack) < new Date() : false;
+  const who = current.personName ? `With ${current.personName} · ` : status === "yard" ? `${current.reason ?? "Yard"} · ` : "";
+  return (
+    <p className="text-sm text-ink-muted mt-1">
+      {who}
+      {formatStartedLine("Start", current.startedAt)}
+      {current.dueBack && <> · {formatStartedLine("Expected end", current.dueBack)}</>}
+      {status === "bed_rest" && current.reason ? ` · ${current.reason}` : ""}
+      {overdue && (
+        <span className="text-danger font-semibold" title="Overdue">
+          {" "}
+          ⏰ Overdue
+        </span>
+      )}
+    </p>
   );
 }
 

@@ -9,11 +9,11 @@ type PlacementType = "yard" | "bed_rest" | "jail_break" | "foster";
 const SUBMIT_LABEL: Record<PlacementType, string> = {
   yard: "Start Yard",
   bed_rest: "Start Bed Rest",
-  // The old app combined jail break + foster under one "Start Homecare"
-  // action — the type still splits internally, the button label doesn't.
-  jail_break: "Start Homecare",
-  foster: "Start Homecare",
+  jail_break: "Start Jail Break",
+  foster: "Start Foster",
 };
+
+const YARD_OPTIONS = ["Yard 1", "Yard 2"];
 
 // Staff-only: covers the activity types the one-tap Start Walk fast path
 // doesn't (docs/ui-flows.md §4 full path). RLS only allows non-walk inserts
@@ -36,7 +36,7 @@ export function StartPlacementDialog({ dogId }: { dogId: string }) {
     setCarers([]);
     setPersonId("");
     setDueBack("");
-    setReason("");
+    setReason(YARD_OPTIONS[0]);
     setNotes("");
   }
 
@@ -52,6 +52,7 @@ export function StartPlacementDialog({ dogId }: { dogId: string }) {
   function onTypeChange(next: PlacementType) {
     setType(next);
     setPersonId("");
+    setReason(next === "yard" ? YARD_OPTIONS[0] : "");
     if (next === "jail_break" || next === "foster") {
       listActiveCarers(next).then(setCarers);
     } else {
@@ -80,8 +81,11 @@ export function StartPlacementDialog({ dogId }: { dogId: string }) {
   }
 
   const needsCarer = type === "jail_break" || type === "foster";
-  const needsDueBack = type === "bed_rest" || needsCarer;
+  // Every type in this dialog gets a due-back now — Paul's ask, so an
+  // overdue flag can show for Yard too (a caretaker alarm to bring them in).
+  const needsDueBack = true;
   const needsReason = type === "bed_rest";
+  const needsYardPicker = type === "yard";
 
   return (
     <>
@@ -103,7 +107,7 @@ export function StartPlacementDialog({ dogId }: { dogId: string }) {
         onClick={(e) => e.target === e.currentTarget && close()}
       >
         <form onSubmit={handleSubmit} className="flex flex-col gap-3 p-5" onClick={(e) => e.stopPropagation()}>
-          <h2 className="font-bold text-lg">Take out — other</h2>
+          <h2 className="font-bold text-lg">Start — other than a walk</h2>
 
           <label className="flex flex-col gap-1 text-sm">
             Type
@@ -118,6 +122,23 @@ export function StartPlacementDialog({ dogId }: { dogId: string }) {
               <option value="foster">Foster</option>
             </select>
           </label>
+
+          {needsYardPicker && (
+            <label className="flex flex-col gap-1 text-sm">
+              Which yard
+              <select
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="h-11 px-3 rounded-[var(--radius)] border border-line-cool bg-white"
+              >
+                {YARD_OPTIONS.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           {needsCarer && (
             <label className="flex flex-col gap-1 text-sm">
@@ -145,7 +166,7 @@ export function StartPlacementDialog({ dogId }: { dogId: string }) {
 
           {needsDueBack && (
             <label className="flex flex-col gap-1 text-sm">
-              Due back
+              Expected end
               <input
                 type="datetime-local"
                 required

@@ -63,50 +63,6 @@ export async function bringDogIn(dogId: string): Promise<ActionResult> {
 }
 
 /**
- * Bring in, but at a time other than now — the dog actually came back
- * earlier and nobody tapped End Walk/End Homecare at the time
- * (docs/ui-flows.md §5 full path, step 2: "Came back earlier"). Unlike the
- * one-tap fast path, this always flags the row `edited` since a non-now
- * time is exactly what that flag is for.
- */
-export async function bringDogInAt(dogId: string, endedAtInput: string, notes: string): Promise<ActionResult> {
-  const person = await getCurrentPerson();
-  if (!person || !person.id) return { error: "Not signed in." };
-
-  const endedAt = new Date(endedAtInput);
-  const now = new Date();
-  if (Number.isNaN(endedAt.getTime())) return { error: "Enter a return time." };
-  if (endedAt > now) return { error: "Return time can't be in the future." };
-
-  const supabase = await createClient();
-  const { data: open } = await supabase
-    .from("dog_activity")
-    .select("id, started_at")
-    .eq("dog_id", dogId)
-    .is("ended_at", null)
-    .maybeSingle();
-
-  if (!open) return { error: "Nothing to bring in — no open activity for this dog." };
-  if (endedAt < new Date(open.started_at)) return { error: "Return time can't be before it went out." };
-
-  const { error } = await supabase
-    .from("dog_activity")
-    .update({
-      ended_at: endedAt.toISOString(),
-      notes: notes.trim() || null,
-      edited_at: now.toISOString(),
-      edited_by: person.id,
-    })
-    .eq("id", open.id);
-
-  if (error) return { error: friendlyError(error) };
-
-  revalidatePath("/dogs");
-  revalidatePath(`/dogs/${dogId}`);
-  return {};
-}
-
-/**
  * Fix the times on an existing activity row (docs/ui-flows.md §6, "Wrong
  * time on an existing record"). RLS (`da_update`) allows this for staff on
  * any row, or a volunteer on their own. Always flags the row `edited`.
@@ -165,7 +121,7 @@ export async function listActiveVolunteers(): Promise<{ id: string; name: string
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Active carers of the given type, for the Start Yard/Bed Rest/Homecare form (staff only). */
+/** Active carers of the given type, for the Start Jail Break/Foster form (staff only). */
 export async function listActiveCarers(type: "jail_break" | "foster"): Promise<{ id: string; name: string }[]> {
   const person = await getCurrentPerson();
   if (!person || !person.isStaff) return [];
@@ -184,8 +140,8 @@ export async function listActiveCarers(type: "jail_break" | "foster"): Promise<{
 }
 
 /**
- * Start Yard / Bed Rest / Homecare (jail break or foster) — docs/ui-flows.md
- * §4 full path, for the activity types the one-tap fast path doesn't cover.
+ * Start Yard / Bed Rest / Jail Break / Foster — docs/ui-flows.md §4 full
+ * path, for the activity types the one-tap fast path doesn't cover.
  * Staff only: RLS (`da_insert`) only allows non-walk types for staff, so
  * this checks the same thing up front for a clean error rather than a raw
  * RLS rejection.
@@ -205,8 +161,10 @@ export async function startPlacement(input: {
   if ((input.type === "jail_break" || input.type === "foster") && !input.personId) {
     return { error: "Pick a carer." };
   }
-  if ((input.type === "bed_rest" || input.type === "jail_break" || input.type === "foster") && !input.dueBack) {
-    return { error: "Due back is required." };
+  // Every type here gets a due-back (Yard included, so a caretaker can be
+  // alerted when a dog is overdue to come in).
+  if (!input.dueBack) {
+    return { error: "Expected end is required." };
   }
   if (input.type === "bed_rest" && !input.reason?.trim()) {
     return { error: "Reason is required for bed rest." };

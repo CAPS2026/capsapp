@@ -33,9 +33,10 @@ export type OrgSettings = {
 };
 
 /**
- * Button label for closing out whichever activity is currently open —
- * kept matching the old AppSheet app's own action names (End Walk / End
- * Homecare) so staff aren't relearning terms for the same action.
+ * Button label for closing out whichever activity is currently open — "End
+ * Walk" matches the old AppSheet app's own action name. Jail Break and
+ * Foster get their own distinct labels rather than the old app's combined
+ * "Homecare" (Paul's call, 2026-09-06: clearer beats matching legacy here).
  * Yard has no legacy equivalent (a new status this rebuild introduced).
  */
 export function endActionLabel(status: DogStatus): string {
@@ -47,8 +48,9 @@ export function endActionLabel(status: DogStatus): string {
     case "bed_rest":
       return "End Bed Rest";
     case "jail_break":
+      return "End Jail Break";
     case "fostered":
-      return "End Homecare";
+      return "End Foster";
     case "available":
       return "End"; // unreachable in practice — only out dogs get this button
   }

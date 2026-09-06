@@ -4,10 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { DogListItem, OrgSettings, StatusMeta } from "@/lib/dogs";
 import { STATUS_COLOR_VAR, endActionLabel } from "@/lib/dogs";
-import { daysAgoLabel, daysSince, formatDate, formatElapsed, minutesSince, timerColor } from "@/lib/format";
+import {
+  daysAgoLabel,
+  daysSince,
+  formatStartedLine,
+  minutesSince,
+  timerColor,
+} from "@/lib/format";
 import { DogActionButton } from "@/components/dogs/dog-action-button";
 import { ManualWalkDialog } from "@/components/dogs/manual-walk-dialog";
-import { BringInAtDialog } from "@/components/dogs/bring-in-at-dialog";
 import { StartPlacementDialog } from "@/components/dogs/start-placement-dialog";
 
 type FilterKey = "needs_walk" | "out_now" | "mine";
@@ -25,7 +30,9 @@ export function DogsList({
   currentPersonId: string;
   isStaff: boolean;
 }) {
-  const [activeFilters, setActiveFilters] = useState<Set<FilterKey>>(new Set());
+  // Single-select — picking a filter replaces whichever was active, per
+  // Paul's feedback (2026-09-06) that these shouldn't stack.
+  const [activeFilter, setActiveFilter] = useState<FilterKey | null>(null);
   const [, setTick] = useState(0);
 
   // Re-render every 30s so live timers keep counting up without a full refetch.
@@ -35,27 +42,23 @@ export function DogsList({
   }, []);
 
   function toggleFilter(key: FilterKey) {
-    setActiveFilters((prev) => {
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
+    setActiveFilter((prev) => (prev === key ? null : key));
   }
 
   const statusByCode = useMemo(() => new Map(statusMeta.map((s) => [s.code, s])), [statusMeta]);
 
   const filteredDogs = useMemo(() => {
     return dogs.filter((dog) => {
-      if (activeFilters.has("needs_walk")) {
+      if (activeFilter === "needs_walk") {
         const isAvailable = dog.status === "available";
         const overdue = !dog.lastWalkAt || daysSince(dog.lastWalkAt) > orgSettings.needsWalkAfterDays;
         if (!isAvailable || !overdue) return false;
       }
-      if (activeFilters.has("out_now") && !statusByCode.get(dog.status)?.isOut) return false;
-      if (activeFilters.has("mine") && dog.current?.personId !== currentPersonId) return false;
+      if (activeFilter === "out_now" && !statusByCode.get(dog.status)?.isOut) return false;
+      if (activeFilter === "mine" && dog.current?.personId !== currentPersonId) return false;
       return true;
     });
-  }, [dogs, activeFilters, orgSettings.needsWalkAfterDays, statusByCode, currentPersonId]);
+  }, [dogs, activeFilter, orgSettings.needsWalkAfterDays, statusByCode, currentPersonId]);
 
   const groups = useMemo(() => {
     return statusMeta.map((status) => {
@@ -74,9 +77,9 @@ export function DogsList({
   return (
     <div className="flex flex-col gap-6 p-4 pb-6">
       <div className="flex gap-2 flex-wrap">
-        <FilterChip label="Needs a walk" active={activeFilters.has("needs_walk")} onClick={() => toggleFilter("needs_walk")} />
-        <FilterChip label="Out now" active={activeFilters.has("out_now")} onClick={() => toggleFilter("out_now")} />
-        <FilterChip label="My dogs" active={activeFilters.has("mine")} onClick={() => toggleFilter("mine")} />
+        <FilterChip label="Needs a walk" active={activeFilter === "needs_walk"} onClick={() => toggleFilter("needs_walk")} />
+        <FilterChip label="Out now" active={activeFilter === "out_now"} onClick={() => toggleFilter("out_now")} />
+        <FilterChip label="My dogs" active={activeFilter === "mine"} onClick={() => toggleFilter("mine")} />
       </div>
 
       {groups.map(({ status, dogs: groupDogs }) =>
@@ -143,6 +146,8 @@ function DogCard({
   isStaff: boolean;
   currentPersonId: string;
 }) {
+  const isAvailable = dog.status === "available";
+
   return (
     <div className="flex items-center gap-3 bg-card border border-line rounded-[var(--radius)] p-3">
       <Link href={`/dogs/${dog.id}`} className="flex items-center gap-3 flex-1 min-w-0">
@@ -162,16 +167,14 @@ function DogCard({
         </div>
       </Link>
 
+      {/* Only the action relevant to the dog's current state — no clutter
+          from options that only make sense before or after this moment
+          (Paul's feedback, 2026-09-06). */}
       <div className="flex flex-col items-end gap-1 shrink-0">
-        {dog.status === "available" && <DogActionButton dogId={dog.id} mode="walk" label="Start Walk" />}
-        {dog.status === "available" && isStaff && <StartPlacementDialog dogId={dog.id} />}
-        {isOut && canBringIn && (
-          <>
-            <DogActionButton dogId={dog.id} mode="bring_in" label={endActionLabel(dog.status)} />
-            <BringInAtDialog dogId={dog.id} />
-          </>
-        )}
-        <ManualWalkDialog dogId={dog.id} isStaff={isStaff} currentPersonId={currentPersonId} />
+        {isAvailable && <DogActionButton dogId={dog.id} mode="walk" label="Start Walk" />}
+        {isAvailable && isStaff && <StartPlacementDialog dogId={dog.id} />}
+        {isAvailable && <ManualWalkDialog dogId={dog.id} isStaff={isStaff} currentPersonId={currentPersonId} />}
+        {isOut && canBringIn && <DogActionButton dogId={dog.id} mode="bring_in" label={endActionLabel(dog.status)} />}
       </div>
     </div>
   );
@@ -189,6 +192,17 @@ function Avatar({ photoUrl, name }: { photoUrl: string | null; name: string }) {
   );
 }
 
+/** ⏰ flag once a due-back time has passed and the dog is still out. */
+function OverdueFlag({ dueBack }: { dueBack: string }) {
+  if (new Date(dueBack) >= new Date()) return null;
+  return (
+    <span className="text-danger font-semibold" title="Overdue">
+      {" "}
+      ⏰ Overdue
+    </span>
+  );
+}
+
 function CardLine({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSettings }) {
   const c = dog.current;
 
@@ -198,7 +212,7 @@ function CardLine({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSett
       const minutes = minutesSince(c.startedAt);
       return (
         <p className="text-sm" style={{ color: timerColor(minutes, orgSettings.walkAlertAfterMinutes) }}>
-          With {c.personName ?? "someone"} · out {formatElapsed(c.startedAt)}
+          With {c.personName ?? "someone"} · {formatStartedLine("Started", c.startedAt)}
         </p>
       );
     }
@@ -207,7 +221,8 @@ function CardLine({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSett
       const minutes = minutesSince(c.startedAt);
       return (
         <p className="text-sm" style={{ color: timerColor(minutes, orgSettings.yardAlertAfterMinutes) }}>
-          In the yard · {formatElapsed(c.startedAt)}
+          {c.reason ?? "Yard"} · {formatStartedLine("Started", c.startedAt)}
+          {c.dueBack && <OverdueFlag dueBack={c.dueBack} />}
         </p>
       );
     }
@@ -221,9 +236,10 @@ function CardLine({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSett
       if (!c) return null;
       return (
         <p className="text-sm text-ink-muted">
-          Since {formatDate(c.startedAt)}
-          {c.dueBack ? ` · due ${formatDate(c.dueBack)}` : ""}
+          {formatStartedLine("Start", c.startedAt)}
+          {c.dueBack && <> · {formatStartedLine("Expected end", c.dueBack)}</>}
           {c.reason ? ` · ${c.reason}` : ""}
+          {c.dueBack && <OverdueFlag dueBack={c.dueBack} />}
         </p>
       );
     case "jail_break":
@@ -231,8 +247,9 @@ function CardLine({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSett
       if (!c) return null;
       return (
         <p className="text-sm text-ink-muted">
-          With {c.personName ?? "someone"} · out {daysSince(c.startedAt)}d
-          {c.dueBack ? ` · due ${formatDate(c.dueBack)}` : ""}
+          With {c.personName ?? "someone"} · {formatStartedLine("Start", c.startedAt)}
+          {c.dueBack && <> · {formatStartedLine("Expected end", c.dueBack)}</>}
+          {c.dueBack && <OverdueFlag dueBack={c.dueBack} />}
         </p>
       );
     default:
