@@ -1,23 +1,31 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { editActivityTimes } from "@/lib/actions/dog-activity";
 import { toDatetimeLocalValue } from "@/lib/format";
 
 // docs/ui-flows.md §6, "Wrong time on an existing record" — for a row that
 // already exists (open or closed) but was logged with the wrong time(s).
+// Works two ways: with its own "Edit times" trigger (the activity log use),
+// or fully controlled via isOpen/onClose (the "wrong time?" prompt shown
+// right after tapping End X, from dog-action-button.tsx).
 export function EditActivityDialog({
   dogId,
   activityId,
   startedAt,
   endedAt,
+  isOpen,
+  onClose,
 }: {
   dogId: string;
   activityId: string;
   startedAt: string;
   endedAt: string | null;
+  isOpen?: boolean;
+  onClose?: () => void;
 }) {
+  const controlled = isOpen !== undefined;
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [checkOut, setCheckOut] = useState(toDatetimeLocalValue(startedAt));
   const [checkIn, setCheckIn] = useState(endedAt ? toDatetimeLocalValue(endedAt) : "");
@@ -26,6 +34,18 @@ export function EditActivityDialog({
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
+  useEffect(() => {
+    if (!controlled) return;
+    if (isOpen) {
+      setError(null);
+      setCheckOut(toDatetimeLocalValue(startedAt));
+      setCheckIn(endedAt ? toDatetimeLocalValue(endedAt) : "");
+      dialogRef.current?.showModal();
+    } else {
+      dialogRef.current?.close();
+    }
+  }, [controlled, isOpen, startedAt, endedAt]);
+
   function open() {
     setError(null);
     dialogRef.current?.showModal();
@@ -33,6 +53,7 @@ export function EditActivityDialog({
 
   function close() {
     dialogRef.current?.close();
+    onClose?.();
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -56,20 +77,23 @@ export function EditActivityDialog({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          open();
-        }}
-        className="text-xs text-ink-muted underline underline-offset-2"
-      >
-        Edit times
-      </button>
+      {!controlled && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            open();
+          }}
+          className="text-xs text-ink-muted underline underline-offset-2"
+        >
+          Edit times
+        </button>
+      )}
 
       <dialog
         ref={dialogRef}
+        onClose={onClose}
         className="rounded-[var(--radius)] border border-line p-0 backdrop:bg-black/40 w-full max-w-sm"
         onClick={(e) => e.target === e.currentTarget && close()}
       >

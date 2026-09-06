@@ -37,12 +37,20 @@ export async function startWalk(dogId: string): Promise<ActionResult> {
   return {};
 }
 
+type BringInResult =
+  | { error: string; closed?: undefined }
+  | { error?: undefined; closed: { id: string; startedAt: string; endedAt: string } };
+
 /**
  * The one-tap fast path (docs/ui-flows.md §5): closes whichever activity is
  * currently open for the dog. RLS (`da_update`) only allows this for staff or
- * the person the open activity belongs to.
+ * the person the open activity belongs to. Returns the closed row so the
+ * caller can immediately offer "wrong time? edit" right at the point of
+ * action — the actual return time is very often not "now" (Paul's
+ * real-world case, 2026-09-06: brought a dog in earlier, only got to the
+ * app later, End Yard booked her out at click-time instead).
  */
-export async function bringDogIn(dogId: string): Promise<ActionResult> {
+export async function bringDogIn(dogId: string): Promise<BringInResult> {
   const person = await getCurrentPerson();
   if (!person || !person.id) return { error: "Not signed in." };
 
@@ -52,14 +60,15 @@ export async function bringDogIn(dogId: string): Promise<ActionResult> {
     .update({ ended_at: new Date().toISOString() })
     .eq("dog_id", dogId)
     .is("ended_at", null)
-    .select("id");
+    .select("id, started_at, ended_at")
+    .maybeSingle();
 
   if (error) return { error: friendlyError(error) };
-  if (!data || data.length === 0) return { error: "Nothing to bring in — no open activity for this dog." };
+  if (!data) return { error: "Nothing to bring in — no open activity for this dog." };
 
   revalidatePath("/dogs");
   revalidatePath(`/dogs/${dogId}`);
-  return {};
+  return { closed: { id: data.id, startedAt: data.started_at, endedAt: data.ended_at! } };
 }
 
 /**

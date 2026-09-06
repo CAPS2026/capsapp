@@ -178,10 +178,15 @@ export function DogDetailView({
       <Section title="Activity">
         <div className="flex flex-col gap-1 pb-2 border-b border-line">
           {latestOfEachType.map(({ type, entry }) => (
-            <p key={type} className="text-sm">
-              <span className="font-semibold">{ACTIVITY_TYPE_LABEL[type]}: </span>
-              {entry ? <ActivityLine entry={entry} /> : <span className="text-ink-muted">None yet</span>}
-            </p>
+            <div key={type} className="flex items-center justify-between gap-2">
+              <p className="text-sm">
+                <span className="font-semibold">{ACTIVITY_TYPE_LABEL[type]}: </span>
+                {entry ? <ActivityLine entry={entry} /> : <span className="text-ink-muted">None yet</span>}
+              </p>
+              {entry && (isStaff || entry.personId === currentPersonId) && (
+                <EditActivityDialog dogId={dog.id} activityId={entry.id} startedAt={entry.startedAt} endedAt={entry.endedAt} />
+              )}
+            </div>
           ))}
         </div>
         <div className="flex flex-col gap-1 pt-1">
