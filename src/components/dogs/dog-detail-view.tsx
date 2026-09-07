@@ -1,11 +1,13 @@
 import type { DogConfidential, DogDetail, MedicalEvent, ActivityEntry, NoteEntry } from "@/lib/dog-detail";
 import { STATUS_COLOR_VAR, endActionLabel } from "@/lib/dogs";
 import {
-  daysSince,
   formatDate,
   formatDaysHoursOut,
+  formatDuration,
   formatMinutesOut,
   formatStartedLine,
+  formatTime24,
+  formatShortDate,
   formatYearsMonths,
 } from "@/lib/format";
 import { DogActionButton } from "@/components/dogs/dog-action-button";
@@ -281,13 +283,24 @@ function CurrentStatusLine({ status, current }: { status: DogDetail["status"]; c
   );
 }
 
+// Shows exactly what "Edit times" would change, so it's obvious at a
+// glance whether something needs fixing (Paul, 2026-09-08: a bare date
+// range like "6 Sept → 6 Sept" didn't make it clear the record was
+// actually wrong — needs the walker, both times, and the total).
 function ActivityLine({ entry }: { entry: ActivityEntry }) {
-  const days = daysSince(entry.startedAt);
   return (
     <>
       {entry.personName ? `with ${entry.personName} · ` : ""}
-      {formatDate(entry.startedAt)}
-      {entry.endedAt ? ` → ${formatDate(entry.endedAt)}` : ` (${days}d so far)`}
+      Out {formatTime24(entry.startedAt)} {formatShortDate(entry.startedAt)}
+      {entry.endedAt ? (
+        <>
+          {" "}
+          → In {formatTime24(entry.endedAt)} {formatShortDate(entry.endedAt)} ·{" "}
+          {formatDuration(entry.startedAt, entry.endedAt)}
+        </>
+      ) : (
+        <> · {formatDaysHoursOut(entry.startedAt)} so far</>
+      )}
       {entry.dueBack ? ` · due ${formatDate(entry.dueBack)}` : ""}
       {entry.reason ? ` · ${entry.reason}` : ""}
     </>

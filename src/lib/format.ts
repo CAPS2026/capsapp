@@ -78,6 +78,17 @@ export function formatDaysHoursOut(startedAt: string): string {
   return `${days}d ${hours}h`;
 }
 
+/** Fixed duration between two timestamps — "12h 31m" / "2d 3h" / "45m". */
+export function formatDuration(startIso: string, endIso: string): string {
+  const totalMinutes = Math.max(0, Math.round((new Date(endIso).getTime() - new Date(startIso).getTime()) / 60000));
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
 /** Minutes -> "H:MM", for the trailing-4-week walk total on Available cards. */
 export function formatHoursMinutes(totalMinutes: number): string {
   const h = Math.floor(totalMinutes / 60);
