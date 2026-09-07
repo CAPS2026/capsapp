@@ -42,20 +42,16 @@ export async function startWalk(dogId: string, walkerId?: string): Promise<Actio
   return {};
 }
 
-type BringInResult =
-  | { error: string; closed?: undefined }
-  | { error?: undefined; closed: { id: string; startedAt: string; endedAt: string } };
-
 /**
  * The one-tap fast path (docs/ui-flows.md §5): closes whichever activity is
- * currently open for the dog. RLS (`da_update`) only allows this for staff or
- * the person the open activity belongs to. Returns the closed row so the
- * caller can immediately offer "wrong time? edit" right at the point of
- * action — the actual return time is very often not "now" (Paul's
- * real-world case, 2026-09-06: brought a dog in earlier, only got to the
- * app later, End Yard booked her out at click-time instead).
+ * currently open for the dog, right now. RLS (`da_update`) only allows this
+ * for staff or the person the open activity belongs to. If the real return
+ * time wasn't "now", the fix is the existing "Edit times" link on the dog's
+ * Activity summary (two taps: dog -> Edit times) rather than a confirm step
+ * on every single close — Paul (2026-09-08): fewest clicks for the standard
+ * case, where the time usually IS right.
  */
-export async function bringDogIn(dogId: string): Promise<BringInResult> {
+export async function bringDogIn(dogId: string): Promise<ActionResult> {
   const person = await getCurrentPerson();
   if (!person || !person.id) return { error: "Not signed in." };
 
@@ -65,15 +61,14 @@ export async function bringDogIn(dogId: string): Promise<BringInResult> {
     .update({ ended_at: new Date().toISOString() })
     .eq("dog_id", dogId)
     .is("ended_at", null)
-    .select("id, started_at, ended_at")
-    .maybeSingle();
+    .select("id");
 
   if (error) return { error: friendlyError(error) };
-  if (!data) return { error: "Nothing to bring in — no open activity for this dog." };
+  if (!data || data.length === 0) return { error: "Nothing to bring in — no open activity for this dog." };
 
   revalidatePath("/dogs");
   revalidatePath(`/dogs/${dogId}`);
-  return { closed: { id: data.id, startedAt: data.started_at, endedAt: data.ended_at! } };
+  return {};
 }
 
 /**
