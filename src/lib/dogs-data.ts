@@ -5,6 +5,7 @@ type ActivityRow = {
   id: string;
   type: string;
   started_at: string;
+  ended_at: string | null;
   due_back: string | null;
   reason: string | null;
   person: { id: string; first_name: string; surname: string } | null;
@@ -37,7 +38,7 @@ export async function getDogsListData() {
     ? await supabase
         .from("dog_activity")
         .select(
-          "id, type, started_at, due_back, reason, person:people!dog_activity_person_id_fkey(id, first_name, surname)",
+          "id, type, started_at, ended_at, due_back, reason, person:people!dog_activity_person_id_fkey(id, first_name, surname)",
         )
         .in("id", activityIds)
     : { data: [] as ActivityRow[] };
@@ -98,7 +99,11 @@ export async function getDogsListData() {
             reason: currentRow.reason,
           }
         : null,
-      lastWalkAt: lastWalkRow?.started_at ?? null,
+      // "Last walk" means "how long since the dog was last walked" — that's
+      // when it came BACK (ended_at), not when it went out. A walk that
+      // starts one day and ends the next should read as "today" once it's
+      // closed, not "yesterday" (bug caught 2026-09-07/08).
+      lastWalkAt: lastWalkRow?.ended_at ?? lastWalkRow?.started_at ?? null,
       fourWeekWalkMinutes: fourWeekMinutesByDog.get(d.id) ?? 0,
     };
   });
