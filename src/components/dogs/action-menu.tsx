@@ -24,10 +24,12 @@ export function ActionMenu({
   dogId,
   isStaff,
   currentPersonId,
+  currentPersonName,
 }: {
   dogId: string;
   isStaff: boolean;
   currentPersonId: string;
+  currentPersonName: string;
 }) {
   const sheetRef = useRef<HTMLDialogElement>(null);
   const [active, setActive] = useState<MenuAction | null>(null);
@@ -44,7 +46,12 @@ export function ActionMenu({
   if (!isStaff) {
     // Volunteers only ever get Manual entry here — no menu needed for one item.
     return (
-      <ManualWalkDialogTrigger dogId={dogId} isStaff={false} currentPersonId={currentPersonId} />
+      <ManualWalkDialogTrigger
+        dogId={dogId}
+        isStaff={false}
+        currentPersonId={currentPersonId}
+        currentPersonName={currentPersonName}
+      />
     );
   }
 
@@ -111,6 +118,7 @@ export function ActionMenu({
         dogId={dogId}
         isStaff={isStaff}
         currentPersonId={currentPersonId}
+        currentPersonName={currentPersonName}
         isOpen={active === "manual"}
         onClose={() => setActive(null)}
       />
@@ -123,10 +131,12 @@ function ManualWalkDialogTrigger({
   dogId,
   isStaff,
   currentPersonId,
+  currentPersonName,
 }: {
   dogId: string;
   isStaff: boolean;
   currentPersonId: string;
+  currentPersonName: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   return (
@@ -146,6 +156,7 @@ function ManualWalkDialogTrigger({
         dogId={dogId}
         isStaff={isStaff}
         currentPersonId={currentPersonId}
+        currentPersonName={currentPersonName}
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
       />

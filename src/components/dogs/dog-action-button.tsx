@@ -19,12 +19,14 @@ export function DogActionButton({
   label,
   isStaff,
   currentPersonId,
+  currentPersonName,
 }: {
   dogId: string;
   mode: "walk" | "bring_in";
   label: string;
   isStaff: boolean;
   currentPersonId: string;
+  currentPersonName: string;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -109,6 +111,7 @@ export function DogActionButton({
         <StartWalkDialog
           dogId={dogId}
           currentPersonId={currentPersonId}
+          currentPersonName={currentPersonName}
           isOpen={pickerOpen}
           onClose={() => setPickerOpen(false)}
         />

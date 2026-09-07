@@ -23,12 +23,14 @@ export function DogsList({
   statusMeta,
   orgSettings,
   currentPersonId,
+  currentPersonName,
   isStaff,
 }: {
   dogs: DogListItem[];
   statusMeta: StatusMeta[];
   orgSettings: OrgSettings;
   currentPersonId: string;
+  currentPersonName: string;
   isStaff: boolean;
 }) {
   // Single-select — picking a filter replaces whichever was active, per
@@ -99,6 +101,7 @@ export function DogsList({
                   canBringIn={isStaff || dog.current?.personId === currentPersonId}
                   isStaff={isStaff}
                   currentPersonId={currentPersonId}
+                  currentPersonName={currentPersonName}
                 />
               ))}
             </div>
@@ -133,12 +136,14 @@ function DogCard({
   canBringIn,
   isStaff,
   currentPersonId,
+  currentPersonName,
 }: {
   dog: DogListItem;
   orgSettings: OrgSettings;
   canBringIn: boolean;
   isStaff: boolean;
   currentPersonId: string;
+  currentPersonName: string;
 }) {
   const isAvailable = dog.status === "available";
 
@@ -172,9 +177,17 @@ function DogCard({
             label="Start Walk"
             isStaff={isStaff}
             currentPersonId={currentPersonId}
+            currentPersonName={currentPersonName}
           />
         )}
-        {isAvailable && <ActionMenu dogId={dog.id} isStaff={isStaff} currentPersonId={currentPersonId} />}
+        {isAvailable && (
+          <ActionMenu
+            dogId={dog.id}
+            isStaff={isStaff}
+            currentPersonId={currentPersonId}
+            currentPersonName={currentPersonName}
+          />
+        )}
         {/* Whether the End button shows is about "is there an open activity
             to close", not the dog_statuses.is_out flag — bed_rest is
             deliberately is_out=false (on-site, not away) but still needs
@@ -187,6 +200,7 @@ function DogCard({
             label={endActionLabel(dog.status)}
             isStaff={isStaff}
             currentPersonId={currentPersonId}
+            currentPersonName={currentPersonName}
           />
         )}
       </div>

@@ -13,12 +13,14 @@ export function ManualWalkDialog({
   dogId,
   isStaff,
   currentPersonId,
+  currentPersonName,
   isOpen,
   onClose,
 }: {
   dogId: string;
   isStaff: boolean;
   currentPersonId: string;
+  currentPersonName: string;
   isOpen: boolean;
   onClose: () => void;
 }) {
@@ -86,7 +88,7 @@ export function ManualWalkDialog({
               onChange={(e) => setPersonId(e.target.value)}
               className="h-11 px-3 rounded-[var(--radius)] border border-line-cool bg-white"
             >
-              <option value={currentPersonId}>Me</option>
+              <option value={currentPersonId}>{currentPersonName}</option>
               {volunteers
                 .filter((v) => v.id !== currentPersonId)
                 .map((v) => (

@@ -34,6 +34,7 @@ export default async function DogsPage() {
         statusMeta={statusMeta}
         orgSettings={orgSettings}
         currentPersonId={person.id}
+        currentPersonName={`${person.firstName} ${person.surname}`.trim()}
         isStaff={person.isStaff}
       />
     </div>

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { listActiveCarers, startPlacement } from "@/lib/actions/dog-activity";
 import { DateTimeField } from "@/components/dogs/datetime-field";
+import { formatTime24 } from "@/lib/format";
 
 export type PlacementType = "yard" | "bed_rest" | "jail_break" | "foster";
 
@@ -15,6 +16,19 @@ const TYPE_LABEL: Record<PlacementType, string> = {
 };
 
 const YARD_OPTIONS = ["Yard 1", "Yard 2"];
+
+// A countdown reads much better than picking an exact date+time for
+// something that's almost always "a couple of hours from now" — Paul's
+// feedback (2026-09-07): the date/time entry for Yard "didn't work" (as in,
+// wasn't the right tool), a duration countdown would be.
+const YARD_DURATIONS = [
+  { label: "15 min", minutes: 15 },
+  { label: "30 min", minutes: 30 },
+  { label: "1 hr", minutes: 60 },
+  { label: "2 hr", minutes: 120 },
+  { label: "3 hr", minutes: 180 },
+  { label: "4 hr", minutes: 240 },
+];
 
 // Controlled — opened from ActionMenu with a fixed type, one focused form
 // per action (Start Yard / Start Bed Rest / Start Jail Break / Start
@@ -129,10 +143,35 @@ export function StartPlacementDialog({
           </label>
         )}
 
-        <label className="flex flex-col gap-1 text-sm">
-          Due End
-          <DateTimeField required value={dueBack} onChange={setDueBack} />
-        </label>
+        {needsYardPicker ? (
+          <div className="flex flex-col gap-1 text-sm">
+            Due back in
+            <div className="grid grid-cols-3 gap-2">
+              {YARD_DURATIONS.map((d) => {
+                const target = new Date(Date.now() + d.minutes * 60_000).toISOString();
+                const active = dueBack === target;
+                return (
+                  <button
+                    key={d.minutes}
+                    type="button"
+                    onClick={() => setDueBack(target)}
+                    className={`h-11 rounded-[var(--radius)] border text-sm font-semibold ${
+                      active ? "bg-brand text-white border-brand" : "border-line-cool bg-white text-ink"
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                );
+              })}
+            </div>
+            {dueBack && <span className="text-xs text-ink-muted">Back by {formatTime24(dueBack)}</span>}
+          </div>
+        ) : (
+          <label className="flex flex-col gap-1 text-sm">
+            Due End
+            <DateTimeField required value={dueBack} onChange={setDueBack} />
+          </label>
+        )}
 
         {needsReason && (
           <label className="flex flex-col gap-1 text-sm">

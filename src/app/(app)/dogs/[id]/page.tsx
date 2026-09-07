@@ -19,7 +19,12 @@ export default async function DogDetailPage({ params }: { params: Promise<{ id: 
       <Link href="/dogs" className="text-sm font-semibold text-brand-ink">
         ← Dogs
       </Link>
-      <DogDetailView {...detail} isStaff={person.isStaff} currentPersonId={person.id} />
+      <DogDetailView
+        {...detail}
+        isStaff={person.isStaff}
+        currentPersonId={person.id}
+        currentPersonName={`${person.firstName} ${person.surname}`.trim()}
+      />
     </div>
   );
 }

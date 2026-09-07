@@ -178,7 +178,7 @@ export async function startPlacement(input: {
   // Every type here gets a due-back (Yard included, so a caretaker can be
   // alerted when a dog is overdue to come in).
   if (!input.dueBack) {
-    return { error: "Expected end is required." };
+    return { error: "Due back is required." };
   }
   if (input.type === "bed_rest" && !input.reason?.trim()) {
     return { error: "Reason is required for bed rest." };

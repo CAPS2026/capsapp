@@ -59,6 +59,7 @@ export function DogDetailView({
   notes,
   isStaff,
   currentPersonId,
+  currentPersonName,
 }: {
   dog: DogDetail;
   confidential: DogConfidential | null;
@@ -69,6 +70,7 @@ export function DogDetailView({
   notes: NoteEntry[];
   isStaff: boolean;
   currentPersonId: string;
+  currentPersonName: string;
 }) {
   const primaryPhoto = dog.photos.find((p) => p.isPrimary) ?? dog.photos[0];
   const age = dog.dateOfBirth ? formatYearsMonths(dog.dateOfBirth) : dog.ageOverride;
@@ -113,10 +115,16 @@ export function DogDetailView({
               label="Start Walk"
               isStaff={isStaff}
               currentPersonId={currentPersonId}
+              currentPersonName={currentPersonName}
             />
           )}
           {dog.status === "available" && (
-            <ActionMenu dogId={dog.id} isStaff={isStaff} currentPersonId={currentPersonId} />
+            <ActionMenu
+              dogId={dog.id}
+              isStaff={isStaff}
+              currentPersonId={currentPersonId}
+              currentPersonName={currentPersonName}
+            />
           )}
           {currentActivity && canBringIn && (
             <DogActionButton
@@ -125,6 +133,7 @@ export function DogDetailView({
               label={endActionLabel(dog.status)}
               isStaff={isStaff}
               currentPersonId={currentPersonId}
+              currentPersonName={currentPersonName}
             />
           )}
         </div>

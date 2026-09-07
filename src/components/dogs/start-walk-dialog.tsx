@@ -12,11 +12,13 @@ import { listActiveVolunteers, startWalk } from "@/lib/actions/dog-activity";
 export function StartWalkDialog({
   dogId,
   currentPersonId,
+  currentPersonName,
   isOpen,
   onClose,
 }: {
   dogId: string;
   currentPersonId: string;
+  currentPersonName: string;
   isOpen: boolean;
   onClose: () => void;
 }) {
@@ -66,7 +68,7 @@ export function StartWalkDialog({
           onChange={(e) => setWalkerId(e.target.value)}
           className="h-11 px-3 rounded-[var(--radius)] border border-line-cool bg-white"
         >
-          <option value={currentPersonId}>Me</option>
+          <option value={currentPersonId}>{currentPersonName}</option>
           {volunteers
             .filter((v) => v.id !== currentPersonId)
             .map((v) => (
