@@ -1,7 +1,7 @@
 # CAPS App — setup & handover
 
 Everything needed to pick this project up from scratch, on a different machine
-or a different account. Kept current as of **4 Sep 2026 (evening)**.
+or a different account. Kept current as of **8 Sep 2026**.
 
 For the *what/why* of the app itself, start at `README.md`, then `docs/caps-rebuild-plan.md`
 → `caps-phase0-features.md` → `schema.md` → `ui-flows.md` → `design.md` in order.
@@ -114,39 +114,84 @@ This file is the *where do the accounts live and how do I get back in* reference
   still blank** — see the box below. `.env.local.example` in the repo is the
   committed template.
 
-### ⚠ Blocking: Supabase keys not wired in yet
-Auth/data code is written (`src/lib/supabase/*`, `src/lib/auth.ts`,
-`src/middleware.ts`, `/login`, `/auth/callback`) and **degrades gracefully**
-without the keys — public pages serve, protected pages redirect to `/login`,
-nothing 500s — but none of it actually works (no real sign-in, no data) until:
-1. `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are fetched
-   (Supabase MCP `get_publishable_keys`/dashboard → Project Settings → API,
-   project `amozcnlvfcxzeaukgbjb`) and put in `.env.local` **and** as Vercel
-   project env vars (dashboard → Settings → Environment Variables, or
-   `vercel env add`). The service-role key is server-only — never
-   `NEXT_PUBLIC_*`, never in a browser bundle.
-2. Someone's `people` row exists with `staff` role active — otherwise even a
-   successful sign-in lands with no roles (bootstrapping needs DB write
-   access, i.e. the Supabase MCP connector reconnected, or the CLI-token
-   method used for Vercel doesn't have an equivalent here yet).
+### Supabase keys — RESOLVED 5-6 Sep 2026
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are wired into
+both `.env.local` and all three Vercel environments (production/preview/
+development). Auth is genuinely live: magic-link sign-in works end to end
+(shouldCreateUser: false — an email with no matching `people` row can't sign
+in at all, bounced to `/login?error=not_registered`; this is deliberate, see
+§5). Google sign-in is NOT enabled as a provider in Supabase yet (separate,
+non-blocking — magic link is the only working path today).
 
-## 5. Where things stand (5 Sep 2026)
+## 5. Where things stand (8 Sep 2026)
 
-- ✅ Phases 0–3 documented (`docs/`): features, schema, UI flows, design.
-- ✅ Supabase schema live and verified (migrations 01–09).
-- ✅ Next.js app scaffolded, branded, builds clean, **deployed to Vercel and
-  publicly live** at `https://capsapp-five.vercel.app` (§3 has the two setup
-  bugs found and fixed).
-- ✅ **Phase 4 slice 1 built**: Supabase Auth wiring (magic link + Google),
-  session middleware, the auth-callback that links a sign-in to an existing
-  `people` row by email, and a role-gated app shell (bottom nav: Dogs/Site
-  always, People/Reports staff-only). Placeholder pages prove the pipeline.
-  **Not yet live-tested** — blocked on the keys above.
-- ⏳ Next: slice 2, the real Dogs list, once the keys are in and there's at
-  least one staff person to sign in as.
-- The **old AppSheet system stays live and frozen** in parallel — see
-  `docs/caps-system-review.md` and `docs/caps-rebuild-plan.md` §6 for the
-  cutover plan. Nothing about this rebuild has touched AppSheet.
+**Live and working** at `https://capsapp-five.vercel.app`:
+
+- **Auth** (Phase 4 slice 1): magic-link sign-in, session middleware, the
+  auth-callback that links a sign-in to an existing `people` row by email
+  and refuses anyone unregistered. Google OAuth not enabled (non-blocking).
+- **Dogs list** (`/dogs`, slice 2): status-grouped cards (Walking/Yard/
+  Available/Bed Rest/Jail Break/Fostered), sorted longest-since-last-walk
+  first, live alert-coloured timers, 3 filter chips (Available/Out now/My
+  dogs — single-select).
+- **Dog detail** (`/dogs/[id]`, slice 3): public info, Listing/SavourLife
+  fields, staff-only panel, activity log (shows walker + out/in times +
+  total duration, so it's obvious what a wrong record needs fixing to),
+  notes, time-with-CAPS.
+- **Take-out/bring-in** (slice 4, `src/lib/actions/dog-activity.ts` +
+  `src/components/dogs/*`): one-tap Start Walk / End Walk/Yard/Bed Rest/
+  Homecare, a staff-only "⋯" action menu for Start Yard/Bed Rest/Jail
+  Break/Foster (each a focused per-type form, not a type-picker), Manual
+  entry (a walk that never touched the app), Edit times on any activity row.
+  **Kiosk mode**: staff get a "Who's walking?" person-picker instead of the
+  fast tap assuming themselves — the real primary workflow is one staff
+  member on a shared iPad checking people in/out, not individual self-serve
+  logins (those are the rare case, kept as the instant tap for non-staff).
+  Yard's due-back is a duration/countdown picker (15min-4hr buttons), not a
+  date/time field — other types keep exact date+time (multi-day spans).
+- **Site — who's here** (`/site`, slice 8-ish): sign in/out board, any
+  registered person or a walk-up guest, reason picker.
+- App shell constrained to a phone-width column (`max-w-lg`) even on
+  desktop — this is a mobile app first.
+- Region: Vercel functions pinned to `syd1` (`vercel.json`) to co-locate
+  with the Sydney-region Supabase DB — was a real performance issue before.
+
+**Explicitly paused, not forgotten:**
+- **Registration** (`/apply/volunteer`) — still a stub page. Paul is
+  unresolved on how to model the volunteer/homecarer distinction and the
+  broader registered-vs-self-serve-vs-admin split (see project memory /
+  ask him directly) — **do not build registration or People until he says
+  go**, both would likely need redoing once that's settled.
+- **People** (`/people`) — staff people-management/approval screens, not
+  started. Blocked on the same open question as Registration.
+- **Mobile visual sizing pass** — Paul flagged card/row height will need
+  work once there are ~20+ real dogs (currently only test data). Explicitly
+  "hold on that" — a dedicated pass, not something to guess at blind.
+- **Logs / Reports / Alerts** (`ui-flows.md` §10-12) — not started. Alerts
+  needs a real email provider (Resend) since Supabase's built-in email
+  sender is capped at 2/hour project-wide — not yet set up, Paul deferred it.
+
+**Known test-data note:** dogs in the DB are seeded test rows with
+deliberately fictional/celebrity names (Beethoven Rex, Lassie, Hooch, Toto,
+Old Yeller, Marley, Bolt) — Paul's explicit instruction, so test data is
+never confusable with a real shelter dog. **Apply this convention to any
+future test data too.** Delete these before real dog data migration.
+
+**Real bugs found and fixed via Paul's live testing this week** (see git log
+for full detail, all on `main`): an ambiguous-embed bug that silently broke
+role lookups for every sign-in (PGRST201, `person_roles` has two FKs to
+`people`); "End Bed Rest" never appearing (button visibility was keyed to
+the wrong flag); "Last walk: today" for a walk from yesterday (calendar-day
+vs rolling-24h bug); the reverse version of that bug ("Last walk" using
+start time instead of end time); a native `<input type="datetime-local">`
+that had no explicit confirm step and didn't respect a fixed 24-hour clock
+(replaced with a custom date+hour+minute picker); an inline "confirm" UI
+that could be tapped-through by a phantom second click on touch devices
+(now avoided by using real `<dialog>` modals for any such follow-up).
+
+The **old AppSheet system stays live and frozen** in parallel — see
+`docs/caps-system-review.md` and `docs/caps-rebuild-plan.md` §6 for the
+cutover plan. Nothing about this rebuild has touched AppSheet.
 
 ## 6. Quick sanity check for a fresh session
 
@@ -157,7 +202,17 @@ nothing 500s — but none of it actually works (no real sign-in, no data) until:
    (those are Paul's personal projects; seeing them means the connector is
    still bound to the wrong account — see §7 below).
 3. `vercel whoami` (after `vercel login`) — does it say `consult-8760`?
-   Vercel MCP `list_teams` should return a real team, not `[]`.
+   **The Vercel MCP connector has never resolved correctly** (`list_teams`
+   returns `[]`, `get_runtime_logs` 403s, even with the right project/team
+   ID passed explicitly) — confirmed still broken as of 8 Sep 2026, unlike
+   Supabase's connector which the email fix resolved. Don't spend time
+   re-diagnosing this; **the local Vercel CLI is the reliable path for
+   everything** (`vercel --prod` to deploy, `vercel logs <url>` for runtime
+   logs) and is what every deploy in this project has used. `vercel --prod`
+   occasionally (~3 times in one session) returns a transient
+   `{"reason":"deploy_failed","message":"Not authorized"}` even though
+   `vercel whoami` is fine — just retry once, it's never needed a second
+   retry.
 4. `git -C capsapp log --oneline -5` — matches what's on
    `github.com/CAPS2026/capsapp/commits/main`?
 
