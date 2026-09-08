@@ -173,7 +173,7 @@ export async function getDogDetail(dogId: string, isStaff: boolean) {
     )
     .eq("dog_id", dogId)
     .order("started_at", { ascending: false })
-    .limit(20);
+    .limit(60);
 
   const allActivities: ActivityEntry[] = ((activityRows ?? []) as unknown as Array<{
     id: string;
@@ -199,11 +199,10 @@ export async function getDogDetail(dogId: string, isStaff: boolean) {
   }));
 
   const currentActivity = allActivities.find((a) => !a.endedAt) ?? null;
-  const activities = allActivities.slice(0, 5);
 
-  const latestOfEachType = (["walk", "yard", "bed_rest", "foster"] as const).map((type) => ({
+  const latestOfEachType = (["walk", "yard", "bed_rest", "jail_break", "foster"] as const).map((type) => ({
     type,
-    entry: allActivities.find((a) => a.type === type || (type === "foster" && a.type === "jail_break")) ?? null,
+    entry: allActivities.find((a) => a.type === type) ?? null,
   }));
 
   let notesQuery = supabase
@@ -229,5 +228,5 @@ export async function getDogDetail(dogId: string, isStaff: boolean) {
     authorName: n.author ? `${n.author.first_name} ${n.author.surname}` : null,
   }));
 
-  return { dog, confidential, medicalEvents, activities, currentActivity, latestOfEachType, notes };
+  return { dog, confidential, medicalEvents, activityLog: allActivities, currentActivity, latestOfEachType, notes };
 }

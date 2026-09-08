@@ -3,24 +3,13 @@ import { STATUS_COLOR_VAR, endActionLabel } from "@/lib/dogs";
 import {
   formatDate,
   formatDaysHoursOut,
-  formatDuration,
   formatMinutesOut,
   formatStartedLine,
-  formatTime24,
-  formatShortDate,
   formatYearsMonths,
 } from "@/lib/format";
 import { DogActionButton } from "@/components/dogs/dog-action-button";
 import { ActionMenu } from "@/components/dogs/action-menu";
-import { EditActivityDialog } from "@/components/dogs/edit-activity-dialog";
-
-const ACTIVITY_TYPE_LABEL: Record<string, string> = {
-  walk: "Walk",
-  yard: "Yard",
-  bed_rest: "Bed rest",
-  jail_break: "Jail break",
-  foster: "Foster",
-};
+import { ActivitySection } from "@/components/dogs/activity-section";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -55,7 +44,7 @@ export function DogDetailView({
   dog,
   confidential,
   medicalEvents,
-  activities,
+  activityLog,
   currentActivity,
   latestOfEachType,
   notes,
@@ -66,7 +55,7 @@ export function DogDetailView({
   dog: DogDetail;
   confidential: DogConfidential | null;
   medicalEvents: MedicalEvent[];
-  activities: ActivityEntry[];
+  activityLog: ActivityEntry[];
   currentActivity: ActivityEntry | null;
   latestOfEachType: { type: string; entry: ActivityEntry | null }[];
   notes: NoteEntry[];
@@ -201,38 +190,13 @@ export function DogDetailView({
       )}
 
       <Section title="Activity">
-        <div className="flex flex-col gap-1 pb-2 border-b border-line">
-          {latestOfEachType.map(({ type, entry }) => (
-            <p key={type} className="text-sm">
-              <span className="font-semibold">{ACTIVITY_TYPE_LABEL[type]}: </span>
-              {entry ? <ActivityLine entry={entry} /> : <span className="text-ink-muted">None yet</span>}
-              {entry && (isStaff || entry.personId === currentPersonId) && (
-                <span className="ml-2">
-                  <EditActivityDialog dogId={dog.id} activityId={entry.id} startedAt={entry.startedAt} endedAt={entry.endedAt} />
-                </span>
-              )}
-            </p>
-          ))}
-        </div>
-        <div className="flex flex-col gap-1 pt-1">
-          <h3 className="text-sm font-bold text-ink-muted">Last {activities.length || 0} activities</h3>
-          {activities.length === 0 && <p className="text-sm text-ink-muted">No activity yet.</p>}
-          {activities.map((a) => (
-            <p key={a.id} className="text-sm">
-              {ACTIVITY_TYPE_LABEL[a.type] ?? a.type} — <ActivityLine entry={a} />
-              {(a.enteredLate || a.editedAt) && (
-                <span className="ml-1 text-xs text-warm-ink font-semibold">
-                  {a.enteredLate ? "late entry" : "edited"}
-                </span>
-              )}
-              {(isStaff || a.personId === currentPersonId) && (
-                <span className="ml-2">
-                  <EditActivityDialog dogId={dog.id} activityId={a.id} startedAt={a.startedAt} endedAt={a.endedAt} />
-                </span>
-              )}
-            </p>
-          ))}
-        </div>
+        <ActivitySection
+          dogId={dog.id}
+          latest={latestOfEachType}
+          recent={activityLog}
+          isStaff={isStaff}
+          currentPersonId={currentPersonId}
+        />
       </Section>
 
       <Section title="Notes">
@@ -280,29 +244,5 @@ function CurrentStatusLine({ status, current }: { status: DogDetail["status"]; c
       )}
       {timeOut}
     </p>
-  );
-}
-
-// Shows exactly what "Edit times" would change, so it's obvious at a
-// glance whether something needs fixing (Paul, 2026-09-08: a bare date
-// range like "6 Sept → 6 Sept" didn't make it clear the record was
-// actually wrong — needs the walker, both times, and the total).
-function ActivityLine({ entry }: { entry: ActivityEntry }) {
-  return (
-    <>
-      {entry.personName ? `with ${entry.personName} · ` : ""}
-      Out {formatTime24(entry.startedAt)} {formatShortDate(entry.startedAt)}
-      {entry.endedAt ? (
-        <>
-          {" "}
-          → In {formatTime24(entry.endedAt)} {formatShortDate(entry.endedAt)} ·{" "}
-          {formatDuration(entry.startedAt, entry.endedAt)}
-        </>
-      ) : (
-        <> · {formatDaysHoursOut(entry.startedAt)} so far</>
-      )}
-      {entry.dueBack ? ` · due ${formatDate(entry.dueBack)}` : ""}
-      {entry.reason ? ` · ${entry.reason}` : ""}
-    </>
   );
 }

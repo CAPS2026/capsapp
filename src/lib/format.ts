@@ -60,6 +60,65 @@ export function formatShortDate(iso: string): string {
   return `${weekday}, ${ordinal(d.getDate())} ${month}`;
 }
 
+/** "6-Sep-26" — compact date for dense activity records. */
+export function formatCompactDate(iso: string): string {
+  const d = new Date(iso);
+  const month = d.toLocaleDateString("en-AU", { month: "short" }).slice(0, 3);
+  return `${d.getDate()}-${month}-${String(d.getFullYear()).slice(-2)}`;
+}
+
+/** "Sat, 6 Sep 2026, 12:00" — full timestamp for the activity record pop-out. */
+export function formatFullDateTime(iso: string): string {
+  const d = new Date(iso);
+  const date = d.toLocaleDateString("en-AU", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  return `${date}, ${formatTime24(iso)}`;
+}
+
+/**
+ * One condensed activity line, per Paul 2026-09-08:
+ *   "Paul Green · 6-Sep-26 · 12:00–12:30 · 30m"        (same day)
+ *   "Paul Green · 6-Sep-26 23:00 → 7-Sep-26 06:15 · 7h 15m"  (spans midnight)
+ *   "Paul Green · 6-Sep-26 12:00 · 2h 40m so far"      (still out)
+ * Person is dropped when there isn't one (yard, bed rest). The total is
+ * always last — it's the realism check ("a 6-hour walk?").
+ */
+export function formatActivityRecordLine(opts: {
+  personName: string | null;
+  startedAt: string;
+  endedAt: string | null;
+}): string {
+  const { personName, startedAt, endedAt } = opts;
+  const parts: string[] = [];
+  if (personName) parts.push(personName);
+
+  if (!endedAt) {
+    parts.push(`${formatCompactDate(startedAt)} ${formatTime24(startedAt)}`);
+    parts.push(`${formatDuration(startedAt, new Date().toISOString())} so far`);
+    return parts.join(" · ");
+  }
+
+  const s = new Date(startedAt);
+  const e = new Date(endedAt);
+  const sameDay =
+    s.getFullYear() === e.getFullYear() && s.getMonth() === e.getMonth() && s.getDate() === e.getDate();
+
+  if (sameDay) {
+    parts.push(formatCompactDate(startedAt));
+    parts.push(`${formatTime24(startedAt)}–${formatTime24(endedAt)}`);
+  } else {
+    parts.push(
+      `${formatCompactDate(startedAt)} ${formatTime24(startedAt)} → ${formatCompactDate(endedAt)} ${formatTime24(endedAt)}`,
+    );
+  }
+  parts.push(formatDuration(startedAt, endedAt));
+  return parts.join(" · ");
+}
+
 /** "Started 10:51 Sat, 6th Sep" / "Due End 12:00 Sun, 7th Sep". */
 export function formatStartedLine(label: string, iso: string): string {
   return `${label} ${formatTime24(iso)} ${formatShortDate(iso)}`;
