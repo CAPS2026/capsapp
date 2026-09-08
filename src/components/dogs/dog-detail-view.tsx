@@ -155,15 +155,17 @@ export function DogDetailView({
         )}
       </Section>
 
-      <Section title="Listing">
-        <Field label="Adoption fee" value={dog.adoptionFee ? `$${dog.adoptionFee}` : null} />
-        <Field label="Interstate adoption" value={yesNo(dog.interstateAdoption)} />
-        <Field label="Available within" value={dog.adoptionAvailableWithin} />
-        <Field label="Adoption policy" value={dog.adoptionPolicy} />
-        <Field label="BIN / source no." value={dog.binSourceNumber} />
-        <Field label="SavourLife ID" value={dog.savourlifeId} />
-        <Field label="Listed on SavourLife" value={yesNo(dog.listedOnSavourlife)} />
-      </Section>
+      {isStaff && (
+        <Section title="Listing">
+          <Field label="Adoption fee" value={dog.adoptionFee ? `$${dog.adoptionFee}` : null} />
+          <Field label="Interstate adoption" value={yesNo(dog.interstateAdoption)} />
+          <Field label="Available within" value={dog.adoptionAvailableWithin} />
+          <Field label="Adoption policy" value={dog.adoptionPolicy} />
+          <Field label="BIN / source no." value={dog.binSourceNumber} />
+          <Field label="SavourLife ID" value={dog.savourlifeId} />
+          <Field label="Listed on SavourLife" value={yesNo(dog.listedOnSavourlife)} />
+        </Section>
+      )}
 
       {isStaff && (confidential || medicalEvents.length > 0) && (
         <Section title="Staff only">

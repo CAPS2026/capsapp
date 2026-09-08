@@ -60,7 +60,7 @@ export function ActivitySection({
 
   return (
     <>
-      <div className="flex flex-col gap-1 pb-2 border-b border-line">
+      <div className={`flex flex-col gap-1 ${isStaff ? "pb-2 border-b border-line" : ""}`}>
         {latest.map(({ type, entry }) => (
           <div key={type} className="text-sm">
             <span className="font-semibold">{TYPE_LABEL[type] ?? type}: </span>
@@ -79,31 +79,37 @@ export function ActivitySection({
         ))}
       </div>
 
-      <div className="pt-1 flex flex-col gap-1">
-        <h3 className="text-sm font-bold text-ink-muted">Recent activity</h3>
-        {recent.length === 0 ? (
-          <p className="text-sm text-ink-muted">No activity yet.</p>
-        ) : (
-          <div className="max-h-44 overflow-y-auto border border-line rounded-[var(--radius)] divide-y divide-line">
-            {recent.map((a) => (
-              <button
-                key={a.id}
-                type="button"
-                onClick={() => openRecord(a.id)}
-                className="w-full text-left text-sm px-3 py-2 hover:bg-gray-tint flex items-baseline gap-2"
-              >
-                <span className="font-semibold shrink-0">{TYPE_LABEL[a.type] ?? a.type}</span>
-                <span className="flex-1 min-w-0">{formatActivityRecordLine(a)}</span>
-                {(a.enteredLate || a.editedAt) && (
-                  <span className="text-xs text-warm-ink font-semibold shrink-0">
-                    {a.enteredLate ? "late" : "edited"}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Full who-did-what history is staff/committee only — volunteers get
+          the latest-of-each-type summary above and nothing more. The hard
+          boundary (other people's names) is already enforced by RLS on the
+          person embed; this just keeps the volunteer view lean. */}
+      {isStaff && (
+        <div className="pt-1 flex flex-col gap-1">
+          <h3 className="text-sm font-bold text-ink-muted">Recent activity</h3>
+          {recent.length === 0 ? (
+            <p className="text-sm text-ink-muted">No activity yet.</p>
+          ) : (
+            <div className="max-h-44 overflow-y-auto border border-line rounded-[var(--radius)] divide-y divide-line">
+              {recent.map((a) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  onClick={() => openRecord(a.id)}
+                  className="w-full text-left text-sm px-3 py-2 hover:bg-gray-tint flex items-baseline gap-2"
+                >
+                  <span className="font-semibold shrink-0">{TYPE_LABEL[a.type] ?? a.type}</span>
+                  <span className="flex-1 min-w-0">{formatActivityRecordLine(a)}</span>
+                  {(a.enteredLate || a.editedAt) && (
+                    <span className="text-xs text-warm-ink font-semibold shrink-0">
+                      {a.enteredLate ? "late" : "edited"}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <dialog
         ref={recordRef}
