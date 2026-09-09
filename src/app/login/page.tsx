@@ -66,8 +66,8 @@ function LoginForm() {
 
         {callbackError === "not_registered" && status === "idle" && (
           <p className="text-sm text-danger text-center">
-            No CAPS account found for that sign-in — register below, or ask a
-            staff member to add you.
+            No CAPS account found for that sign-in. Ask a staff member — new
+            volunteers register at the shelter.
           </p>
         )}
 
@@ -97,8 +97,8 @@ function LoginForm() {
             </button>
             {status === "not_registered" && (
               <p className="text-sm text-danger">
-                No CAPS account found for that email — register below, or ask
-                a staff member to add you.
+                No CAPS account found for that email. Ask a staff member — new
+                volunteers register at the shelter.
               </p>
             )}
             {status === "error" && (
@@ -124,13 +124,6 @@ function LoginForm() {
         </button>
       </div>
 
-      <p className="text-xs text-ink-muted max-w-sm text-center">
-        New to CAPS?{" "}
-        <a href="/apply/volunteer" className="text-brand-ink underline">
-          Register as a volunteer or homecarer
-        </a>{" "}
-        first — that creates your account.
-      </p>
     </main>
   );
 }

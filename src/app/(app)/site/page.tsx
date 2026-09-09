@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getOpenSiteVisits, listSiteVisitReasons } from "@/lib/site-visits-data";
 import { SiteVisitBoard } from "@/components/site/site-visit-board";
 import { SignInDialog } from "@/components/site/sign-in-dialog";
@@ -15,6 +16,16 @@ export default async function SitePage() {
         <SignInDialog reasons={reasons} />
       </div>
       <SiteVisitBoard visits={visits} />
+
+      {/* Where a new walk-up gets the registration form — they fill it in
+          themselves. This is the surface the shared shelter iPad shows. */}
+      <Link
+        href="/apply/volunteer"
+        className="mt-2 flex items-center justify-between gap-3 bg-card border border-line rounded-[var(--radius)] p-3 text-sm font-semibold text-brand-ink"
+      >
+        New volunteer? Open the registration form
+        <span aria-hidden="true">→</span>
+      </Link>
     </div>
   );
 }
