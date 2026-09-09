@@ -127,53 +127,98 @@ in at all, bounced to `/login?error=not_registered`; this is deliberate, see
 §5). Google sign-in is NOT enabled as a provider in Supabase yet (separate,
 non-blocking — magic link is the only working path today).
 
-## 5. Where things stand (8 Sep 2026)
+## 5. Where things stand (10 Sep 2026)
 
 **Live and working** at `https://capsapp-five.vercel.app`:
 
-- **Auth** (Phase 4 slice 1): magic-link sign-in, session middleware, the
-  auth-callback that links a sign-in to an existing `people` row by email
-  and refuses anyone unregistered. Google OAuth not enabled (non-blocking).
-- **Dogs list** (`/dogs`, slice 2): status-grouped cards (Walking/Yard/
-  Available/Bed Rest/Jail Break/Fostered), sorted longest-since-last-walk
-  first, live alert-coloured timers, 3 filter chips (Available/Out now/My
-  dogs — single-select).
-- **Dog detail** (`/dogs/[id]`, slice 3): public info, Listing/SavourLife
-  fields, staff-only panel, activity log (shows walker + out/in times +
-  total duration, so it's obvious what a wrong record needs fixing to),
-  notes, time-with-CAPS.
-- **Take-out/bring-in** (slice 4, `src/lib/actions/dog-activity.ts` +
-  `src/components/dogs/*`): one-tap Start Walk / End Walk/Yard/Bed Rest/
-  Homecare, a staff-only "⋯" action menu for Start Yard/Bed Rest/Jail
-  Break/Foster (each a focused per-type form, not a type-picker), Manual
-  entry (a walk that never touched the app), Edit times on any activity row.
-  **Kiosk mode**: staff get a "Who's walking?" person-picker instead of the
-  fast tap assuming themselves — the real primary workflow is one staff
-  member on a shared iPad checking people in/out, not individual self-serve
-  logins (those are the rare case, kept as the instant tap for non-staff).
-  Yard's due-back is a duration/countdown picker (15min-4hr buttons), not a
-  date/time field — other types keep exact date+time (multi-day spans).
-- **Site — who's here** (`/site`, slice 8-ish): sign in/out board, any
-  registered person or a walk-up guest, reason picker.
-- App shell constrained to a phone-width column (`max-w-lg`) even on
-  desktop — this is a mobile app first.
-- Region: Vercel functions pinned to `syd1` (`vercel.json`) to co-locate
-  with the Sydney-region Supabase DB — was a real performance issue before.
+- **Auth** — magic-link sign-in, session middleware, auth-callback that
+  links a sign-in to an existing `people` row by email and refuses anyone
+  unregistered (`shouldCreateUser: false` + a post-callback check). Google
+  OAuth not enabled (non-blocking).
+- **Dogs list** (`/dogs`) — status-grouped cards, longest-since-last-walk
+  first, alert-coloured timers, single-select filter chips, exact card
+  wording per Paul's dictation.
+- **Dog detail** (`/dogs/[id]`) — role-split: plain volunteers see basic
+  info + latest-of-each-type activity; staff (and Volunteer Plus for the
+  activity log) additionally see the Listing panel, the full who-did-what
+  log, the confidential + medical panel, staff-visibility notes. Activity
+  is condensed one-line records; any line pops out to its full record with
+  Edit times. Staff-only "Delete this dog" at the bottom.
+- **Take-out / bring-in** — one-tap Start Walk / End X; a staff "⋯" menu
+  for Start Yard / Bed Rest / Jail Break / Foster; Manual entry; Edit
+  times; "came back earlier" backdated close. **Kiosk mode**: staff (and
+  Volunteer Plus, for walks + yard) get a person-picker instead of the
+  fast tap assuming themselves. Yard due-back is a duration/countdown
+  picker; other types take exact date+time.
+- **Site — who's here** (`/site`) — sign in/out board; any registered
+  person or a walk-up guest; reason picker; a "New volunteer? registration
+  form" link for the shared iPad.
+- **Registration** (`/apply/volunteer`) — public self-service form, matched
+  to the real CAPS application form (experience level, activity interests,
+  under-18 question + parent/guardian gate, homecare interest = separate
+  Fostering / Jail break checkboxes, promo-image consent, real T&C text).
+  Adults → `volunteer` role active; under-18 → pending until staff confirm
+  consent; homecare interest → pending `foster_carer`/`jailbreak_carer`
+  role(s) + `homecare_profile` + emails. Dedupe on email/phone/name.
+- **People** (`/people`, staff) — searchable list with role badges +
+  filters; person detail with Approve/Decline on pending roles, **Edit**
+  (all contact/EC/parent/consent fields), **Archive/Restore**, **Delete**,
+  a **Kiosk access** section to grant/remove **Volunteer Plus**, and a
+  **Homecare** section. Foster approval is gated on a passing **home check**
+  (`/people/[id]/home-check` — property/fence/household form with a
+  "ready to approve" vs "improvements needed" outcome; the improvements
+  path drafts an editable email to the applicant).
+- **Homecare approval email loop** — on registration, an admin
+  notification email (HTML, with a one-click **Approve** button for jail
+  break) goes to `org_settings.admin_notification_email` (currently
+  `consult@…`), plus an acknowledgement to the applicant. `/approve/<token>`
+  is the public one-click landing page (single-use, 45-day token; shows the
+  applicant's details). **BLOCKED on Resend domain verification** — see §5a.
+- **Logs** (`/logs`, staff) — eight tabs: Walks / Homecare / Yard /
+  Bed Rest / Medical / Visitors / Dogs / People. Date + dog + person
+  filters, late/edited flags, CSV export per tab.
+- **Reports** (`/reports`, staff) — Needs a walk / Currently out /
+  Homecare load / Length of stay, each with CSV.
+- **Volunteer Plus** — `volunteer_plus` role; a Volunteer Plus signs in
+  themselves and can operate kiosk mode for **walks + yard** on behalf of
+  others (placements stay staff-only). `getCurrentPerson().canKiosk` gates
+  it in the UI; `is_volunteer_plus()` + loosened `dog_activity` RLS
+  (migrations 13 + 14) enforce it.
+- App shell is a phone-width column (`max-w-lg`) even on desktop.
+- Vercel functions pinned to `syd1` to co-locate with the Sydney Supabase.
+
+### 5a. Migrations to apply / Resend
+
+Migrations mirror as SQL in `supabase/migrations/`. Applied via the
+Supabase MCP when it's connected, otherwise pasted into the dashboard SQL
+editor. **Run in order; 13 must run on its own** (`ALTER TYPE … ADD VALUE`
+can't share a transaction). Check `supabase/migrations/` for the latest —
+as of 10 Sep the newest are 10 (`image_consent`), 11 (homecare approval
+tokens + `admin_notification_email` + `yard_check_notes`), 12
+(`yard_check_outcome`), 13 (`volunteer_plus` enum value), 14
+(`is_volunteer_plus()` + `dog_activity` RLS). The app has graceful
+fallbacks for un-applied 10/11/12 but 13+14 must be run for Volunteer
+Plus to work.
+
+**Resend** (`RESEND_API_KEY` set in all Vercel envs + `.env.local`) sends
+from `onboarding@resend.dev` until the CAPS domain is verified — and that
+shared sender **only delivers to the Resend account owner's own address**,
+so real applicant emails don't send yet and everything lands in spam. Fix:
+Resend dashboard → Domains → add `capeanimalprotectionshelter.org.au` →
+add the SPF/DKIM/return-path DNS records → verify → then set `RESEND_FROM`
+(e.g. `CAPS <noreply@capeanimalprotectionshelter.org.au>`) as a Vercel env
+var. Domain was added in Resend 10 Sep; DNS not yet done.
 
 **Explicitly paused, not forgotten:**
-- **Registration** (`/apply/volunteer`) — still a stub page. Paul is
-  unresolved on how to model the volunteer/homecarer distinction and the
-  broader registered-vs-self-serve-vs-admin split (see project memory /
-  ask him directly) — **do not build registration or People until he says
-  go**, both would likely need redoing once that's settled.
-- **People** (`/people`) — staff people-management/approval screens, not
-  started. Blocked on the same open question as Registration.
-- **Mobile visual sizing pass** — Paul flagged card/row height will need
-  work once there are ~20+ real dogs (currently only test data). Explicitly
-  "hold on that" — a dedicated pass, not something to guess at blind.
-- **Logs / Reports / Alerts** (`ui-flows.md` §10-12) — not started. Alerts
-  needs a real email provider (Resend) since Supabase's built-in email
-  sender is capped at 2/hour project-wide — not yet set up, Paul deferred it.
+- **Café-mode PIN / limited kiosk surface** — the shared iPad should run a
+  safe limited surface by default with a staff PIN to step up to full
+  access. Designed but not built; its own session (Paul to confirm shape).
+- **Alerts** (`ui-flows.md` §12) — overdue-return emails; needs Resend
+  domain done first.
+- **Mobile visual sizing pass** — card/row height once there are ~20+ real
+  dogs. "Hold on that" — a dedicated pass.
+- **Merge two people** — dedupe part (c); reassign FK rows onto one record.
+- **Nightly Supabase → Google Sheet mirror** (D6).
 
 **Known test-data note:** dogs in the DB are seeded test rows with
 deliberately fictional/celebrity names (Beethoven Rex, Lassie, Hooch, Toto,
