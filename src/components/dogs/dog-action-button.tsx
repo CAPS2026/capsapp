@@ -21,14 +21,14 @@ export function DogActionButton({
   dogId,
   mode,
   label,
-  isStaff,
+  canKiosk,
   currentPersonId,
   currentPersonName,
 }: {
   dogId: string;
   mode: "walk" | "bring_in";
   label: string;
-  isStaff: boolean;
+  canKiosk: boolean;
   currentPersonId: string;
   currentPersonName: string;
 }) {
@@ -40,7 +40,7 @@ export function DogActionButton({
   function handleClick(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    if (mode === "walk" && isStaff) {
+    if (mode === "walk" && canKiosk) {
       setPickerOpen(true);
       return;
     }
@@ -66,7 +66,7 @@ export function DogActionButton({
       </button>
       {error && <p className="text-xs text-danger max-w-40 text-right">{error}</p>}
 
-      {mode === "walk" && isStaff && (
+      {mode === "walk" && canKiosk && (
         <StartWalkDialog
           dogId={dogId}
           currentPersonId={currentPersonId}

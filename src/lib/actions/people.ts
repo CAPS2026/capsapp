@@ -194,6 +194,49 @@ export async function updatePerson(
 }
 
 /**
+ * Grant or remove the Volunteer Plus role (staff only). Volunteer Plus
+ * volunteers sign in themselves and can operate kiosk mode for walks +
+ * yard. They need an email on file to sign in.
+ */
+export async function setVolunteerPlus(personId: string, on: boolean): Promise<Result> {
+  const me = await requireStaff();
+  if (!me) return { error: "Staff only." };
+
+  const supabase = await createClient();
+
+  if (on) {
+    const { data: person } = await supabase.from("people").select("email").eq("id", personId).maybeSingle();
+    if (!person?.email)
+      return { error: "Add an email address first — Volunteer Plus volunteers sign in with it." };
+
+    const { error } = await supabase
+      .from("person_roles")
+      .upsert(
+        {
+          person_id: personId,
+          role: "volunteer_plus",
+          status: "active",
+          approved_by: me.id,
+          granted_on: today(),
+          ended_on: null,
+        },
+        { onConflict: "person_id,role" },
+      );
+    if (error) return { error: error.message };
+  } else {
+    const { error } = await supabase
+      .from("person_roles")
+      .update({ status: "exited", ended_on: today() })
+      .eq("person_id", personId)
+      .eq("role", "volunteer_plus");
+    if (error) return { error: error.message };
+  }
+
+  revalidate(personId);
+  return {};
+}
+
+/**
  * Permanently delete a person and everything that belongs to them (roles,
  * profiles, their own activity + site-visit rows). Where they appear as an
  * operator / author / approver on someone else's record, their name is

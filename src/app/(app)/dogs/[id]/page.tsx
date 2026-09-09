@@ -22,6 +22,7 @@ export default async function DogDetailPage({ params }: { params: Promise<{ id: 
       <DogDetailView
         {...detail}
         isStaff={person.isStaff}
+        canKiosk={person.canKiosk}
         currentPersonId={person.id}
         currentPersonName={`${person.firstName} ${person.surname}`.trim()}
       />

@@ -51,6 +51,7 @@ export function DogDetailView({
   latestOfEachType,
   notes,
   isStaff,
+  canKiosk,
   currentPersonId,
   currentPersonName,
 }: {
@@ -62,13 +63,14 @@ export function DogDetailView({
   latestOfEachType: { type: string; entry: ActivityEntry | null }[];
   notes: NoteEntry[];
   isStaff: boolean;
+  canKiosk: boolean;
   currentPersonId: string;
   currentPersonName: string;
 }) {
   const primaryPhoto = dog.photos.find((p) => p.isPrimary) ?? dog.photos[0];
   const age = dog.dateOfBirth ? formatYearsMonths(dog.dateOfBirth) : dog.ageOverride;
   const timeWithCaps = dog.arrivalDate ? formatYearsMonths(dog.arrivalDate) : "Time unknown";
-  const canBringIn = isStaff || currentActivity?.personId === currentPersonId;
+  const canBringIn = canKiosk || currentActivity?.personId === currentPersonId;
 
   return (
     <div className="flex flex-col gap-4">
@@ -106,7 +108,7 @@ export function DogDetailView({
               dogId={dog.id}
               mode="walk"
               label="Start Walk"
-              isStaff={isStaff}
+              canKiosk={canKiosk}
               currentPersonId={currentPersonId}
               currentPersonName={currentPersonName}
             />
@@ -115,6 +117,7 @@ export function DogDetailView({
             <ActionMenu
               dogId={dog.id}
               isStaff={isStaff}
+              canKiosk={canKiosk}
               currentPersonId={currentPersonId}
               currentPersonName={currentPersonName}
             />
@@ -124,7 +127,7 @@ export function DogDetailView({
               dogId={dog.id}
               mode="bring_in"
               label={endActionLabel(dog.status)}
-              isStaff={isStaff}
+              canKiosk={canKiosk}
               currentPersonId={currentPersonId}
               currentPersonName={currentPersonName}
             />
@@ -198,7 +201,7 @@ export function DogDetailView({
           dogId={dog.id}
           latest={latestOfEachType}
           recent={activityLog}
-          isStaff={isStaff}
+          canKiosk={canKiosk}
           currentPersonId={currentPersonId}
         />
       </Section>

@@ -6,6 +6,7 @@ import { formatDate } from "@/lib/format";
 import { deletePerson } from "@/lib/actions/people";
 import { PersonRoleActions } from "@/components/people/person-role-actions";
 import { PersonArchiveButton } from "@/components/people/person-archive-button";
+import { VolunteerPlusToggle } from "@/components/people/volunteer-plus-toggle";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 
 const INTEREST_LABEL = new Map(VOLUNTEER_INTERESTS.map((i) => [i.code, i.label]));
@@ -120,6 +121,19 @@ export function PersonDetailView({ person }: { person: PersonDetail }) {
           </div>
         ))}
       </Section>
+
+      {person.roles.some(
+        (r) => (r.role === "volunteer" || r.role === "volunteer_plus") && r.status === "active",
+      ) && (
+        <Section title="Kiosk access">
+          <VolunteerPlusToggle
+            personId={person.id}
+            firstName={person.firstName}
+            email={person.email}
+            isPlus={person.roles.some((r) => r.role === "volunteer_plus" && r.status === "active")}
+          />
+        </Section>
+      )}
 
       <Section title="Contact">
         <Field label="Email" value={person.email} />

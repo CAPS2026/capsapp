@@ -25,13 +25,13 @@ export function ActivitySection({
   dogId,
   latest,
   recent,
-  isStaff,
+  canKiosk,
   currentPersonId,
 }: {
   dogId: string;
   latest: { type: string; entry: ActivityEntry | null }[];
   recent: ActivityEntry[];
-  isStaff: boolean;
+  canKiosk: boolean;
   currentPersonId: string;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -46,7 +46,7 @@ export function ActivitySection({
   }, [recent, latest]);
 
   const selected = selectedId ? byId.get(selectedId) ?? null : null;
-  const canEdit = selected ? isStaff || selected.personId === currentPersonId : false;
+  const canEdit = selected ? canKiosk || selected.personId === currentPersonId : false;
 
   useEffect(() => {
     if (mode === "record") recordRef.current?.showModal();
@@ -60,7 +60,7 @@ export function ActivitySection({
 
   return (
     <>
-      <div className={`flex flex-col gap-1 ${isStaff ? "pb-2 border-b border-line" : ""}`}>
+      <div className={`flex flex-col gap-1 ${canKiosk ? "pb-2 border-b border-line" : ""}`}>
         {latest.map(({ type, entry }) => (
           <div key={type} className="text-sm">
             <span className="font-semibold">{TYPE_LABEL[type] ?? type}: </span>
@@ -79,11 +79,12 @@ export function ActivitySection({
         ))}
       </div>
 
-      {/* Full who-did-what history is staff/committee only — volunteers get
-          the latest-of-each-type summary above and nothing more. The hard
-          boundary (other people's names) is already enforced by RLS on the
-          person embed; this just keeps the volunteer view lean. */}
-      {isStaff && (
+      {/* Full who-did-what history is for staff + Volunteer Plus — plain
+          volunteers get the latest-of-each-type summary above and nothing
+          more. The hard boundary (other people's names) is already
+          enforced by RLS on the person embed; this just keeps the plain
+          volunteer view lean. */}
+      {canKiosk && (
         <div className="pt-1 flex flex-col gap-1">
           <h3 className="text-sm font-bold text-ink-muted">Recent activity</h3>
           {recent.length === 0 ? (

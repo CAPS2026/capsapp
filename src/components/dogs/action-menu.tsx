@@ -6,49 +6,45 @@ import { ManualWalkDialog } from "@/components/dogs/manual-walk-dialog";
 
 type MenuAction = PlacementType | "manual";
 
-const ROWS: { action: PlacementType; label: string }[] = [
-  { action: "yard", label: "Start Yard" },
-  { action: "bed_rest", label: "Start Bed Rest" },
-  { action: "jail_break", label: "Start Jail Break" },
-  { action: "foster", label: "Start Foster" },
+const ALL_ROWS: { action: PlacementType; label: string; needs: "kiosk" | "staff" }[] = [
+  { action: "yard", label: "Start Yard", needs: "kiosk" },
+  { action: "bed_rest", label: "Start Bed Rest", needs: "staff" },
+  { action: "jail_break", label: "Start Jail Break", needs: "staff" },
+  { action: "foster", label: "Start Foster", needs: "staff" },
 ];
 
-// One "⋯" icon button (a real 44px tap target) replacing the previous
-// small text links, opening a bottom-sheet of every action relevant to an
-// Available dog — Paul's feedback (2026-09-06): the old app had a
-// dedicated button per action; a single hidden "Other…" link wasn't
-// discoverable enough, but stacking that many buttons on the card doesn't
-// fit a phone either. This is on Available dogs only — while something's
-// already open, the single End button on the card is the only action.
+// One "⋯" icon button (a real 44px tap target), opening a bottom-sheet of
+// every action relevant to an Available dog (Paul, 2026-09-06). Staff see
+// all of it; a Volunteer Plus sees Start Yard + Manual entry; a plain
+// volunteer just gets a Manual-entry link (self only).
 export function ActionMenu({
   dogId,
   isStaff,
+  canKiosk,
   currentPersonId,
   currentPersonName,
 }: {
   dogId: string;
   isStaff: boolean;
+  canKiosk: boolean;
   currentPersonId: string;
   currentPersonName: string;
 }) {
   const sheetRef = useRef<HTMLDialogElement>(null);
   const [active, setActive] = useState<MenuAction | null>(null);
 
-  function openSheet() {
-    sheetRef.current?.showModal();
-  }
+  const rows = ALL_ROWS.filter((r) => (r.needs === "staff" ? isStaff : canKiosk));
 
   function pick(action: MenuAction) {
     sheetRef.current?.close();
     setActive(action);
   }
 
-  if (!isStaff) {
-    // Volunteers only ever get Manual entry here — no menu needed for one item.
+  if (!canKiosk) {
     return (
       <ManualWalkDialogTrigger
         dogId={dogId}
-        isStaff={false}
+        canKiosk={false}
         currentPersonId={currentPersonId}
         currentPersonName={currentPersonName}
       />
@@ -62,7 +58,7 @@ export function ActionMenu({
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          openSheet();
+          sheetRef.current?.showModal();
         }}
         aria-label="More actions"
         className="w-11 h-11 rounded-full border border-line text-ink-muted text-xl leading-none flex items-center justify-center shrink-0"
@@ -77,7 +73,7 @@ export function ActionMenu({
       >
         <div className="flex flex-col p-2" onClick={(e) => e.stopPropagation()}>
           <p className="text-xs font-bold uppercase tracking-wide text-ink-muted px-3 pt-2 pb-1">Take out</p>
-          {ROWS.map((row) => (
+          {rows.map((row) => (
             <button
               key={row.action}
               type="button"
@@ -105,7 +101,7 @@ export function ActionMenu({
         </div>
       </dialog>
 
-      {ROWS.map((row) => (
+      {rows.map((row) => (
         <StartPlacementDialog
           key={row.action}
           dogId={dogId}
@@ -116,7 +112,7 @@ export function ActionMenu({
       ))}
       <ManualWalkDialog
         dogId={dogId}
-        isStaff={isStaff}
+        canKiosk={canKiosk}
         currentPersonId={currentPersonId}
         currentPersonName={currentPersonName}
         isOpen={active === "manual"}
@@ -126,15 +122,15 @@ export function ActionMenu({
   );
 }
 
-/** Volunteer-only case: a plain small trigger, no bottom sheet. */
+/** Plain-volunteer case: a small trigger, no bottom sheet. */
 function ManualWalkDialogTrigger({
   dogId,
-  isStaff,
+  canKiosk,
   currentPersonId,
   currentPersonName,
 }: {
   dogId: string;
-  isStaff: boolean;
+  canKiosk: boolean;
   currentPersonId: string;
   currentPersonName: string;
 }) {
@@ -154,7 +150,7 @@ function ManualWalkDialogTrigger({
       </button>
       <ManualWalkDialog
         dogId={dogId}
-        isStaff={isStaff}
+        canKiosk={canKiosk}
         currentPersonId={currentPersonId}
         currentPersonName={currentPersonName}
         isOpen={isOpen}

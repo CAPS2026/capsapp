@@ -31,7 +31,7 @@ export async function startWalk(dogId: string, walkerId?: string): Promise<Actio
   const { error } = await supabase.from("dog_activity").insert({
     dog_id: dogId,
     type: "walk",
-    person_id: person.isStaff && walkerId ? walkerId : person.id,
+    person_id: person.canKiosk && walkerId ? walkerId : person.id,
     started_at: new Date().toISOString(),
   });
 
@@ -123,7 +123,7 @@ export async function editActivityTimes(input: {
  */
 export async function listActiveVolunteers(): Promise<{ id: string; name: string }[]> {
   const person = await getCurrentPerson();
-  if (!person || !person.isStaff) return [];
+  if (!person || !person.canKiosk) return [];
 
   const supabase = await createClient();
   const { data } = await supabase
@@ -185,7 +185,10 @@ export async function startPlacement(input: {
 }): Promise<ActionResult> {
   const person = await getCurrentPerson();
   if (!person || !person.id) return { error: "Not signed in." };
-  if (!person.isStaff) return { error: "Only staff can start this." };
+  // Yard is a kiosk operation (staff or Volunteer Plus); bed rest / jail
+  // break / foster stay staff-only. RLS enforces the same.
+  if (input.type === "yard" ? !person.canKiosk : !person.isStaff)
+    return { error: "You can't start this." };
 
   if ((input.type === "jail_break" || input.type === "foster") && !input.personId) {
     return { error: "Pick a carer." };
@@ -241,7 +244,7 @@ export async function logManualWalk(input: {
 }): Promise<ActionResult> {
   const person = await getCurrentPerson();
   if (!person || !person.id) return { error: "Not signed in." };
-  if (!person.isStaff && input.personId !== person.id) {
+  if (!person.canKiosk && input.personId !== person.id) {
     return { error: "You can only log a walk for yourself." };
   }
 

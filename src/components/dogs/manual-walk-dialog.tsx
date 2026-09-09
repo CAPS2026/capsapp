@@ -11,14 +11,14 @@ import { DateTimeField } from "@/components/dogs/datetime-field";
 // checked out"). Controlled — opened from ActionMenu.
 export function ManualWalkDialog({
   dogId,
-  isStaff,
+  canKiosk,
   currentPersonId,
   currentPersonName,
   isOpen,
   onClose,
 }: {
   dogId: string;
-  isStaff: boolean;
+  canKiosk: boolean;
   currentPersonId: string;
   currentPersonName: string;
   isOpen: boolean;
@@ -41,12 +41,12 @@ export function ManualWalkDialog({
       setCheckOut("");
       setCheckIn("");
       setNotes("");
-      if (isStaff) listActiveVolunteers().then(setVolunteers);
+      if (canKiosk) listActiveVolunteers().then(setVolunteers);
       dialogRef.current?.showModal();
     } else {
       dialogRef.current?.close();
     }
-  }, [isOpen, isStaff, currentPersonId]);
+  }, [isOpen, canKiosk, currentPersonId]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -80,7 +80,7 @@ export function ManualWalkDialog({
           For a walk that happened without using the app at all — nobody tapped Start Walk or End Walk.
         </p>
 
-        {isStaff ? (
+        {canKiosk ? (
           <label className="flex flex-col gap-1 text-sm">
             Volunteer
             <select

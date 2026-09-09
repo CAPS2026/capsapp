@@ -25,6 +25,7 @@ export function DogsList({
   currentPersonId,
   currentPersonName,
   isStaff,
+  canKiosk,
 }: {
   dogs: DogListItem[];
   statusMeta: StatusMeta[];
@@ -32,6 +33,7 @@ export function DogsList({
   currentPersonId: string;
   currentPersonName: string;
   isStaff: boolean;
+  canKiosk: boolean;
 }) {
   // Single-select — picking a filter replaces whichever was active, per
   // Paul's feedback (2026-09-06) that these shouldn't stack.
@@ -98,8 +100,9 @@ export function DogsList({
                   key={dog.id}
                   dog={dog}
                   orgSettings={orgSettings}
-                  canBringIn={isStaff || dog.current?.personId === currentPersonId}
+                  canBringIn={canKiosk || dog.current?.personId === currentPersonId}
                   isStaff={isStaff}
+                  canKiosk={canKiosk}
                   currentPersonId={currentPersonId}
                   currentPersonName={currentPersonName}
                 />
@@ -135,6 +138,7 @@ function DogCard({
   orgSettings,
   canBringIn,
   isStaff,
+  canKiosk,
   currentPersonId,
   currentPersonName,
 }: {
@@ -142,6 +146,7 @@ function DogCard({
   orgSettings: OrgSettings;
   canBringIn: boolean;
   isStaff: boolean;
+  canKiosk: boolean;
   currentPersonId: string;
   currentPersonName: string;
 }) {
@@ -175,7 +180,7 @@ function DogCard({
             dogId={dog.id}
             mode="walk"
             label="Start Walk"
-            isStaff={isStaff}
+            canKiosk={canKiosk}
             currentPersonId={currentPersonId}
             currentPersonName={currentPersonName}
           />
@@ -184,6 +189,7 @@ function DogCard({
           <ActionMenu
             dogId={dog.id}
             isStaff={isStaff}
+            canKiosk={canKiosk}
             currentPersonId={currentPersonId}
             currentPersonName={currentPersonName}
           />
@@ -198,7 +204,7 @@ function DogCard({
             dogId={dog.id}
             mode="bring_in"
             label={endActionLabel(dog.status)}
-            isStaff={isStaff}
+            canKiosk={canKiosk}
             currentPersonId={currentPersonId}
             currentPersonName={currentPersonName}
           />

@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export type Role =
   | "volunteer"
+  | "volunteer_plus"
   | "jailbreak_carer"
   | "foster_carer"
   | "adopter"
@@ -22,6 +23,14 @@ export interface CurrentPerson {
    * a small enum migration away when it's actually needed.
    */
   isStaff: boolean;
+  /** Experienced volunteer who signs in themselves (`volunteer_plus`). */
+  isVolunteerPlus: boolean;
+  /**
+   * Can operate kiosk mode for walks + yard — check people in/out on
+   * behalf of others. True for staff and Volunteer Plus. Placements
+   * (bed rest / jail break / foster) stay staff-only.
+   */
+  canKiosk: boolean;
 }
 
 type PersonRoleRow = { role: Role; status: string };
@@ -65,6 +74,8 @@ export async function getCurrentPerson(): Promise<CurrentPerson | null> {
       email: user.email ?? null,
       roles: [],
       isStaff: false,
+      isVolunteerPlus: false,
+      canKiosk: false,
     };
   }
 
@@ -72,12 +83,17 @@ export async function getCurrentPerson(): Promise<CurrentPerson | null> {
     .filter((r) => r.status === "active")
     .map((r) => r.role);
 
+  const isStaff = roles.includes("staff") || roles.includes("committee");
+  const isVolunteerPlus = roles.includes("volunteer_plus");
+
   return {
     id: person.id,
     firstName: person.first_name,
     surname: person.surname,
     email: person.email,
     roles,
-    isStaff: roles.includes("staff") || roles.includes("committee"),
+    isStaff,
+    isVolunteerPlus,
+    canKiosk: isStaff || isVolunteerPlus,
   };
 }

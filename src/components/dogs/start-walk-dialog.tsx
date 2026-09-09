@@ -8,7 +8,7 @@ import { listActiveVolunteers, startWalk } from "@/lib/actions/dog-activity";
 // person"): staff on a shared device need to pick WHO is actually walking
 // the dog, not assume it's themselves — that's the real common case per
 // Paul (2026-09-07), self-serve login is the rare one. Controlled, opened
-// by DogActionButton in place of the instant tap when isStaff.
+// by DogActionButton in place of the instant tap when canKiosk.
 export function StartWalkDialog({
   dogId,
   currentPersonId,

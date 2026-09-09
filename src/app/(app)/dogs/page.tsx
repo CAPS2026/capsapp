@@ -36,6 +36,7 @@ export default async function DogsPage() {
         currentPersonId={person.id}
         currentPersonName={`${person.firstName} ${person.surname}`.trim()}
         isStaff={person.isStaff}
+        canKiosk={person.canKiosk}
       />
     </div>
   );
