@@ -16,6 +16,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/site", label: "Site" },
   { href: "/people", label: "People", staffOnly: true },
   { href: "/logs", label: "Logs", staffOnly: true },
+  { href: "/reports", label: "Reports", staffOnly: true },
 ];
 
 export function AppShell({

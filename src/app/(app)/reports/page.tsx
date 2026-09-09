@@ -1,19 +1,20 @@
 import { redirect } from "next/navigation";
 import { getCurrentPerson } from "@/lib/auth";
+import { getReports } from "@/lib/reports-data";
+import { ReportsView } from "@/components/reports/reports-view";
 
 export default async function ReportsPage() {
   const person = await getCurrentPerson();
   if (!person?.isStaff) redirect("/dogs");
 
+  const reports = await getReports();
+
   return (
-    <div className="p-6">
+    <div className="flex flex-col gap-4 p-4 pb-8">
       <h1 className="text-2xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
         Reports
       </h1>
-      <p className="text-ink-muted text-sm mt-2">
-        Needs-a-walk, currently-out, walk activity, length of stay, homecare
-        load, intake/exit (docs/ui-flows.md §11) — coming soon.
-      </p>
+      <ReportsView reports={reports} />
     </div>
   );
 }
