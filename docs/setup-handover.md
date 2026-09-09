@@ -1,7 +1,11 @@
 # CAPS App — setup & handover
 
 Everything needed to pick this project up from scratch, on a different machine
-or a different account. Kept current as of **8 Sep 2026**.
+or a different Claude account. Accounts/access (§1–4, §6–8) current as of
+**10 Sep 2026**. **§5 "where things stand" is behind** — People, Registration
+and the homecare approval flow have all been built since; see the project
+memory file (`~/.claude/projects/C--/memory/project_caps_automation.md`) and
+`git log` for the current feature state.
 
 For the *what/why* of the app itself, start at `README.md`, then `docs/caps-rebuild-plan.md`
 → `caps-phase0-features.md` → `schema.md` → `ui-flows.md` → `design.md` in order.
@@ -242,3 +246,49 @@ connect-time. A genuinely **fresh conversation** (not just `/mcp` in the
 same one) was needed to pick up the corrected account. If connectors ever
 look wrong again, always verify in a brand-new session before assuming
 something's still broken upstream.
+
+## 8. Switching Claude Code accounts on the same machine
+
+If you sign into Claude Code with a **different account (different email)** but
+stay on **this machine** and **this repo**, it's close to plug-and-play. Almost
+everything this project depends on is tied to the *machine* or to *external
+accounts*, not to your Claude login.
+
+**Carries over automatically — no action needed:**
+
+| Thing | Why it's unaffected |
+|---|---|
+| GitHub (`CAPS2026/capsapp`) | Uses `git` / `gh` credentials on the machine |
+| Vercel — CLI, deploys, env vars, logs | `vercel login` token lives on the machine (`%APPDATA%\xdg.data\com.vercel.cli\auth.json`); pushes to `main` auto-deploy regardless of who's driving |
+| Resend | API key is in Vercel env + `.env.local` — nothing to do with Claude |
+| Local repo `C:\Users\green\capsapp` + `.env.local` | Files on disk |
+| **Project memory** (`~/.claude/projects/C--/memory/`) | Keyed to the **Windows user + project path**, not the Claude login — same machine + same folder = same memory files |
+| `.claude/settings.json`, hooks, `.mcp.json` / MCP server config | On disk under `.claude/` / the repo |
+
+**Needs redoing on the new account:**
+
+- **MCP connectors.** Connector authorizations are per Claude account — the new
+  account starts with none. Re-authorize the **Supabase** connector in
+  claude.ai → connector settings, signing in as the **CAPS Supabase account**
+  (`consult@capeanimalprotectionshelter.org.au`, *not* a personal Supabase
+  login). Then open a **fresh conversation** and run the §6 sanity check —
+  `list_organizations` must show only "CAPS2026's Org". The old account-mismatch
+  saga in §7 was a wrong-email-on-the-Supabase-account problem (now fixed), so a
+  clean re-auth on a new Claude account should just work.
+- The **Vercel MCP connector** has never resolved and isn't used — skip it; the
+  CLI covers everything (§3).
+- Any **user-scope plugins/skills** you'd added (e.g. the `vercel` plugin) —
+  re-add if wanted. Repo/project-scope skills carry over.
+
+**Does the different login email matter?** Only in three ways, none blocking:
+1. Fresh connector-authorization space → the Supabase re-auth above.
+2. The new account needs its own **Claude Code entitlement / plan**.
+3. Your Claude login email is **unrelated** to the GitHub / Supabase / Vercel /
+   Resend account emails — those are all separate and untouched. The Supabase
+   connector cares which *Supabase* account you sign it in as, not your Claude
+   email.
+
+**In short:** re-auth the Supabase connector as the CAPS account → open a fresh
+session → run the §6 check. That's the whole switch. If it's *also* a new
+machine, add the §1/§3 clone + `gh auth` + `vercel login` steps and copy
+`.env.local` and the `memory/` folder across.
