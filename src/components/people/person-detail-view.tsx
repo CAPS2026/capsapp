@@ -1,5 +1,9 @@
 import type { PersonDetail } from "@/lib/person-detail";
-import { VOLUNTEER_INTERESTS } from "@/lib/registration";
+import {
+  VOLUNTEER_INTERESTS,
+  HOMECARE_INTERESTS,
+  HOMECARE_INTEREST_LABEL,
+} from "@/lib/registration";
 import { ROLE_LABEL, STATUS_LABEL, STATUS_TEXT_CLASS } from "@/lib/people";
 import { formatDate } from "@/lib/format";
 import { PersonRoleActions } from "@/components/people/person-role-actions";
@@ -88,6 +92,12 @@ export function PersonDetailView({ person }: { person: PersonDetail }) {
               : null
           }
         />
+        <Field
+          label="Promo image consent"
+          value={
+            person.imageConsent === null ? "Not asked" : person.imageConsent ? "Yes" : "No"
+          }
+        />
       </Section>
 
       <Section title="Emergency contact">
@@ -116,21 +126,30 @@ export function PersonDetailView({ person }: { person: PersonDetail }) {
         </Section>
       )}
 
-      {person.volunteerProfile?.interests.includes("homecare") && (
-        <div className="bg-warm-tint border border-warm rounded-[var(--radius)] p-3 text-sm text-warm-ink">
-          <strong>Interested in homecare</strong> (fostering / jail break) — registered on the
-          form, not yet actioned. The homecare approval flow is still being built.
-        </div>
-      )}
+      {(() => {
+        const homecare = (person.volunteerProfile?.interests ?? []).filter((c) =>
+          HOMECARE_INTERESTS.includes(c),
+        );
+        if (homecare.length === 0) return null;
+        return (
+          <div className="bg-warm-tint border border-warm rounded-[var(--radius)] p-3 text-sm text-warm-ink">
+            <strong>
+              Interested in {homecare.map((c) => HOMECARE_INTEREST_LABEL[c] ?? c).join(" and ")}
+            </strong>{" "}
+            — registered on the form, not yet actioned. The homecare approval flow is still
+            being built.
+          </div>
+        );
+      })()}
 
       {person.volunteerProfile && (
         <Section title="Volunteer details">
           <Field
             label="Interests"
             value={
-              person.volunteerProfile.interests.filter((c) => c !== "homecare").length
+              person.volunteerProfile.interests.filter((c) => !HOMECARE_INTERESTS.includes(c)).length
                 ? person.volunteerProfile.interests
-                    .filter((c) => c !== "homecare")
+                    .filter((c) => !HOMECARE_INTERESTS.includes(c))
                     .map((c) => INTEREST_LABEL.get(c) ?? c)
                     .join(", ")
                 : null

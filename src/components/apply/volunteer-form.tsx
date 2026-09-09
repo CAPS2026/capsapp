@@ -5,6 +5,7 @@ import { registerVolunteer } from "@/lib/actions/registration";
 import {
   ageFromDob,
   VOLUNTEER_INTERESTS,
+  EXPERIENCE_OPTIONS,
   HOW_HEARD_OPTIONS,
   type RegisterResult,
 } from "@/lib/registration";
@@ -32,6 +33,46 @@ function Field({
   );
 }
 
+// A stacked radio group rendered as tappable rows.
+function RadioRows({
+  legend,
+  options,
+  value,
+  onChange,
+  name,
+}: {
+  legend: string;
+  options: { code: string; label: string }[];
+  value: string;
+  onChange: (code: string) => void;
+  name: string;
+}) {
+  return (
+    <fieldset className="flex flex-col gap-2">
+      <legend className="text-sm font-bold">{legend}</legend>
+      <div className="flex flex-col gap-1.5">
+        {options.map((o) => (
+          <label
+            key={o.code}
+            className={`flex items-start gap-2 text-sm px-3 py-2 rounded-[var(--radius)] border cursor-pointer ${
+              value === o.code ? "border-brand bg-brand-tint" : "border-line-cool"
+            }`}
+          >
+            <input
+              type="radio"
+              name={name}
+              className="mt-0.5"
+              checked={value === o.code}
+              onChange={() => onChange(o.code)}
+            />
+            {o.label}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 export function VolunteerForm() {
   const [form, setForm] = useState({
     firstName: "",
@@ -49,23 +90,26 @@ export function VolunteerForm() {
     parentPhone: "",
     parentEmail: "",
     parentalConsent: false,
-    experience: "",
+    experienceLevel: "",
+    experienceOther: "",
     medicalIssues: "",
     howHeard: "",
     howHeardOther: "",
-    agreeTerms: false,
     signatureName: "",
     website: "", // honeypot
   });
-  const [under18, setUnder18] = useState<"" | "no" | "yes">("");
+  const [over18, setOver18] = useState<"" | "yes" | "no">("");
   const [interests, setInterests] = useState<string[]>([]);
-  const [homecareInterest, setHomecareInterest] = useState(false);
+  const [fosterInterest, setFosterInterest] = useState(false);
+  const [jailBreakInterest, setJailBreakInterest] = useState(false);
+  const [imageConsent, setImageConsent] = useState<"" | "yes" | "no">("");
+  const [agreeTerms, setAgreeTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<"active" | "pending" | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const dobAge = form.dateOfBirth ? ageFromDob(form.dateOfBirth) : null;
-  const isMinor = under18 === "yes" || (dobAge !== null && dobAge < 18);
+  const isMinor = over18 === "no" || (dobAge !== null && dobAge < 18);
 
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -76,16 +120,27 @@ export function VolunteerForm() {
   function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!under18) {
-      setError("Please tell us whether you're under 18.");
+    if (!over18) {
+      setError("Please tell us whether you're 18 or over.");
+      return;
+    }
+    if (!imageConsent) {
+      setError("Please answer the promotional-image consent question.");
+      return;
+    }
+    if (!agreeTerms) {
+      setError("Please agree to the volunteer terms to continue.");
       return;
     }
     startTransition(async () => {
       const result: RegisterResult = await registerVolunteer({
         ...form,
-        under18: under18 === "yes",
+        over18: over18 === "yes",
         interests,
-        homecareInterest,
+        fosterInterest,
+        jailBreakInterest,
+        imageConsent: imageConsent === "yes",
+        agreeTerms,
       });
       if (result.ok) setDone(result.status);
       else setError(result.error);
@@ -109,10 +164,13 @@ export function VolunteerForm() {
             guardian&apos;s consent before you can start. We&apos;ll be in touch.
           </p>
         )}
-        {homecareInterest && (
+        {(fosterInterest || jailBreakInterest) && (
           <p className="text-ink-muted">
-            You also said you&apos;re interested in homecare (fostering / jail break) — that has
-            its own approval process, and CAPS will contact you about it separately.
+            You also registered interest in{" "}
+            {[fosterInterest && "fostering", jailBreakInterest && "the jail break program"]
+              .filter(Boolean)
+              .join(" and ")}
+            . That has its own approval process — CAPS will contact you about the next steps.
           </p>
         )}
         <p className="text-ink-muted">You can close this page now.</p>
@@ -199,25 +257,25 @@ export function VolunteerForm() {
       </div>
 
       <fieldset className="flex flex-col gap-2">
-        <legend className="text-sm font-bold">Are you under 18?</legend>
+        <legend className="text-sm font-bold">Are you 18 or over?</legend>
         <div className="flex gap-2">
           {(
             [
-              ["no", "18 or over"],
-              ["yes", "Under 18"],
+              ["yes", "Yes"],
+              ["no", "No, under 18"],
             ] as const
           ).map(([val, label]) => (
             <label
               key={val}
               className={`flex-1 flex items-center justify-center gap-2 text-sm h-11 rounded-[var(--radius)] border cursor-pointer ${
-                under18 === val ? "border-brand bg-brand-tint font-semibold" : "border-line-cool"
+                over18 === val ? "border-brand bg-brand-tint font-semibold" : "border-line-cool"
               }`}
             >
               <input
                 type="radio"
-                name="under18"
-                checked={under18 === val}
-                onChange={() => setUnder18(val)}
+                name="over18"
+                checked={over18 === val}
+                onChange={() => setOver18(val)}
               />
               {label}
             </label>
@@ -321,8 +379,27 @@ export function VolunteerForm() {
         </fieldset>
       )}
 
+      <RadioRows
+        legend="Briefly describe your experience and confidence in handling dogs"
+        name="experience"
+        options={EXPERIENCE_OPTIONS}
+        value={form.experienceLevel}
+        onChange={(code) => set("experienceLevel", code)}
+      />
+      {form.experienceLevel === "other" && (
+        <Field label="Tell us more">
+          <input
+            className={inputClass}
+            value={form.experienceOther}
+            onChange={(e) => set("experienceOther", e.target.value)}
+          />
+        </Field>
+      )}
+
       <fieldset className="flex flex-col gap-2">
-        <legend className="text-sm font-bold">What would you like to help with?</legend>
+        <legend className="text-sm font-bold">
+          Which activities are you interested in? Tick all that apply.
+        </legend>
         <div className="grid grid-cols-2 gap-2">
           {VOLUNTEER_INTERESTS.map((i) => (
             <label
@@ -348,10 +425,23 @@ export function VolunteerForm() {
           <input
             type="checkbox"
             className="mt-1"
-            checked={homecareInterest}
-            onChange={(e) => setHomecareInterest(e.target.checked)}
+            checked={fosterInterest}
+            onChange={(e) => setFosterInterest(e.target.checked)}
           />
-          <span>I&apos;m interested in homecare — fostering a dog or the jail break program.</span>
+          <span>
+            <strong>Fostering</strong> — having a dog live in my home for weeks or months.
+          </span>
+        </label>
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={jailBreakInterest}
+            onChange={(e) => setJailBreakInterest(e.target.checked)}
+          />
+          <span>
+            <strong>Jail break</strong> — taking a dog out for a day trip or overnight.
+          </span>
         </label>
         <p className="text-xs text-ink-muted">
           Homecare has its own approval process (a chat for jail break, a home visit for
@@ -359,15 +449,6 @@ export function VolunteerForm() {
           the next steps.
         </p>
       </fieldset>
-
-      <Field label="Any experience with dogs?" hint="Optional.">
-        <textarea
-          rows={2}
-          className={areaClass}
-          value={form.experience}
-          onChange={(e) => set("experience", e.target.value)}
-        />
-      </Field>
 
       <Field
         label="Any medical conditions we should know about?"
@@ -381,7 +462,7 @@ export function VolunteerForm() {
         />
       </Field>
 
-      <Field label="How did you hear about us?">
+      <Field label="How did you hear about volunteering with CAPS?">
         <select
           className={inputClass}
           value={form.howHeard}
@@ -405,20 +486,50 @@ export function VolunteerForm() {
         </Field>
       )}
 
-      <details className="text-sm border border-line rounded-[var(--radius)] p-3">
-        <summary className="font-semibold cursor-pointer">Read the volunteer terms</summary>
-        <p className="mt-2 whitespace-pre-wrap text-ink-muted">{VOLUNTEER_TERMS}</p>
-      </details>
+      <fieldset className="flex flex-col gap-2">
+        <legend className="text-sm font-bold">
+          Do you consent to your image being used to promote CAPS (e.g. Facebook, flyers)?
+        </legend>
+        <div className="flex gap-2">
+          {(
+            [
+              ["yes", "Yes"],
+              ["no", "No"],
+            ] as const
+          ).map(([val, label]) => (
+            <label
+              key={val}
+              className={`flex-1 flex items-center justify-center gap-2 text-sm h-11 rounded-[var(--radius)] border cursor-pointer ${
+                imageConsent === val ? "border-brand bg-brand-tint font-semibold" : "border-line-cool"
+              }`}
+            >
+              <input
+                type="radio"
+                name="imageConsent"
+                checked={imageConsent === val}
+                onChange={() => setImageConsent(val)}
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
 
-      <label className="flex items-start gap-2 text-sm">
-        <input
-          type="checkbox"
-          className="mt-1"
-          checked={form.agreeTerms}
-          onChange={(e) => set("agreeTerms", e.target.checked)}
-        />
-        <span>I have read and agree to CAPS&apos;s volunteer terms.</span>
-      </label>
+      <fieldset className="flex flex-col gap-2">
+        <legend className="text-sm font-bold">Terms and conditions</legend>
+        <div className="max-h-52 overflow-y-auto whitespace-pre-wrap text-sm text-ink-muted border border-line rounded-[var(--radius)] p-3">
+          {VOLUNTEER_TERMS}
+        </div>
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={agreeTerms}
+            onChange={(e) => setAgreeTerms(e.target.checked)}
+          />
+          <span>I have read and agree to the above terms.</span>
+        </label>
+      </fieldset>
 
       <Field label="Type your name to sign">
         <input

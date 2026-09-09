@@ -3,9 +3,12 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   INTEREST_CODES,
-  HOMECARE_INTEREST,
+  FOSTER_INTEREST,
+  JAILBREAK_INTEREST,
   HOW_HEARD_CODES,
+  EXPERIENCE_CODES,
   howHeardLabel,
+  experienceLabel,
   ageFromDob,
   type RegisterResult,
 } from "@/lib/registration";
@@ -40,13 +43,16 @@ export async function registerVolunteer(input: {
   parentPhone: string;
   parentEmail: string;
   parentalConsent: boolean;
-  under18: boolean;
+  over18: boolean;
   interests: string[];
-  homecareInterest: boolean;
-  experience: string;
+  fosterInterest: boolean;
+  jailBreakInterest: boolean;
+  experienceLevel: string;
+  experienceOther: string;
   medicalIssues: string;
   howHeard: string;
   howHeardOther: string;
+  imageConsent: boolean | null;
   agreeTerms: boolean;
   signatureName: string;
   /** Honeypot — real users never see or fill this. */
@@ -63,6 +69,8 @@ export async function registerVolunteer(input: {
   const dob = clean(input.dateOfBirth);
   const interests = input.interests.filter((i) => INTEREST_CODES.has(i));
   const howHeardCode = HOW_HEARD_CODES.has(input.howHeard) ? input.howHeard : "";
+  const experienceCode = EXPERIENCE_CODES.has(input.experienceLevel) ? input.experienceLevel : "";
+  const wantsHomecare = input.fosterInterest || input.jailBreakInterest;
 
   if (!firstName || !surname) return { error: "Please give your first name and surname." };
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
@@ -73,15 +81,20 @@ export async function registerVolunteer(input: {
   if (!dob || ageFromDob(dob) === null) return { error: "Please give your date of birth." };
   if (!clean(input.ecName) || !clean(input.ecPhone))
     return { error: "Please give an emergency contact name and phone number." };
-  if (interests.length === 0 && !input.homecareInterest)
+  if (!experienceCode) return { error: "Please pick the option that best describes your experience." };
+  if (experienceCode === "other" && !clean(input.experienceOther))
+    return { error: "Please describe your experience." };
+  if (interests.length === 0 && !wantsHomecare)
     return { error: "Pick at least one thing you'd like to help with." };
+  if (input.imageConsent === null)
+    return { error: "Please answer the promotional-image consent question." };
   if (!input.agreeTerms) return { error: "Please agree to the volunteer terms to continue." };
   if (!clean(input.signatureName)) return { error: "Please type your name to sign." };
 
   const dobAge = ageFromDob(dob)!;
-  // Gate on either signal — the explicit "under 18" answer or the date of
-  // birth. If they conflict, treat as a minor (safer).
-  const minor = input.under18 || dobAge < 18;
+  // Gate on either signal — the explicit "18 or over" answer or the date
+  // of birth. If they conflict, treat as a minor (safer).
+  const minor = !input.over18 || dobAge < 18;
   if (minor) {
     if (!clean(input.parentName) || !clean(input.parentPhone))
       return {
@@ -115,28 +128,36 @@ export async function registerVolunteer(input: {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const { data: personRow, error: personErr } = await supabase
-    .from("people")
-    .insert({
-      first_name: firstName,
-      surname,
-      nickname: clean(input.nickname) || null,
-      email,
-      phone,
-      date_of_birth: dob,
-      address: clean(input.address) || null,
-      ec_name: clean(input.ecName),
-      ec_phone: clean(input.ecPhone),
-      ec_relationship: clean(input.ecRelationship) || null,
-      ec_email: clean(input.ecEmail) || null,
-      parent_name: minor ? clean(input.parentName) : null,
-      parent_phone: minor ? clean(input.parentPhone) : null,
-      parent_email: minor ? clean(input.parentEmail) || null : null,
-      parental_consent: minor,
-      parental_consent_date: minor ? today : null,
-    })
-    .select("id")
-    .single();
+  const personFields: Record<string, unknown> = {
+    first_name: firstName,
+    surname,
+    nickname: clean(input.nickname) || null,
+    email,
+    phone,
+    date_of_birth: dob,
+    address: clean(input.address) || null,
+    ec_name: clean(input.ecName),
+    ec_phone: clean(input.ecPhone),
+    ec_relationship: clean(input.ecRelationship) || null,
+    ec_email: clean(input.ecEmail) || null,
+    parent_name: minor ? clean(input.parentName) : null,
+    parent_phone: minor ? clean(input.parentPhone) : null,
+    parent_email: minor ? clean(input.parentEmail) || null : null,
+    parental_consent: minor,
+    parental_consent_date: minor ? today : null,
+    image_consent: input.imageConsent,
+  };
+
+  let personRes = await supabase.from("people").insert(personFields).select("id").single();
+
+  // 42703 = undefined column — the image_consent migration (10) hasn't
+  // been applied yet. Retry without it so registration still works.
+  if (personRes.error?.code === "42703") {
+    delete personFields.image_consent;
+    personRes = await supabase.from("people").insert(personFields).select("id").single();
+  }
+
+  const { data: personRow, error: personErr } = personRes;
 
   if (personErr || !personRow) {
     // 23505 = unique violation — almost certainly the email, i.e. a
@@ -163,15 +184,19 @@ export async function registerVolunteer(input: {
   });
   if (roleErr) return { error: roleErr.message };
 
-  // Homecare interest rides along in `interests` for now (Paul, 2026-09-09)
-  // — surfaced on the person's People page. The pending carer roles + the
-  // email approval loop are a later build.
-  const storedInterests = input.homecareInterest ? [...interests, HOMECARE_INTEREST] : interests;
+  // Foster / jail break interest rides along in `interests` for now (Paul,
+  // 2026-09-09) — surfaced on the person's People page. The pending carer
+  // roles + the email approval loop are a later build.
+  const storedInterests = [
+    ...interests,
+    ...(input.fosterInterest ? [FOSTER_INTEREST] : []),
+    ...(input.jailBreakInterest ? [JAILBREAK_INTEREST] : []),
+  ];
 
   const { error: profileErr } = await supabase.from("volunteer_profile").insert({
     person_id: personRow.id,
     interests: storedInterests,
-    experience: clean(input.experience) || null,
+    experience: experienceLabel(experienceCode || null, input.experienceOther),
     medical_issues: clean(input.medicalIssues) || null,
     how_heard: howHeardLabel(howHeardCode || null, input.howHeardOther) || null,
     agree_terms: true,

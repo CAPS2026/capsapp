@@ -24,6 +24,7 @@ export type PersonDetail = {
   isMinor: boolean;
   address: string | null;
   hasAccount: boolean;
+  imageConsent: boolean | null;
   ec: { name: string | null; phone: string | null; relationship: string | null; email: string | null };
   parent: {
     name: string | null;
@@ -78,6 +79,7 @@ export async function getPersonDetail(id: string): Promise<PersonDetail | null> 
     parent_email: string | null;
     parental_consent: boolean;
     parental_consent_date: string | null;
+    image_consent: boolean | null;
     notes_internal: string | null;
     created_at: string;
     person_roles:
@@ -119,6 +121,7 @@ export async function getPersonDetail(id: string): Promise<PersonDetail | null> 
     isMinor: age !== null && age < 18,
     address: row.address,
     hasAccount: !!row.auth_user_id,
+    imageConsent: row.image_consent ?? null,
     ec: {
       name: row.ec_name,
       phone: row.ec_phone,
