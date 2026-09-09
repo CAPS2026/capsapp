@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 // Paths that don't require a signed-in person. Everything else under the
 // (app) route group is protected by default.
-const PUBLIC_PREFIXES = ["/login", "/auth", "/apply", "/manifest.json"];
+const PUBLIC_PREFIXES = ["/login", "/auth", "/apply", "/approve", "/manifest.json"];
 
 function isPublicPath(pathname: string) {
   if (pathname === "/") return true;

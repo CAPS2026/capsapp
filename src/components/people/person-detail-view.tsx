@@ -1,9 +1,6 @@
+import Link from "next/link";
 import type { PersonDetail } from "@/lib/person-detail";
-import {
-  VOLUNTEER_INTERESTS,
-  HOMECARE_INTERESTS,
-  HOMECARE_INTEREST_LABEL,
-} from "@/lib/registration";
+import { VOLUNTEER_INTERESTS } from "@/lib/registration";
 import { ROLE_LABEL, STATUS_LABEL, STATUS_TEXT_CLASS } from "@/lib/people";
 import { formatDate } from "@/lib/format";
 import { PersonRoleActions } from "@/components/people/person-role-actions";
@@ -28,6 +25,15 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
       <span className="text-right">{value}</span>
     </div>
   );
+}
+
+function numOrNull(n: number | null): string | null {
+  return n === null || n === undefined ? null : String(n);
+}
+
+function fenceText(hp: NonNullable<PersonDetail["homecareProfile"]>): string | null {
+  const parts = [hp.fenceType, hp.fenceHeight].filter(Boolean);
+  return parts.length ? parts.join(", ") : null;
 }
 
 export function PersonDetailView({ person }: { person: PersonDetail }) {
@@ -75,7 +81,22 @@ export function PersonDetailView({ person }: { person: PersonDetail }) {
             )}
             {r.endedOn && <p className="text-xs text-ink-muted">Ended {formatDate(r.endedOn)}</p>}
             {r.note && <p className="text-xs text-ink-muted">{r.note}</p>}
-            {r.status === "pending" && <PersonRoleActions roleId={r.id} personId={person.id} />}
+            {r.status === "pending" && (
+              <PersonRoleActions
+                roleId={r.id}
+                personId={person.id}
+                approveBlockedReason={
+                  r.role === "foster_carer" && !person.homecareProfile?.yardCheckDone
+                    ? "Foster needs a home visit first."
+                    : undefined
+                }
+                approveBlockedHref={
+                  r.role === "foster_carer" && !person.homecareProfile?.yardCheckDone
+                    ? `/people/${person.id}/yard-check`
+                    : undefined
+                }
+              />
+            )}
           </div>
         ))}
       </Section>
@@ -126,32 +147,13 @@ export function PersonDetailView({ person }: { person: PersonDetail }) {
         </Section>
       )}
 
-      {(() => {
-        const homecare = (person.volunteerProfile?.interests ?? []).filter((c) =>
-          HOMECARE_INTERESTS.includes(c),
-        );
-        if (homecare.length === 0) return null;
-        return (
-          <div className="bg-warm-tint border border-warm rounded-[var(--radius)] p-3 text-sm text-warm-ink">
-            <strong>
-              Interested in {homecare.map((c) => HOMECARE_INTEREST_LABEL[c] ?? c).join(" and ")}
-            </strong>{" "}
-            — registered on the form, not yet actioned. The homecare approval flow is still
-            being built.
-          </div>
-        );
-      })()}
-
       {person.volunteerProfile && (
         <Section title="Volunteer details">
           <Field
             label="Interests"
             value={
-              person.volunteerProfile.interests.filter((c) => !HOMECARE_INTERESTS.includes(c)).length
-                ? person.volunteerProfile.interests
-                    .filter((c) => !HOMECARE_INTERESTS.includes(c))
-                    .map((c) => INTEREST_LABEL.get(c) ?? c)
-                    .join(", ")
+              person.volunteerProfile.interests.length
+                ? person.volunteerProfile.interests.map((c) => INTEREST_LABEL.get(c) ?? c).join(", ")
                 : null
             }
           />
@@ -174,11 +176,7 @@ export function PersonDetailView({ person }: { person: PersonDetail }) {
       )}
 
       {person.homecareProfile && (
-        <Section title="Homecare details">
-          <p className="text-sm text-ink-muted">
-            On file — the full homecare/approval view lands with the homecare build.
-          </p>
-        </Section>
+        <HomecareSection personId={person.id} hp={person.homecareProfile} />
       )}
 
       {person.notesInternal && (
@@ -187,5 +185,54 @@ export function PersonDetailView({ person }: { person: PersonDetail }) {
         </Section>
       )}
     </div>
+  );
+}
+
+function HomecareSection({
+  personId,
+  hp,
+}: {
+  personId: string;
+  hp: NonNullable<PersonDetail["homecareProfile"]>;
+}) {
+  const yardCheckHref = `/people/${personId}/yard-check`;
+  return (
+    <Section title="Homecare">
+      <Field label="Applied" value={hp.appliedOn ? formatDate(hp.appliedOn) : null} />
+      {hp.yardCheckDone ? (
+        <>
+          <div className="flex justify-between gap-4 text-sm py-0.5">
+            <span className="text-ink-muted">Yard check</span>
+            <span className="text-right text-ok font-semibold">
+              Done{hp.yardCheckOn ? ` ${formatDate(hp.yardCheckOn)}` : ""}
+              {hp.yardCheckByName ? ` · ${hp.yardCheckByName}` : ""}
+            </span>
+          </div>
+          <Field label="Property" value={hp.propertyOwnership} />
+          <Field label="Fence" value={fenceText(hp)} />
+          <Field label="People at home" value={numOrNull(hp.peopleAtHome)} />
+          <Field label="Children under 16" value={numOrNull(hp.childrenU16)} />
+          <Field label="Other animals" value={hp.otherAnimals} />
+          <Field label="Animal notes" value={hp.animalDetails} />
+          <Field
+            label="Pets vaccinated"
+            value={hp.vaccinesCurrent === null ? null : hp.vaccinesCurrent ? "Yes" : "No"}
+          />
+          {hp.yardCheckNotes && (
+            <p className="text-sm whitespace-pre-wrap pt-1">{hp.yardCheckNotes}</p>
+          )}
+          <Link href={yardCheckHref} className="text-xs text-brand-ink underline font-semibold pt-1">
+            Update yard check
+          </Link>
+        </>
+      ) : (
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <span className="text-ink-muted">Yard check not done</span>
+          <Link href={yardCheckHref} className="text-brand-ink underline font-semibold">
+            Record yard check
+          </Link>
+        </div>
+      )}
+    </Section>
   );
 }

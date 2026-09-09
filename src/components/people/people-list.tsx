@@ -101,22 +101,6 @@ export function PeopleList({ people }: { people: PersonListItem[] }) {
                         {r.status === "pending" ? " • pending" : ""}
                       </span>
                     ))}
-                  {p.homecareInterests.includes("foster") && (
-                    <span
-                      className="text-xs px-1.5 py-0.5 rounded-full font-semibold bg-warm-tint text-warm-ink"
-                      title="Registered interest in fostering — not yet actioned"
-                    >
-                      foster?
-                    </span>
-                  )}
-                  {p.homecareInterests.includes("jail_break") && (
-                    <span
-                      className="text-xs px-1.5 py-0.5 rounded-full font-semibold bg-warm-tint text-warm-ink"
-                      title="Registered interest in jail break — not yet actioned"
-                    >
-                      jail break?
-                    </span>
-                  )}
                   {p.archived && <span className="text-xs text-ink-muted">archived</span>}
                 </div>
               </div>

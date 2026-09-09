@@ -44,7 +44,21 @@ export type PersonDetail = {
     signatureName: string | null;
     signatureDate: string | null;
   } | null;
-  homecareProfile: Record<string, unknown> | null;
+  homecareProfile: {
+    appliedOn: string | null;
+    propertyOwnership: string | null;
+    fenceType: string | null;
+    fenceHeight: string | null;
+    peopleAtHome: number | null;
+    childrenU16: number | null;
+    otherAnimals: string | null;
+    animalDetails: string | null;
+    vaccinesCurrent: boolean | null;
+    yardCheckDone: boolean;
+    yardCheckOn: string | null;
+    yardCheckByName: string | null;
+    yardCheckNotes: string | null;
+  } | null;
 };
 
 export async function getPersonDetail(id: string): Promise<PersonDetail | null> {
@@ -107,6 +121,34 @@ export async function getPersonDetail(id: string): Promise<PersonDetail | null> 
     .eq("person_id", id)
     .maybeSingle();
 
+  const hpRow = hp as unknown as
+    | ({
+        applied_on: string | null;
+        property_ownership: string | null;
+        fence_type: string | null;
+        fence_height: string | null;
+        people_at_home: number | null;
+        children_u16: number | null;
+        other_animals: string | null;
+        animal_details: string | null;
+        vaccines_current: boolean | null;
+        yard_check_done: boolean | null;
+        yard_check_by: string | null;
+        yard_check_on: string | null;
+        yard_check_notes: string | null;
+      })
+    | null;
+
+  let yardCheckByName: string | null = null;
+  if (hpRow?.yard_check_by) {
+    const { data: checker } = await supabase
+      .from("people")
+      .select("first_name, surname")
+      .eq("id", hpRow.yard_check_by)
+      .maybeSingle();
+    if (checker) yardCheckByName = `${checker.first_name} ${checker.surname}`;
+  }
+
   const age = ageFromDob(row.date_of_birth);
 
   return {
@@ -159,6 +201,22 @@ export async function getPersonDetail(id: string): Promise<PersonDetail | null> 
           signatureDate: vp.signature_date,
         }
       : null,
-    homecareProfile: (hp as Record<string, unknown> | null) ?? null,
+    homecareProfile: hpRow
+      ? {
+          appliedOn: hpRow.applied_on,
+          propertyOwnership: hpRow.property_ownership,
+          fenceType: hpRow.fence_type,
+          fenceHeight: hpRow.fence_height,
+          peopleAtHome: hpRow.people_at_home,
+          childrenU16: hpRow.children_u16,
+          otherAnimals: hpRow.other_animals,
+          animalDetails: hpRow.animal_details,
+          vaccinesCurrent: hpRow.vaccines_current,
+          yardCheckDone: !!hpRow.yard_check_done,
+          yardCheckOn: hpRow.yard_check_on,
+          yardCheckByName,
+          yardCheckNotes: hpRow.yard_check_notes ?? null,
+        }
+      : null,
   };
 }

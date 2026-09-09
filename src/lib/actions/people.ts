@@ -25,6 +25,25 @@ export async function approveRole(personRoleId: string, personId: string): Promi
   if (!me) return { error: "Staff only." };
 
   const supabase = await createClient();
+
+  const { data: roleRow } = await supabase
+    .from("person_roles")
+    .select("role, status")
+    .eq("id", personRoleId)
+    .maybeSingle();
+  if (!roleRow || roleRow.status !== "pending") return { error: "That role isn't pending." };
+
+  // Foster needs the home visit recorded first (Paul, 2026-09-09).
+  if (roleRow.role === "foster_carer") {
+    const { data: hp } = await supabase
+      .from("homecare_profile")
+      .select("yard_check_done")
+      .eq("person_id", personId)
+      .maybeSingle();
+    if (!hp?.yard_check_done)
+      return { error: "Record the yard check before approving a foster carer." };
+  }
+
   const { error } = await supabase
     .from("person_roles")
     .update({ status: "active", approved_by: me.id, granted_on: today() })

@@ -24,18 +24,10 @@ export const VOLUNTEER_INTERESTS: { code: string; label: string }[] = [
 ];
 export const INTEREST_CODES = new Set(VOLUNTEER_INTERESTS.map((i) => i.code));
 
-// Homecare — recorded as interests for now, kept distinct from the grid
-// above because they trigger a separate approval process. Foster and jail
-// break are tracked separately (Paul, 2026-09-09). At step 4 each maps to
-// a pending `foster_carer` / `jailbreak_carer` role + the email approval
-// loop; for now they just flag interest on the person's page.
-export const FOSTER_INTEREST = "foster";
-export const JAILBREAK_INTEREST = "jail_break";
-export const HOMECARE_INTERESTS = [FOSTER_INTEREST, JAILBREAK_INTEREST];
-export const HOMECARE_INTEREST_LABEL: Record<string, string> = {
-  [FOSTER_INTEREST]: "Fostering",
-  [JAILBREAK_INTEREST]: "Jail Break",
-};
+// Homecare (fostering / jail break) is asked as two checkboxes on the
+// form. On submit each creates a pending `foster_carer` / `jailbreak_carer`
+// role — the person_roles rows are the source of truth, not an interest
+// code (see src/lib/actions/registration.ts + the step-4 approval flow).
 
 // "Briefly describe your experience and confidence in handling dogs" —
 // a single-choice question on the form. Required.
