@@ -148,31 +148,39 @@ export function VolunteerForm() {
   }
 
   if (done) {
+    const homecareLine = [fosterInterest && "fostering", jailBreakInterest && "the jail break program"]
+      .filter(Boolean)
+      .join(" and ");
+    const onSiteActiveNow = interests.length > 0 && done === "active";
+    const onSitePending = interests.length > 0 && done === "pending";
     return (
       <div className="flex flex-col gap-3 text-sm">
         <h2 className="text-lg font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
-          {done === "active" ? "You're registered" : "Thanks — we've got your registration"}
+          {onSiteActiveNow ? "You're registered" : "Thanks — we've got your registration"}
         </h2>
-        {done === "active" ? (
+
+        {onSiteActiveNow && (
           <p>
             You can start helping with dog walking straight away. Next time you&apos;re at the
             shelter, check in with a caretaker and they&apos;ll set you up with a dog.
           </p>
-        ) : (
+        )}
+        {onSitePending && (
           <p>
             Because you&apos;re under 18, someone from CAPS needs to confirm your parent or
-            guardian&apos;s consent before you can start. We&apos;ll be in touch.
+            guardian&apos;s consent before you can start on-site. We&apos;ll be in touch.
           </p>
         )}
-        {(fosterInterest || jailBreakInterest) && (
-          <p className="text-ink-muted">
-            You also registered interest in{" "}
-            {[fosterInterest && "fostering", jailBreakInterest && "the jail break program"]
-              .filter(Boolean)
-              .join(" and ")}
-            . That has its own approval process — CAPS will contact you about the next steps.
+
+        {homecareLine && (
+          <p className={onSiteActiveNow || onSitePending ? "text-ink-muted" : undefined}>
+            {onSiteActiveNow || onSitePending ? "You also registered interest in " : "You registered interest in "}
+            {homecareLine}. That has its own approval process — a chat for jail break, a home
+            visit for fostering — and CAPS will contact you about the next steps. You can&apos;t
+            take a dog out on homecare until you&apos;ve been approved.
           </p>
         )}
+
         <p className="text-ink-muted">You can close this page now.</p>
       </div>
     );
