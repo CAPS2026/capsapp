@@ -113,7 +113,14 @@ export async function editActivityTimes(input: {
   return {};
 }
 
-/** Active volunteers, for the Manual entry form's person picker (staff only). */
+/**
+ * The "available walkers" list — active volunteers who said they want to
+ * do dog walking (docs/ui-flows.md §7). Used by the Start Walk kiosk
+ * picker and Manual entry. Someone who registered only for, say,
+ * fundraising is an active volunteer but not a walker, so they're left
+ * out. Volunteers with no interests recorded (older / migrated records)
+ * are kept in — better to over-include than hide a real walker.
+ */
 export async function listActiveVolunteers(): Promise<{ id: string; name: string }[]> {
   const person = await getCurrentPerson();
   if (!person || !person.isStaff) return [];
@@ -121,11 +128,24 @@ export async function listActiveVolunteers(): Promise<{ id: string; name: string
   const supabase = await createClient();
   const { data } = await supabase
     .from("person_roles")
-    .select("person:people!person_roles_person_id_fkey(id, first_name, surname)")
+    .select(
+      "person:people!person_roles_person_id_fkey(id, first_name, surname, volunteer_profile(interests))",
+    )
     .eq("role", "volunteer")
     .eq("status", "active");
 
-  return ((data ?? []) as unknown as Array<{ person: { id: string; first_name: string; surname: string } }>)
+  return ((data ?? []) as unknown as Array<{
+    person: {
+      id: string;
+      first_name: string;
+      surname: string;
+      volunteer_profile: { interests: string[] | null } | null;
+    };
+  }>)
+    .filter((r) => {
+      const interests = r.person.volunteer_profile?.interests ?? [];
+      return interests.length === 0 || interests.includes("dog_walking");
+    })
     .map((r) => ({ id: r.person.id, name: `${r.person.first_name} ${r.person.surname}` }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
