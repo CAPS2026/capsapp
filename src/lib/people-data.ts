@@ -19,6 +19,7 @@ export type PersonListItem = {
   hasPending: boolean;
   archived: boolean;
   missingEmergencyContact: boolean;
+  homecareInterest: boolean;
 };
 
 export function ageFromDob(dob: string | null): number | null {
@@ -38,7 +39,7 @@ export async function getPeopleList(): Promise<PersonListItem[]> {
   const { data } = await supabase
     .from("people")
     .select(
-      "id, first_name, surname, nickname, email, phone, date_of_birth, ec_name, ec_phone, auth_user_id, person_roles!person_roles_person_id_fkey(id, role, status)",
+      "id, first_name, surname, nickname, email, phone, date_of_birth, ec_name, ec_phone, auth_user_id, person_roles!person_roles_person_id_fkey(id, role, status), volunteer_profile(interests)",
     )
     .order("surname")
     .order("first_name");
@@ -55,6 +56,7 @@ export async function getPeopleList(): Promise<PersonListItem[]> {
     ec_phone: string | null;
     auth_user_id: string | null;
     person_roles: RoleRow[] | null;
+    volunteer_profile: { interests: string[] | null } | null;
   }>).map((p) => {
     const roles = p.person_roles ?? [];
     const active = roles.filter((r) => r.status === "active");
@@ -73,6 +75,7 @@ export async function getPeopleList(): Promise<PersonListItem[]> {
       // been ended (exited/declined) and none is live.
       archived: roles.length > 0 && !roles.some((r) => r.status === "active" || r.status === "pending"),
       missingEmergencyContact: active.some((r) => r.role === "volunteer") && (!p.ec_name || !p.ec_phone),
+      homecareInterest: (p.volunteer_profile?.interests ?? []).includes("homecare"),
     };
   });
 }

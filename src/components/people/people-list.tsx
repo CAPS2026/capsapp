@@ -101,6 +101,14 @@ export function PeopleList({ people }: { people: PersonListItem[] }) {
                         {r.status === "pending" ? " • pending" : ""}
                       </span>
                     ))}
+                  {p.homecareInterest && (
+                    <span
+                      className="text-xs px-1.5 py-0.5 rounded-full font-semibold bg-warm-tint text-warm-ink"
+                      title="Registered interest in homecare — not yet actioned"
+                    >
+                      homecare?
+                    </span>
+                  )}
                   {p.archived && <span className="text-xs text-ink-muted">archived</span>}
                 </div>
               </div>

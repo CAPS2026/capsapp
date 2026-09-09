@@ -1,7 +1,14 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { INTEREST_CODES, ageFromDob, type RegisterResult } from "@/lib/registration";
+import {
+  INTEREST_CODES,
+  HOMECARE_INTEREST,
+  HOW_HEARD_CODES,
+  howHeardLabel,
+  ageFromDob,
+  type RegisterResult,
+} from "@/lib/registration";
 
 // Public, unauthenticated intake. Runs with the service-role client because
 // RLS on `people` is staff-only for insert (docs/schema.md §8) and an
@@ -33,10 +40,13 @@ export async function registerVolunteer(input: {
   parentPhone: string;
   parentEmail: string;
   parentalConsent: boolean;
+  under18: boolean;
   interests: string[];
+  homecareInterest: boolean;
   experience: string;
   medicalIssues: string;
   howHeard: string;
+  howHeardOther: string;
   agreeTerms: boolean;
   signatureName: string;
   /** Honeypot — real users never see or fill this. */
@@ -49,22 +59,29 @@ export async function registerVolunteer(input: {
   const surname = clean(input.surname);
   const email = clean(input.email).toLowerCase();
   const phone = clean(input.phone);
+  const phoneDigits = phone.replace(/\D/g, "");
   const dob = clean(input.dateOfBirth);
   const interests = input.interests.filter((i) => INTEREST_CODES.has(i));
+  const howHeardCode = HOW_HEARD_CODES.has(input.howHeard) ? input.howHeard : "";
 
   if (!firstName || !surname) return { error: "Please give your first name and surname." };
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
     return { error: "Please give a valid email address." };
   if (!phone) return { error: "Please give a phone number." };
+  if (phoneDigits.length < 8 || phoneDigits.length > 15)
+    return { error: "That phone number doesn't look right — please check it." };
   if (!dob || ageFromDob(dob) === null) return { error: "Please give your date of birth." };
   if (!clean(input.ecName) || !clean(input.ecPhone))
     return { error: "Please give an emergency contact name and phone number." };
-  if (interests.length === 0) return { error: "Pick at least one thing you'd like to help with." };
+  if (interests.length === 0 && !input.homecareInterest)
+    return { error: "Pick at least one thing you'd like to help with." };
   if (!input.agreeTerms) return { error: "Please agree to the volunteer terms to continue." };
   if (!clean(input.signatureName)) return { error: "Please type your name to sign." };
 
-  const age = ageFromDob(dob)!;
-  const minor = age < 18;
+  const dobAge = ageFromDob(dob)!;
+  // Gate on either signal — the explicit "under 18" answer or the date of
+  // birth. If they conflict, treat as a minor (safer).
+  const minor = input.under18 || dobAge < 18;
   if (minor) {
     if (!clean(input.parentName) || !clean(input.parentPhone))
       return {
@@ -146,12 +163,17 @@ export async function registerVolunteer(input: {
   });
   if (roleErr) return { error: roleErr.message };
 
+  // Homecare interest rides along in `interests` for now (Paul, 2026-09-09)
+  // — surfaced on the person's People page. The pending carer roles + the
+  // email approval loop are a later build.
+  const storedInterests = input.homecareInterest ? [...interests, HOMECARE_INTEREST] : interests;
+
   const { error: profileErr } = await supabase.from("volunteer_profile").insert({
     person_id: personRow.id,
-    interests,
+    interests: storedInterests,
     experience: clean(input.experience) || null,
     medical_issues: clean(input.medicalIssues) || null,
-    how_heard: clean(input.howHeard) || null,
+    how_heard: howHeardLabel(howHeardCode || null, input.howHeardOther) || null,
     agree_terms: true,
     signature_name: clean(input.signatureName),
     signature_date: today,

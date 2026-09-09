@@ -116,13 +116,21 @@ export function PersonDetailView({ person }: { person: PersonDetail }) {
         </Section>
       )}
 
+      {person.volunteerProfile?.interests.includes("homecare") && (
+        <div className="bg-warm-tint border border-warm rounded-[var(--radius)] p-3 text-sm text-warm-ink">
+          <strong>Interested in homecare</strong> (fostering / jail break) — registered on the
+          form, not yet actioned. The homecare approval flow is still being built.
+        </div>
+      )}
+
       {person.volunteerProfile && (
         <Section title="Volunteer details">
           <Field
             label="Interests"
             value={
-              person.volunteerProfile.interests.length
+              person.volunteerProfile.interests.filter((c) => c !== "homecare").length
                 ? person.volunteerProfile.interests
+                    .filter((c) => c !== "homecare")
                     .map((c) => INTEREST_LABEL.get(c) ?? c)
                     .join(", ")
                 : null
