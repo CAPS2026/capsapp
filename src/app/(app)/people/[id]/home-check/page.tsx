@@ -2,9 +2,9 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentPerson } from "@/lib/auth";
 import { getPersonDetail } from "@/lib/person-detail";
-import { YardCheckForm } from "@/components/people/yard-check-form";
+import { HomeCheckForm } from "@/components/people/home-check-form";
 
-export default async function YardCheckPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function HomeCheckPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const viewer = await getCurrentPerson();
   if (!viewer?.isStaff) redirect("/dogs");
@@ -20,11 +20,12 @@ export default async function YardCheckPage({ params }: { params: Promise<{ id: 
         ← {person.firstName} {person.surname}
       </Link>
       <h1 className="text-xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
-        Yard check
+        Home check
       </h1>
-      <YardCheckForm
+      <HomeCheckForm
         personId={id}
         personName={`${person.firstName} ${person.surname}`}
+        firstName={person.firstName}
         initial={{
           propertyOwnership: hp?.propertyOwnership ?? null,
           fenceType: hp?.fenceType ?? null,
@@ -34,7 +35,7 @@ export default async function YardCheckPage({ params }: { params: Promise<{ id: 
           otherAnimals: hp?.otherAnimals ?? null,
           animalDetails: hp?.animalDetails ?? null,
           vaccinesCurrent: hp?.vaccinesCurrent ?? null,
-          notes: hp?.yardCheckNotes ?? null,
+          notes: hp?.homeCheckNotes ?? null,
         }}
       />
     </div>

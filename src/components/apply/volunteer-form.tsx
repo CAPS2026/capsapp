@@ -173,12 +173,20 @@ export function VolunteerForm() {
         )}
 
         {homecareLine && (
-          <p className={onSiteActiveNow || onSitePending ? "text-ink-muted" : undefined}>
-            {onSiteActiveNow || onSitePending ? "You also registered interest in " : "You registered interest in "}
-            {homecareLine}. That has its own approval process — a chat for jail break, a home
-            visit for fostering — and CAPS will contact you about the next steps. You can&apos;t
-            take a dog out on homecare until you&apos;ve been approved.
-          </p>
+          <>
+            <p className={onSiteActiveNow || onSitePending ? "text-ink-muted" : undefined}>
+              {onSiteActiveNow || onSitePending
+                ? "You also registered interest in "
+                : "You registered interest in "}
+              {homecareLine}. That has its own approval process — a chat for jail break, a home
+              visit for fostering — and CAPS will contact you about the next steps. You can&apos;t
+              take a dog out on homecare until you&apos;ve been approved.
+            </p>
+            <p className="text-ink-muted">
+              We&apos;ve emailed you an acknowledgement — if it&apos;s not in your inbox, check
+              your spam or junk folder and mark it &ldquo;not spam&rdquo;.
+            </p>
+          </>
         )}
 
         <p className="text-ink-muted">You can close this page now.</p>

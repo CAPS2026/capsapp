@@ -14,7 +14,7 @@ export function PersonRoleActions({
   roleId: string;
   personId: string;
   /** When set, Approve is disabled and this note is shown (e.g. foster
-   *  needs the yard check first). Decline still works. */
+   *  needs the home check first). Decline still works. */
   approveBlockedReason?: string;
   approveBlockedHref?: string;
 }) {
@@ -59,7 +59,7 @@ export function PersonRoleActions({
             <>
               {" "}
               <Link href={approveBlockedHref} className="text-brand-ink underline font-semibold">
-                Record yard check
+                Record home check
               </Link>
             </>
           )}

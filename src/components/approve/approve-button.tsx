@@ -6,10 +6,12 @@ import { approveViaToken } from "@/lib/actions/homecare";
 export function ApproveButton({
   token,
   personName,
+  firstName,
   roleLabel,
 }: {
   token: string;
   personName: string;
+  firstName: string;
   roleLabel: string;
 }) {
   const [state, setState] = useState<"idle" | "done">("idle");
@@ -18,14 +20,15 @@ export function ApproveButton({
 
   if (state === "done") {
     return (
-      <p className="text-sm font-semibold text-ok">
-        Approved. {personName} can now take a dog out on {roleLabel} — we&apos;ve emailed them.
+      <p className="text-sm font-semibold text-ok border-t border-line pt-3">
+        Approved. {firstName} can now take a dog out on {roleLabel} — we&apos;ve emailed them to
+        let them know.
       </p>
     );
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2 border-t border-line pt-3">
       <button
         type="button"
         disabled={isPending}

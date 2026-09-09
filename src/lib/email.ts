@@ -5,8 +5,10 @@
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
 // Until the CAPS domain is verified in Resend, mail goes out from Resend's
-// shared onboarding sender. Set RESEND_FROM once the domain is verified,
-// e.g. "CAPS <noreply@capeanimalprotectionshelter.org.au>".
+// shared onboarding sender — which can ONLY deliver to the Resend account
+// owner's own address. Verify capeanimalprotectionshelter.org.au in
+// Resend, then set RESEND_FROM, e.g.
+// "CAPS <noreply@capeanimalprotectionshelter.org.au>".
 const FROM = process.env.RESEND_FROM ?? "CAPS <onboarding@resend.dev>";
 
 export type SendResult = { ok: true } | { ok: false; error: string };
@@ -15,6 +17,7 @@ export async function sendEmail(opts: {
   to: string | string[];
   subject: string;
   text: string;
+  html?: string;
 }): Promise<SendResult> {
   const key = process.env.RESEND_API_KEY;
   if (!key) return { ok: false, error: "RESEND_API_KEY not set" };
@@ -28,6 +31,7 @@ export async function sendEmail(opts: {
         to: Array.isArray(opts.to) ? opts.to : [opts.to],
         subject: opts.subject,
         text: opts.text,
+        ...(opts.html ? { html: opts.html } : {}),
       }),
     });
     if (!res.ok) {

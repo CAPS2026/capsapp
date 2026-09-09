@@ -86,13 +86,15 @@ export function PersonDetailView({ person }: { person: PersonDetail }) {
                 roleId={r.id}
                 personId={person.id}
                 approveBlockedReason={
-                  r.role === "foster_carer" && !person.homecareProfile?.yardCheckDone
-                    ? "Foster needs a home visit first."
+                  r.role === "foster_carer" && !person.homecareProfile?.homeCheckDone
+                    ? person.homecareProfile?.homeCheckOutcome === "improvements_needed"
+                      ? "Home check found improvements needed."
+                      : "Foster needs a home visit first."
                     : undefined
                 }
                 approveBlockedHref={
-                  r.role === "foster_carer" && !person.homecareProfile?.yardCheckDone
-                    ? `/people/${person.id}/yard-check`
+                  r.role === "foster_carer" && !person.homecareProfile?.homeCheckDone
+                    ? `/people/${person.id}/home-check`
                     : undefined
                 }
               />
@@ -195,17 +197,33 @@ function HomecareSection({
   personId: string;
   hp: NonNullable<PersonDetail["homecareProfile"]>;
 }) {
-  const yardCheckHref = `/people/${personId}/yard-check`;
+  const href = `/people/${personId}/home-check`;
+  const visited = hp.homeCheckOutcome !== null || hp.homeCheckDone;
   return (
     <Section title="Homecare">
       <Field label="Applied" value={hp.appliedOn ? formatDate(hp.appliedOn) : null} />
-      {hp.yardCheckDone ? (
+
+      {!visited && (
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <span className="text-ink-muted">Home check not done</span>
+          <Link href={href} className="text-brand-ink underline font-semibold">
+            Record home check
+          </Link>
+        </div>
+      )}
+
+      {visited && (
         <>
           <div className="flex justify-between gap-4 text-sm py-0.5">
-            <span className="text-ink-muted">Yard check</span>
-            <span className="text-right text-ok font-semibold">
-              Done{hp.yardCheckOn ? ` ${formatDate(hp.yardCheckOn)}` : ""}
-              {hp.yardCheckByName ? ` · ${hp.yardCheckByName}` : ""}
+            <span className="text-ink-muted">Home check</span>
+            <span
+              className={`text-right font-semibold ${
+                hp.homeCheckDone ? "text-ok" : "text-warm-ink"
+              }`}
+            >
+              {hp.homeCheckDone ? "Passed" : "Improvements needed"}
+              {hp.homeCheckOn ? ` ${formatDate(hp.homeCheckOn)}` : ""}
+              {hp.homeCheckByName ? ` · ${hp.homeCheckByName}` : ""}
             </span>
           </div>
           <Field label="Property" value={hp.propertyOwnership} />
@@ -218,20 +236,13 @@ function HomecareSection({
             label="Pets vaccinated"
             value={hp.vaccinesCurrent === null ? null : hp.vaccinesCurrent ? "Yes" : "No"}
           />
-          {hp.yardCheckNotes && (
-            <p className="text-sm whitespace-pre-wrap pt-1">{hp.yardCheckNotes}</p>
+          {hp.homeCheckNotes && (
+            <p className="text-sm whitespace-pre-wrap pt-1">{hp.homeCheckNotes}</p>
           )}
-          <Link href={yardCheckHref} className="text-xs text-brand-ink underline font-semibold pt-1">
-            Update yard check
+          <Link href={href} className="text-xs text-brand-ink underline font-semibold pt-1">
+            {hp.homeCheckDone ? "Update home check" : "Re-do home check"}
           </Link>
         </>
-      ) : (
-        <div className="flex items-center justify-between gap-3 text-sm">
-          <span className="text-ink-muted">Yard check not done</span>
-          <Link href={yardCheckHref} className="text-brand-ink underline font-semibold">
-            Record yard check
-          </Link>
-        </div>
       )}
     </Section>
   );

@@ -41,7 +41,7 @@ export async function approveRole(personRoleId: string, personId: string): Promi
       .eq("person_id", personId)
       .maybeSingle();
     if (!hp?.yard_check_done)
-      return { error: "Record the yard check before approving a foster carer." };
+      return { error: "Record a passing home check before approving a foster carer." };
   }
 
   const { error } = await supabase

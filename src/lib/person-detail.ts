@@ -54,10 +54,11 @@ export type PersonDetail = {
     otherAnimals: string | null;
     animalDetails: string | null;
     vaccinesCurrent: boolean | null;
-    yardCheckDone: boolean;
-    yardCheckOn: string | null;
-    yardCheckByName: string | null;
-    yardCheckNotes: string | null;
+    homeCheckDone: boolean;
+    homeCheckOutcome: "passed" | "improvements_needed" | null;
+    homeCheckOn: string | null;
+    homeCheckByName: string | null;
+    homeCheckNotes: string | null;
   } | null;
 };
 
@@ -133,20 +134,21 @@ export async function getPersonDetail(id: string): Promise<PersonDetail | null> 
         animal_details: string | null;
         vaccines_current: boolean | null;
         yard_check_done: boolean | null;
+        yard_check_outcome: "passed" | "improvements_needed" | null;
         yard_check_by: string | null;
         yard_check_on: string | null;
         yard_check_notes: string | null;
       })
     | null;
 
-  let yardCheckByName: string | null = null;
+  let homeCheckByName: string | null = null;
   if (hpRow?.yard_check_by) {
     const { data: checker } = await supabase
       .from("people")
       .select("first_name, surname")
       .eq("id", hpRow.yard_check_by)
       .maybeSingle();
-    if (checker) yardCheckByName = `${checker.first_name} ${checker.surname}`;
+    if (checker) homeCheckByName = `${checker.first_name} ${checker.surname}`;
   }
 
   const age = ageFromDob(row.date_of_birth);
@@ -212,10 +214,11 @@ export async function getPersonDetail(id: string): Promise<PersonDetail | null> 
           otherAnimals: hpRow.other_animals,
           animalDetails: hpRow.animal_details,
           vaccinesCurrent: hpRow.vaccines_current,
-          yardCheckDone: !!hpRow.yard_check_done,
-          yardCheckOn: hpRow.yard_check_on,
-          yardCheckByName,
-          yardCheckNotes: hpRow.yard_check_notes ?? null,
+          homeCheckDone: !!hpRow.yard_check_done,
+          homeCheckOutcome: hpRow.yard_check_outcome ?? null,
+          homeCheckOn: hpRow.yard_check_on,
+          homeCheckByName,
+          homeCheckNotes: hpRow.yard_check_notes ?? null,
         }
       : null,
   };
