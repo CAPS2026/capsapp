@@ -7,9 +7,11 @@ import {
   formatStartedLine,
   formatYearsMonths,
 } from "@/lib/format";
+import { deleteDog } from "@/lib/actions/dogs";
 import { DogActionButton } from "@/components/dogs/dog-action-button";
 import { ActionMenu } from "@/components/dogs/action-menu";
 import { ActivitySection } from "@/components/dogs/activity-section";
+import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -216,6 +218,19 @@ export function DogDetailView({
       <Section title="Time with CAPS">
         <p className="text-sm">{timeWithCaps}</p>
       </Section>
+
+      {isStaff && (
+        <div className="flex justify-end pt-2">
+          <ConfirmDeleteButton
+            triggerLabel="Delete this dog"
+            heading={`Delete ${dog.name}?`}
+            body="This permanently removes the dog and all their activity, notes, medical events and photos. It can't be undone — for a dog that has left, set their status to Exited instead."
+            confirmLabel="Delete"
+            action={deleteDog.bind(null, dog.id)}
+            redirectTo="/dogs"
+          />
+        </div>
+      )}
     </div>
   );
 }

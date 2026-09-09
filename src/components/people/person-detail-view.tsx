@@ -3,8 +3,10 @@ import type { PersonDetail } from "@/lib/person-detail";
 import { VOLUNTEER_INTERESTS } from "@/lib/registration";
 import { ROLE_LABEL, STATUS_LABEL, STATUS_TEXT_CLASS } from "@/lib/people";
 import { formatDate } from "@/lib/format";
+import { deletePerson } from "@/lib/actions/people";
 import { PersonRoleActions } from "@/components/people/person-role-actions";
 import { PersonArchiveButton } from "@/components/people/person-archive-button";
+import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 
 const INTEREST_LABEL = new Map(VOLUNTEER_INTERESTS.map((i) => [i.code, i.label]));
 
@@ -60,7 +62,23 @@ export function PersonDetailView({ person }: { person: PersonDetail }) {
             {archived && <span className="text-ink-muted">· archived</span>}
           </div>
         </div>
-        <PersonArchiveButton personId={person.id} archived={archived} />
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <Link
+            href={`/people/${person.id}/edit`}
+            className="text-sm font-semibold text-brand-ink underline underline-offset-2"
+          >
+            Edit
+          </Link>
+          <PersonArchiveButton personId={person.id} archived={archived} />
+          <ConfirmDeleteButton
+            triggerLabel="Delete"
+            heading={`Delete ${person.firstName} ${person.surname}?`}
+            body="This permanently removes their record, roles, profile, activity and site visits. It can't be undone — use Archive instead if they might come back."
+            confirmLabel="Delete"
+            action={deletePerson.bind(null, person.id)}
+            redirectTo="/people"
+          />
+        </div>
       </div>
 
       <Section title="Roles">
