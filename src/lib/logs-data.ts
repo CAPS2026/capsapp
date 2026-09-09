@@ -1,8 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { formatDuration, formatFullDateTime } from "@/lib/format";
+import { ROLE_LABEL } from "@/lib/people";
+import type { Role } from "@/lib/auth";
 import type { LogFilters, LogTab, LogTable } from "@/lib/logs";
 
 const LIMIT = 500;
+
+function titleCase(s: string): string {
+  return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 function dayStart(d?: string) {
   return d ? `${d}T00:00:00` : null;
@@ -11,7 +17,10 @@ function dayEnd(d?: string) {
   return d ? `${d}T23:59:59.999` : null;
 }
 
-const ACTIVITY_TYPE: Record<Exclude<LogTab, "medical" | "site">, string[]> = {
+const ACTIVITY_TYPE: Record<
+  Exclude<LogTab, "medical" | "site" | "dogs" | "people">,
+  string[]
+> = {
   walks: ["walk"],
   homecare: ["jail_break", "foster"],
   yard: ["yard"],
@@ -153,9 +162,91 @@ async function siteLog(f: LogFilters): Promise<LogTable> {
   };
 }
 
+async function dogsLog(f: LogFilters): Promise<LogTable> {
+  const supabase = await createClient();
+  let q = supabase
+    .from("dogs")
+    .select("id, ref, name, breed, status, arrival_date, arrival_type, exit_date, exit_type")
+    .order("arrival_date", { ascending: false, nullsFirst: false })
+    .limit(LIMIT + 1);
+  if (f.from) q = q.gte("arrival_date", f.from);
+  if (f.to) q = q.lte("arrival_date", f.to);
+
+  const { data } = await q;
+  const raw = (data ?? []) as unknown as Array<{
+    ref: string;
+    name: string;
+    breed: string | null;
+    status: string;
+    arrival_date: string | null;
+    arrival_type: string | null;
+    exit_date: string | null;
+    exit_type: string | null;
+  }>;
+
+  return {
+    columns: ["Ref", "Name", "Breed", "Status", "Arrived", "How", "Exited", "Exit reason"],
+    rows: raw.slice(0, LIMIT).map((d) => ({
+      Ref: d.ref,
+      Name: d.name,
+      Breed: d.breed ?? "",
+      Status: titleCase(d.status),
+      Arrived: d.arrival_date ?? "",
+      How: d.arrival_type ? titleCase(d.arrival_type) : "",
+      Exited: d.exit_date ?? "",
+      "Exit reason": d.exit_type ? titleCase(d.exit_type) : "",
+    })),
+    capped: raw.length > LIMIT,
+  };
+}
+
+async function peopleLog(f: LogFilters): Promise<LogTable> {
+  const supabase = await createClient();
+  let q = supabase
+    .from("people")
+    .select(
+      "id, first_name, surname, email, phone, created_at, auth_user_id, person_roles!person_roles_person_id_fkey(role, status)",
+    )
+    .order("created_at", { ascending: false })
+    .limit(LIMIT + 1);
+  const from = dayStart(f.from);
+  const to = dayEnd(f.to);
+  if (from) q = q.gte("created_at", from);
+  if (to) q = q.lte("created_at", to);
+
+  const { data } = await q;
+  const raw = (data ?? []) as unknown as Array<{
+    first_name: string;
+    surname: string;
+    email: string | null;
+    phone: string | null;
+    created_at: string;
+    auth_user_id: string | null;
+    person_roles: { role: Role; status: string }[] | null;
+  }>;
+
+  return {
+    columns: ["Name", "Roles", "Email", "Phone", "Account", "Registered"],
+    rows: raw.slice(0, LIMIT).map((p) => ({
+      Name: `${p.first_name} ${p.surname}`,
+      Roles: (p.person_roles ?? [])
+        .filter((r) => r.status === "active" || r.status === "pending")
+        .map((r) => `${ROLE_LABEL[r.role]}${r.status === "pending" ? " (pending)" : ""}`)
+        .join(", "),
+      Email: p.email ?? "",
+      Phone: p.phone ?? "",
+      Account: p.auth_user_id ? "Yes" : "",
+      Registered: p.created_at.slice(0, 10),
+    })),
+    capped: raw.length > LIMIT,
+  };
+}
+
 export async function getLog(tab: LogTab, filters: LogFilters): Promise<LogTable> {
   if (tab === "medical") return medicalLog(filters);
   if (tab === "site") return siteLog(filters);
+  if (tab === "dogs") return dogsLog(filters);
+  if (tab === "people") return peopleLog(filters);
   return activityLog(tab, filters);
 }
 

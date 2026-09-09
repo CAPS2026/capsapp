@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { LOG_TABS, rowsToCsv, type LogTab, type LogTable } from "@/lib/logs";
+import { LOG_TABS, REGISTER_TABS, rowsToCsv, type LogTab, type LogTable } from "@/lib/logs";
 
 const controlClass =
   "h-10 px-2 rounded-[var(--radius)] border border-line-cool bg-white text-sm";
@@ -36,9 +36,10 @@ export function LogsView({
   function goTab(t: LogTab) {
     const next = new URLSearchParams(params.toString());
     next.set("tab", t);
-    // person filter doesn't apply to Medical; dog filter doesn't apply to Site
-    if (t === "medical") next.delete("person");
-    if (t === "site") next.delete("dog");
+    // person filter doesn't apply to Medical; dog doesn't apply to Visitors;
+    // the registers (Dogs / People) take neither.
+    if (t === "medical" || REGISTER_TABS.includes(t)) next.delete("person");
+    if (t === "site" || REGISTER_TABS.includes(t)) next.delete("dog");
     router.replace(`${pathname}?${next.toString()}`);
   }
 
@@ -55,8 +56,9 @@ export function LogsView({
     URL.revokeObjectURL(url);
   }
 
-  const showDog = tab !== "site";
-  const showPerson = tab !== "medical";
+  const isRegister = REGISTER_TABS.includes(tab);
+  const showDog = !isRegister && tab !== "site";
+  const showPerson = !isRegister && tab !== "medical";
 
   return (
     <div className="flex flex-col gap-3">

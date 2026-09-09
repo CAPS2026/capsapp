@@ -1,6 +1,14 @@
 // Client-safe types + helpers for the Logs screen (docs/ui-flows.md §10).
 
-export type LogTab = "walks" | "homecare" | "yard" | "bed_rest" | "medical" | "site";
+export type LogTab =
+  | "walks"
+  | "homecare"
+  | "yard"
+  | "bed_rest"
+  | "medical"
+  | "site"
+  | "dogs"
+  | "people";
 
 export const LOG_TABS: { key: LogTab; label: string }[] = [
   { key: "walks", label: "Walks" },
@@ -8,8 +16,13 @@ export const LOG_TABS: { key: LogTab; label: string }[] = [
   { key: "yard", label: "Yard" },
   { key: "bed_rest", label: "Bed Rest" },
   { key: "medical", label: "Medical" },
-  { key: "site", label: "Site visits" },
+  { key: "site", label: "Visitors" },
+  { key: "dogs", label: "Dogs" },
+  { key: "people", label: "People" },
 ];
+
+/** Tabs that are registers, not activity — only the date range applies. */
+export const REGISTER_TABS: LogTab[] = ["dogs", "people"];
 
 export function isLogTab(v: string | undefined | null): v is LogTab {
   return !!v && LOG_TABS.some((t) => t.key === v);
