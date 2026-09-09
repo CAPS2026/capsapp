@@ -1,0 +1,175 @@
+import { createClient } from "@/lib/supabase/server";
+import { formatDuration, formatFullDateTime } from "@/lib/format";
+import type { LogFilters, LogTab, LogTable } from "@/lib/logs";
+
+const LIMIT = 500;
+
+function dayStart(d?: string) {
+  return d ? `${d}T00:00:00` : null;
+}
+function dayEnd(d?: string) {
+  return d ? `${d}T23:59:59.999` : null;
+}
+
+const ACTIVITY_TYPE: Record<Exclude<LogTab, "medical" | "site">, string[]> = {
+  walks: ["walk"],
+  homecare: ["jail_break", "foster"],
+  yard: ["yard"],
+  bed_rest: ["bed_rest"],
+};
+
+async function activityLog(tab: keyof typeof ACTIVITY_TYPE, f: LogFilters): Promise<LogTable> {
+  const supabase = await createClient();
+  let q = supabase
+    .from("dog_activity")
+    .select(
+      "id, type, started_at, ended_at, reason, entered_late, edited_at, dog:dogs!dog_activity_dog_id_fkey(name), person:people!dog_activity_person_id_fkey(first_name, surname)",
+    )
+    .in("type", ACTIVITY_TYPE[tab])
+    .order("started_at", { ascending: false })
+    .limit(LIMIT + 1);
+
+  const from = dayStart(f.from);
+  const to = dayEnd(f.to);
+  if (from) q = q.gte("started_at", from);
+  if (to) q = q.lte("started_at", to);
+  if (f.dogId) q = q.eq("dog_id", f.dogId);
+  if (f.personId) q = q.eq("person_id", f.personId);
+
+  const { data } = await q;
+  const raw = (data ?? []) as unknown as Array<{
+    id: string;
+    type: string;
+    started_at: string;
+    ended_at: string | null;
+    reason: string | null;
+    entered_late: boolean;
+    edited_at: string | null;
+    dog: { name: string } | null;
+    person: { first_name: string; surname: string } | null;
+  }>;
+
+  const capped = raw.length > LIMIT;
+  const columns =
+    tab === "homecare"
+      ? ["Dog", "Type", "Carer", "Out", "In", "Duration", "Reason", "Flags"]
+      : ["Dog", tab === "walks" ? "Walker" : "Person", "Out", "In", "Duration", "Reason", "Flags"];
+
+  const rows = raw.slice(0, LIMIT).map((r) => {
+    const person = r.person ? `${r.person.first_name} ${r.person.surname}` : "";
+    const base: Record<string, string> = {
+      Dog: r.dog?.name ?? "",
+      Out: formatFullDateTime(r.started_at),
+      In: r.ended_at ? formatFullDateTime(r.ended_at) : "(still out)",
+      Duration: r.ended_at ? formatDuration(r.started_at, r.ended_at) : "",
+      Reason: r.reason ?? "",
+      Flags: [r.entered_late && "late", r.edited_at && "edited"].filter(Boolean).join(", "),
+    };
+    if (tab === "homecare") {
+      base.Type = r.type === "jail_break" ? "Jail break" : "Foster";
+      base.Carer = person;
+    } else {
+      base[tab === "walks" ? "Walker" : "Person"] = person;
+    }
+    return base;
+  });
+
+  return { columns, rows, capped };
+}
+
+async function medicalLog(f: LogFilters): Promise<LogTable> {
+  const supabase = await createClient();
+  let q = supabase
+    .from("medical_events")
+    .select("id, event_date, type, detail, vet, dog:dogs!medical_events_dog_id_fkey(name)")
+    .order("event_date", { ascending: false })
+    .limit(LIMIT + 1);
+
+  if (f.from) q = q.gte("event_date", f.from);
+  if (f.to) q = q.lte("event_date", f.to);
+  if (f.dogId) q = q.eq("dog_id", f.dogId);
+
+  const { data } = await q;
+  const raw = (data ?? []) as unknown as Array<{
+    id: string;
+    event_date: string;
+    type: string;
+    detail: string;
+    vet: string | null;
+    dog: { name: string } | null;
+  }>;
+
+  return {
+    columns: ["Dog", "Date", "Type", "Detail", "Vet"],
+    rows: raw.slice(0, LIMIT).map((r) => ({
+      Dog: r.dog?.name ?? "",
+      Date: r.event_date,
+      Type: r.type,
+      Detail: r.detail,
+      Vet: r.vet ?? "",
+    })),
+    capped: raw.length > LIMIT,
+  };
+}
+
+async function siteLog(f: LogFilters): Promise<LogTable> {
+  const supabase = await createClient();
+  let q = supabase
+    .from("site_visits")
+    .select(
+      "id, checked_in, checked_out, reason, reason_other, guest_name, person:people!site_visits_person_id_fkey(first_name, surname), reason_ref:site_visit_reason!site_visits_reason_fkey(label)",
+    )
+    .order("checked_in", { ascending: false })
+    .limit(LIMIT + 1);
+
+  const from = dayStart(f.from);
+  const to = dayEnd(f.to);
+  if (from) q = q.gte("checked_in", from);
+  if (to) q = q.lte("checked_in", to);
+  if (f.personId) q = q.eq("person_id", f.personId);
+
+  const { data } = await q;
+  const raw = (data ?? []) as unknown as Array<{
+    id: string;
+    checked_in: string;
+    checked_out: string | null;
+    reason: string;
+    reason_other: string | null;
+    guest_name: string | null;
+    person: { first_name: string; surname: string } | null;
+    reason_ref: { label: string } | null;
+  }>;
+
+  return {
+    columns: ["Who", "In", "Out", "Reason"],
+    rows: raw.slice(0, LIMIT).map((r) => ({
+      Who: r.person ? `${r.person.first_name} ${r.person.surname}` : (r.guest_name ?? "Guest"),
+      In: formatFullDateTime(r.checked_in),
+      Out: r.checked_out ? formatFullDateTime(r.checked_out) : "(on site)",
+      Reason:
+        r.reason === "other" && r.reason_other ? r.reason_other : (r.reason_ref?.label ?? r.reason),
+    })),
+    capped: raw.length > LIMIT,
+  };
+}
+
+export async function getLog(tab: LogTab, filters: LogFilters): Promise<LogTable> {
+  if (tab === "medical") return medicalLog(filters);
+  if (tab === "site") return siteLog(filters);
+  return activityLog(tab, filters);
+}
+
+export async function getLogFilterOptions(): Promise<{
+  dogs: { id: string; name: string }[];
+  people: { id: string; name: string }[];
+}> {
+  const supabase = await createClient();
+  const [{ data: dogs }, { data: people }] = await Promise.all([
+    supabase.from("dogs").select("id, name").order("name"),
+    supabase.from("people").select("id, first_name, surname").order("surname").order("first_name"),
+  ]);
+  return {
+    dogs: (dogs ?? []).map((d) => ({ id: d.id, name: d.name })),
+    people: (people ?? []).map((p) => ({ id: p.id, name: `${p.first_name} ${p.surname}` })),
+  };
+}

@@ -18,11 +18,12 @@ export async function deleteDog(dogId: string): Promise<Result> {
 
   const admin = createAdminClient();
 
-  // notes.dog_id and dog_activity.dog_id block a delete; clear them first.
-  // dog_confidential / dog_media / medical_events cascade on their own, and
+  // dog_activity.dog_id blocks a delete; clear it first. dog_confidential /
+  // dog_media / medical_events cascade on their own, and
   // dogs.current_activity_id / latest_*_id are ON DELETE SET NULL so they
-  // clear when the activity rows go.
-  await admin.from("notes").delete().eq("dog_id", dogId);
+  // clear when the activity rows go. `notes` is polymorphic with no FK, so
+  // it wouldn't block the delete — but tidy up the orphans anyway.
+  await admin.from("notes").delete().eq("subject_type", "dog").eq("subject_id", dogId);
   await admin.from("dog_activity").delete().eq("dog_id", dogId);
 
   const { error } = await admin.from("dogs").delete().eq("id", dogId);

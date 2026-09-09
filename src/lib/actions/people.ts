@@ -218,6 +218,7 @@ export async function deletePerson(personId: string): Promise<Result> {
   // Delete rows that are theirs.
   await admin.from("dog_activity").delete().eq("person_id", personId);
   await admin.from("site_visits").delete().eq("person_id", personId);
+  await admin.from("notes").delete().eq("subject_type", "person").eq("subject_id", personId);
 
   // person_roles / homecare_profile / volunteer_profile cascade.
   const { error } = await admin.from("people").delete().eq("id", personId);
