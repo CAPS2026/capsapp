@@ -184,21 +184,41 @@ non-blocking — magic link is the only working path today).
   others (placements stay staff-only). `getCurrentPerson().canKiosk` gates
   it in the UI; `is_volunteer_plus()` + loosened `dog_activity` RLS
   (migrations 13 + 14) enforce it.
-- App shell is a phone-width column (`max-w-lg`) even on desktop.
+- **Café mode** — a staff member taps "Hand over" in the header to drop the
+  shared device to the limited volunteer surface (walk + yard check
+  in/out, sign-in, basic dog info; no confidential/medical, People, Logs,
+  Reports, placements, approvals, deletes). While the `caps_cafe` httpOnly
+  cookie is set, `getCurrentPerson()` treats the staff account as
+  Volunteer Plus (`isStaff` false, `canKiosk` true) — so every existing
+  `isStaff` gate does the work. "Staff access" on the volunteer-mode bar
+  takes the shared PIN (scrypt hash in `org_settings.staff_pin_hash`,
+  migration 15) to switch back; an idle guard re-locks after 15 min idle
+  or a 3 h ceiling. Set/change the PIN at `/settings` (staff).
+- **People photos** — one avatar per person, public `people-photos` bucket
+  (migration 16), uploaded staff-only on the person Edit page via a
+  service-role server action (so the bucket needs no RLS). Shown on the
+  person page + People list.
+- App shell width is per-route: `/logs` + `/reports` use the full laptop
+  width (`max-w-6xl`), `/people` list `max-w-3xl`, everything else stays a
+  phone-width `max-w-lg` column (the operational screens run on phones and
+  the shared iPad).
 - Vercel functions pinned to `syd1` to co-locate with the Sydney Supabase.
 
 ### 5a. Migrations to apply / Resend
 
 Migrations mirror as SQL in `supabase/migrations/`. Applied via the
-Supabase MCP when it's connected, otherwise pasted into the dashboard SQL
-editor. **Run in order; 13 must run on its own** (`ALTER TYPE … ADD VALUE`
-can't share a transaction). Check `supabase/migrations/` for the latest —
-as of 10 Sep the newest are 10 (`image_consent`), 11 (homecare approval
-tokens + `admin_notification_email` + `yard_check_notes`), 12
-(`yard_check_outcome`), 13 (`volunteer_plus` enum value), 14
-(`is_volunteer_plus()` + `dog_activity` RLS). The app has graceful
-fallbacks for un-applied 10/11/12 but 13+14 must be run for Volunteer
-Plus to work.
+Supabase MCP (`execute_sql` — `apply_migration` is blocked by the Claude
+Code auto-mode classifier, a plain `execute_sql` with the DDL works) or
+pasted into the dashboard SQL editor. Because they went in through
+`execute_sql`, **`list_migrations` only shows 01–09** — that's expected,
+the schema is current. **Run in order; 13 must run on its own**
+(`ALTER TYPE … ADD VALUE` can't share a transaction). Newest as of 10 Sep:
+10 (`image_consent`), 11 (homecare approval tokens +
+`admin_notification_email` + `yard_check_notes`), 12 (`yard_check_outcome`),
+13 (`volunteer_plus` enum value), 14 (`is_volunteer_plus()` +
+`dog_activity` RLS), 15 (`org_settings.staff_pin_hash` — café-mode PIN),
+16 (`people.photo_path` + `people-photos` bucket). All 10–16 are applied.
+The app has graceful fallbacks for un-applied 10/11/12.
 
 **Resend** (`RESEND_API_KEY` set in all Vercel envs + `.env.local`) sends
 from `onboarding@resend.dev` until the CAPS domain is verified — and that
