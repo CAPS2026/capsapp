@@ -4,6 +4,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import type { CurrentPerson } from "@/lib/auth";
+import { CafeBar } from "@/components/cafe/cafe-bar";
+import { HandOverButton } from "@/components/cafe/hand-over-button";
+import { IdleGuard } from "@/components/cafe/idle-guard";
 
 type NavItem = {
   href: string;
@@ -21,9 +24,11 @@ const NAV_ITEMS: NavItem[] = [
 
 export function AppShell({
   person,
+  pinIsSet,
   children,
 }: {
   person: CurrentPerson;
+  pinIsSet: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -36,18 +41,32 @@ export function AppShell({
   // for its own content.
   return (
     <div className="flex-1 flex flex-col min-h-screen">
+      <IdleGuard />
+
       <header className="border-b border-line bg-card">
-        <div className="max-w-lg mx-auto flex items-center justify-between gap-3 px-4 h-14">
-          <div className="flex items-center gap-2">
-            <Image src="/logo.jpg" alt="" width={28} height={28} className="rounded-full" />
-            <span className="font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
+        <div className="max-w-lg mx-auto flex items-center justify-between gap-2 px-4 h-14">
+          <div className="flex items-center gap-2 min-w-0">
+            <Image src="/logo.jpg" alt="" width={28} height={28} className="rounded-full shrink-0" />
+            <span
+              className="font-extrabold truncate"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
               CAPS App
             </span>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-ink-muted hidden sm:inline">
-              {person.firstName || person.email}
-            </span>
+          <div className="flex items-center gap-3 shrink-0">
+            {person.isStaff && (
+              <>
+                <Link
+                  href="/settings"
+                  aria-label="Settings"
+                  className="text-lg leading-none text-ink-muted"
+                >
+                  ⚙
+                </Link>
+                <HandOverButton pinIsSet={pinIsSet} />
+              </>
+            )}
             <form action="/auth/signout" method="post">
               <button
                 type="submit"
@@ -59,6 +78,8 @@ export function AppShell({
           </div>
         </div>
       </header>
+
+      {person.cafeMode && <CafeBar />}
 
       <main className="flex-1 pb-20 max-w-lg mx-auto w-full">{children}</main>
 

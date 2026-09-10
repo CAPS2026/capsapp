@@ -1,4 +1,6 @@
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { CAFE_COOKIE } from "@/lib/cafe";
 
 export type Role =
   | "volunteer"
@@ -31,6 +33,13 @@ export interface CurrentPerson {
    * (bed rest / jail break / foster) stay staff-only.
    */
   canKiosk: boolean;
+  /**
+   * This device is in café mode — a staff account handed it to volunteers
+   * (see src/lib/cafe.ts). While true, isStaff is forced false (limited
+   * surface) but canKiosk stays true so walks + yard check in/out still
+   * work. Getting isStaff back needs the shared PIN.
+   */
+  cafeMode: boolean;
 }
 
 type PersonRoleRow = { role: Role; status: string };
@@ -76,6 +85,7 @@ export async function getCurrentPerson(): Promise<CurrentPerson | null> {
       isStaff: false,
       isVolunteerPlus: false,
       canKiosk: false,
+      cafeMode: false,
     };
   }
 
@@ -83,8 +93,15 @@ export async function getCurrentPerson(): Promise<CurrentPerson | null> {
     .filter((r) => r.status === "active")
     .map((r) => r.role);
 
-  const isStaff = roles.includes("staff") || roles.includes("committee");
-  const isVolunteerPlus = roles.includes("volunteer_plus");
+  const realIsStaff = roles.includes("staff") || roles.includes("committee");
+  const realIsPlus = roles.includes("volunteer_plus");
+
+  // Café mode: a staff account that handed this device to volunteers is
+  // treated as Volunteer Plus until the PIN is re-entered — full kiosk for
+  // walks + yard, nothing staff-only.
+  const cafeMode = realIsStaff && (await cookies()).get(CAFE_COOKIE)?.value === "1";
+  const isStaff = realIsStaff && !cafeMode;
+  const isVolunteerPlus = realIsPlus || cafeMode;
 
   return {
     id: person.id,
@@ -95,5 +112,6 @@ export async function getCurrentPerson(): Promise<CurrentPerson | null> {
     isStaff,
     isVolunteerPlus,
     canKiosk: isStaff || isVolunteerPlus,
+    cafeMode,
   };
 }

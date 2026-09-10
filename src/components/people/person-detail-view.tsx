@@ -139,9 +139,15 @@ export function PersonDetailView({ person }: { person: PersonDetail }) {
           }
         />
         <Field
-          label="Promo image consent"
+          label="Photo / promo consent"
           value={
-            person.imageConsent === null ? "Not asked" : person.imageConsent ? "Yes" : "No"
+            person.imageConsent === null ? (
+              <span className="text-warm-ink font-semibold">Not asked</span>
+            ) : person.imageConsent ? (
+              "Yes"
+            ) : (
+              <span className="text-danger font-semibold">No — do not use their image</span>
+            )
           }
         />
       </Section>
