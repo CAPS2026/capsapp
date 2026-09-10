@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { formatDuration, formatFullDateTime } from "@/lib/format";
+import { formatDuration, formatLogDateTime } from "@/lib/format";
 import { ROLE_LABEL } from "@/lib/people";
 import type { Role } from "@/lib/auth";
 import type { LogFilters, LogTab, LogTable } from "@/lib/logs";
@@ -68,8 +68,8 @@ async function activityLog(tab: keyof typeof ACTIVITY_TYPE, f: LogFilters): Prom
     const person = r.person ? `${r.person.first_name} ${r.person.surname}` : "";
     const base: Record<string, string> = {
       Dog: r.dog?.name ?? "",
-      Out: formatFullDateTime(r.started_at),
-      In: r.ended_at ? formatFullDateTime(r.ended_at) : "(still out)",
+      Out: formatLogDateTime(r.started_at),
+      In: r.ended_at ? formatLogDateTime(r.ended_at) : "(still out)",
       Duration: r.ended_at ? formatDuration(r.started_at, r.ended_at) : "",
       Reason: r.reason ?? "",
       Flags: [r.entered_late && "late", r.edited_at && "edited"].filter(Boolean).join(", "),
@@ -153,8 +153,8 @@ async function siteLog(f: LogFilters): Promise<LogTable> {
     columns: ["Who", "In", "Out", "Reason"],
     rows: raw.slice(0, LIMIT).map((r) => ({
       Who: r.person ? `${r.person.first_name} ${r.person.surname}` : (r.guest_name ?? "Guest"),
-      In: formatFullDateTime(r.checked_in),
-      Out: r.checked_out ? formatFullDateTime(r.checked_out) : "(on site)",
+      In: formatLogDateTime(r.checked_in),
+      Out: r.checked_out ? formatLogDateTime(r.checked_out) : "(on site)",
       Reason:
         r.reason === "other" && r.reason_other ? r.reason_other : (r.reason_ref?.label ?? r.reason),
     })),

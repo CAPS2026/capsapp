@@ -34,17 +34,31 @@ export function AppShell({
   const pathname = usePathname();
   const visibleItems = NAV_ITEMS.filter((item) => !item.staffOnly || person.isStaff);
 
-  // Phone-width column, centred — this is a mobile app first; letting it
-  // stretch full-bleed on a wide desktop window is what was making rows
-  // like "Edit times" look like they had huge wasted gaps (Paul's
-  // feedback, 2026-09-07) when really it was just the page being too wide
-  // for its own content.
+  // Phone-first: the operational screens (Dogs, Site, take-out flows) stay
+  // a single ~phone-width column even on a laptop — stretching phone-shaped
+  // cards full-bleed is what looked broken (Paul, 2026-09-07). But the
+  // staff data screens (People, Logs, Reports) are used on a laptop and
+  // genuinely need the width — a wide table shouldn't be crammed into a
+  // 512px strip with no room to scroll (Paul, 2026-09-10). So those routes
+  // get a wide container.
+  // Data tables want the whole laptop; the searchable People list tolerates
+  // some width; everything else (card stacks, forms, the phone flows)
+  // stays a single readable column.
+  const shellWidth =
+    pathname.startsWith("/logs") || pathname.startsWith("/reports")
+      ? "max-w-6xl"
+      : pathname === "/people"
+        ? "max-w-3xl"
+        : "max-w-lg";
+
   return (
     <div className="flex-1 flex flex-col min-h-screen">
       <IdleGuard />
 
       <header className="border-b border-line bg-card">
-        <div className="max-w-lg mx-auto flex items-center justify-between gap-2 px-4 h-14">
+        <div
+          className={`${shellWidth} mx-auto flex items-center justify-between gap-2 px-4 h-14`}
+        >
           <div className="flex items-center gap-2 min-w-0">
             <Image src="/logo.jpg" alt="" width={28} height={28} className="rounded-full shrink-0" />
             <span
@@ -81,10 +95,10 @@ export function AppShell({
 
       {person.cafeMode && <CafeBar />}
 
-      <main className="flex-1 pb-20 max-w-lg mx-auto w-full">{children}</main>
+      <main className={`flex-1 pb-20 ${shellWidth} mx-auto w-full`}>{children}</main>
 
       <nav className="fixed bottom-0 inset-x-0 border-t border-line bg-card flex justify-center">
-        <div className="max-w-lg w-full flex">
+        <div className={`${shellWidth} w-full flex`}>
           {visibleItems.map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + "/");
             return (

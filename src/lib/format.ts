@@ -69,6 +69,14 @@ export function formatCompactDate(iso: string): string {
   return `${d.getDate()}-${month}-${String(d.getFullYear()).slice(-2)}`;
 }
 
+/** "10 Sep, 09:36" — compact timestamp for dense log tables (no weekday,
+ *  no year; the log's date filter carries the year context). */
+export function formatLogDateTime(iso: string): string {
+  const d = new Date(iso);
+  const date = d.toLocaleDateString("en-AU", { day: "numeric", month: "short" });
+  return `${date}, ${formatTime24(iso)}`;
+}
+
 /** "Sat, 6 Sep 2026, 12:00" — full timestamp for the activity record pop-out. */
 export function formatFullDateTime(iso: string): string {
   const d = new Date(iso);

@@ -137,7 +137,7 @@ export function LogsView({
       </p>
 
       <div className="overflow-x-auto border border-line rounded-[var(--radius)]">
-        <table className="w-full text-sm border-collapse">
+        <table className="min-w-full text-sm border-collapse">
           <thead>
             <tr className="bg-gray-tint text-left">
               {data.columns.map((c) => (
