@@ -1,9 +1,11 @@
-/** H:MM elapsed since an ISO timestamp, for live walk/yard timers. */
+/** Human elapsed since an ISO timestamp — "just now" / "12m" / "2h 05m". */
 export function formatElapsed(startedAt: string): string {
   const totalMinutes = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 60000));
+  if (totalMinutes < 1) return "just now";
+  if (totalMinutes < 60) return `${totalMinutes}m`;
   const h = Math.floor(totalMinutes / 60);
   const m = totalMinutes % 60;
-  return `${h}:${String(m).padStart(2, "0")}`;
+  return `${h}h ${String(m).padStart(2, "0")}m`;
 }
 
 export function minutesSince(iso: string): number {

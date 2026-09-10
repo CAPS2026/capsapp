@@ -1,12 +1,18 @@
 "use client";
 
-import { useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { OpenVisit } from "@/lib/site-visits-data";
 import { signOutOfSite } from "@/lib/actions/site-visits";
-import { formatElapsed } from "@/lib/format";
+import { formatElapsed, formatTime24 } from "@/lib/format";
 
 export function SiteVisitBoard({ visits }: { visits: OpenVisit[] }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   if (visits.length === 0) {
     return <p className="text-sm text-ink-muted">Nobody signed in right now.</p>;
   }
@@ -33,17 +39,17 @@ function VisitRow({ visit }: { visit: OpenVisit }) {
 
   return (
     <div className="flex items-center justify-between gap-3 bg-card border border-line rounded-[var(--radius)] p-3">
-      <div>
-        <p className="font-bold">{visit.displayName}</p>
+      <div className="min-w-0">
+        <p className="font-bold truncate">{visit.displayName}</p>
         <p className="text-sm text-ink-muted">
-          {visit.reasonLabel} · since {formatElapsed(visit.checkedIn)}
+          {visit.reasonLabel} · in {formatTime24(visit.checkedIn)} · {formatElapsed(visit.checkedIn)}
         </p>
       </div>
       <button
         type="button"
         onClick={signOut}
         disabled={isPending}
-        className="h-9 px-4 rounded-full bg-ok text-white text-sm font-bold disabled:opacity-60"
+        className="h-9 px-4 rounded-full bg-danger text-white text-sm font-bold disabled:opacity-60 shrink-0"
       >
         {isPending ? "…" : "Sign out"}
       </button>
