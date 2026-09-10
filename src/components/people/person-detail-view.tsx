@@ -8,6 +8,7 @@ import { PersonRoleActions } from "@/components/people/person-role-actions";
 import { PersonArchiveButton } from "@/components/people/person-archive-button";
 import { VolunteerPlusToggle } from "@/components/people/volunteer-plus-toggle";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
+import { Field } from "@/components/detail-field";
 
 const INTEREST_LABEL = new Map(VOLUNTEER_INTERESTS.map((i) => [i.code, i.label]));
 
@@ -17,16 +18,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <h2 className="font-bold">{title}</h2>
       {children}
     </section>
-  );
-}
-
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  if (value === null || value === undefined || value === "") return null;
-  return (
-    <div className="flex justify-between gap-4 text-sm py-0.5">
-      <span className="text-ink-muted">{label}</span>
-      <span className="text-right">{value}</span>
-    </div>
   );
 }
 
@@ -47,9 +38,9 @@ export function PersonDetailView({ person }: { person: PersonDetail }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-2">
         <div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-baseline gap-2 flex-wrap">
             <h1 className="text-xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
               {person.firstName} {person.surname}
             </h1>
@@ -63,7 +54,7 @@ export function PersonDetailView({ person }: { person: PersonDetail }) {
             {archived && <span className="text-ink-muted">· archived</span>}
           </div>
         </div>
-        <div className="flex flex-col items-end gap-1.5 shrink-0">
+        <div className="flex items-center gap-4">
           <Link
             href={`/people/${person.id}/edit`}
             className="text-sm font-semibold text-brand-ink underline underline-offset-2"
@@ -246,13 +237,9 @@ function HomecareSection({
 
       {visited && (
         <>
-          <div className="flex justify-between gap-4 text-sm py-0.5">
+          <div className="flex flex-col gap-0.5 py-0.5 text-sm">
             <span className="text-ink-muted">Home check</span>
-            <span
-              className={`text-right font-semibold ${
-                hp.homeCheckDone ? "text-ok" : "text-warm-ink"
-              }`}
-            >
+            <span className={`font-semibold ${hp.homeCheckDone ? "text-ok" : "text-warm-ink"}`}>
               {hp.homeCheckDone ? "Passed" : "Improvements needed"}
               {hp.homeCheckOn ? ` ${formatDate(hp.homeCheckOn)}` : ""}
               {hp.homeCheckByName ? ` · ${hp.homeCheckByName}` : ""}

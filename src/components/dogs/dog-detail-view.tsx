@@ -12,6 +12,7 @@ import { DogActionButton } from "@/components/dogs/dog-action-button";
 import { ActionMenu } from "@/components/dogs/action-menu";
 import { ActivitySection } from "@/components/dogs/activity-section";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
+import { Field } from "@/components/detail-field";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -19,16 +20,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <h2 className="font-bold">{title}</h2>
       {children}
     </section>
-  );
-}
-
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  if (value === null || value === undefined || value === "") return null;
-  return (
-    <div className="flex justify-between gap-4 text-sm py-0.5">
-      <span className="text-ink-muted">{label}</span>
-      <span className="text-right">{value}</span>
-    </div>
   );
 }
 
@@ -74,35 +65,45 @@ export function DogDetailView({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-4">
-        {primaryPhoto ? (
-          // eslint-disable-next-line @next/next/no-img-element -- external Supabase Storage URL
-          <img src={primaryPhoto.url} alt={dog.name} className="w-20 h-20 rounded-full object-cover shrink-0" />
-        ) : (
-          <div className="w-20 h-20 rounded-full bg-gray-tint flex items-center justify-center text-2xl font-bold text-ink-muted shrink-0">
-            {dog.name.charAt(0).toUpperCase()}
-          </div>
-        )}
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
-              {dog.name}
-            </h1>
-            <span className="text-sm text-ink-muted">{dog.ref}</span>
-          </div>
-          <span
-            className="inline-block mt-1 text-xs font-bold px-2 py-0.5 rounded-full text-white"
-            style={{ background: `var(${STATUS_COLOR_VAR[dog.status]})` }}
-          >
-            {dog.status.replace("_", " ")}
-          </span>
-          {dog.experiencedHandlerOnly && (
-            <span className="ml-2 text-xs font-semibold text-warm-ink">⚠️ Experienced handlers only</span>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-start gap-3">
+          {primaryPhoto ? (
+            // eslint-disable-next-line @next/next/no-img-element -- external Supabase Storage URL
+            <img
+              src={primaryPhoto.url}
+              alt={dog.name}
+              className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover shrink-0"
+            />
+          ) : (
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gray-tint flex items-center justify-center text-2xl font-bold text-ink-muted shrink-0">
+              {dog.name.charAt(0).toUpperCase()}
+            </div>
           )}
-          {currentActivity && <CurrentStatusLine status={dog.status} current={currentActivity} />}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <h1 className="text-xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
+                {dog.name}
+              </h1>
+              <span className="text-sm text-ink-muted">{dog.ref}</span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap mt-1">
+              <span
+                className="inline-block text-xs font-bold px-2 py-0.5 rounded-full text-white"
+                style={{ background: `var(${STATUS_COLOR_VAR[dog.status]})` }}
+              >
+                {dog.status.replace("_", " ")}
+              </span>
+              {dog.experiencedHandlerOnly && (
+                <span className="text-xs font-semibold text-warm-ink">⚠️ Experienced handlers only</span>
+              )}
+            </div>
+            {currentActivity && <CurrentStatusLine status={dog.status} current={currentActivity} />}
+          </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        {/* Actions on their own full-width row — on a phone they were being
+            crushed into a sliver beside the photo and the status line. */}
+        <div className="flex items-center gap-2">
           {dog.status === "available" && (
             <DogActionButton
               dogId={dog.id}
@@ -153,7 +154,7 @@ export function DogDetailView({
         <Field label="Good with other animals" value={goodWithLabel(dog.goodWithOther)} />
         <Field label="Energy level" value={dog.energyLevel} />
         <Field label="House trained" value={dog.houseTrained} />
-        <Field label="Handling notes" value={dog.handlingNotes} />
+        <Field label="Handling notes" value={dog.handlingNotes} block />
         {dog.publicDescription && <p className="text-sm pt-1">{dog.publicDescription}</p>}
         {dog.publicMedicalSummary && (
           <p className="text-sm text-ink-muted pt-1">Medical summary: {dog.publicMedicalSummary}</p>
@@ -176,10 +177,10 @@ export function DogDetailView({
         <Section title="Staff only">
           {confidential && (
             <>
-              <Field label="Behaviour notes" value={confidential.behaviourNotes} />
-              <Field label="Adoption history" value={confidential.adoptionHistory} />
-              <Field label="Internal medical summary" value={confidential.medicalSummaryInternal} />
-              <Field label="Restrictions" value={confidential.restrictions} />
+              <Field label="Behaviour notes" value={confidential.behaviourNotes} block />
+              <Field label="Adoption history" value={confidential.adoptionHistory} block />
+              <Field label="Internal medical summary" value={confidential.medicalSummaryInternal} block />
+              <Field label="Restrictions" value={confidential.restrictions} block />
             </>
           )}
           {medicalEvents.length > 0 && (

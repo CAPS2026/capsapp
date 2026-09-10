@@ -184,6 +184,14 @@ export function ActivitySection({
 }
 
 function Row({ label, value }: { label: string; value: string }) {
+  if (value.length > 22) {
+    return (
+      <div className="flex flex-col gap-0.5">
+        <dt className="text-ink-muted">{label}</dt>
+        <dd className="whitespace-pre-wrap">{value}</dd>
+      </div>
+    );
+  }
   return (
     <div className="flex justify-between gap-4">
       <dt className="text-ink-muted">{label}</dt>
