@@ -220,11 +220,18 @@ var. Domain was added in Resend 10 Sep; DNS not yet done.
 - **Merge two people** — dedupe part (c); reassign FK rows onto one record.
 - **Nightly Supabase → Google Sheet mirror** (D6).
 
-**Known test-data note:** dogs in the DB are seeded test rows with
-deliberately fictional/celebrity names (Beethoven Rex, Lassie, Hooch, Toto,
-Old Yeller, Marley, Bolt) — Paul's explicit instruction, so test data is
-never confusable with a real shelter dog. **Apply this convention to any
-future test data too.** Delete these before real dog data migration.
+**Known test-data note:** the DB holds a realistic test dataset —
+`supabase/seed-testdata.sql` (idempotent, fixed UUIDs, teardown block at
+the foot of the file). ~23 dogs across every status, ~29 people (12
+walkers incl. 2 minors and 2 Volunteer Plus, 12 homecare carers in
+various approval states), ~100 activity rows, plus medical events, notes
+and site visits. All dog names are deliberately fictional/celebrity
+(Beethoven Rex, Lassie, Balto, Scooby, Snoopy, …) — Paul's explicit
+instruction, so test data is never confusable with a real shelter dog;
+seeded people use `@example.com` emails. **Apply the fictional-name
+convention to any future test data too.** Delete the seed + the
+`Testy Homecare-Applicant` row before real dog data migration (Phase 5) —
+run the DELETE block in the seed file.
 
 **Real bugs found and fixed via Paul's live testing this week** (see git log
 for full detail, all on `main`): an ambiguous-embed bug that silently broke
