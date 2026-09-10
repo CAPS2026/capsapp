@@ -45,7 +45,8 @@ async function activityLog(tab: keyof typeof ACTIVITY_TYPE, f: LogFilters): Prom
   if (f.dogId) q = q.eq("dog_id", f.dogId);
   if (f.personId) q = q.eq("person_id", f.personId);
 
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) console.error("logs-data query failed", error);
   const raw = (data ?? []) as unknown as Array<{
     id: string;
     type: string;
@@ -98,7 +99,8 @@ async function medicalLog(f: LogFilters): Promise<LogTable> {
   if (f.to) q = q.lte("event_date", f.to);
   if (f.dogId) q = q.eq("dog_id", f.dogId);
 
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) console.error("logs-data query failed", error);
   const raw = (data ?? []) as unknown as Array<{
     id: string;
     event_date: string;
@@ -137,7 +139,8 @@ async function siteLog(f: LogFilters): Promise<LogTable> {
   if (to) q = q.lte("checked_in", to);
   if (f.personId) q = q.eq("person_id", f.personId);
 
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) console.error("logs-data query failed", error);
   const raw = (data ?? []) as unknown as Array<{
     id: string;
     checked_in: string;
@@ -172,7 +175,8 @@ async function dogsLog(f: LogFilters): Promise<LogTable> {
   if (f.from) q = q.gte("arrival_date", f.from);
   if (f.to) q = q.lte("arrival_date", f.to);
 
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) console.error("logs-data query failed", error);
   const raw = (data ?? []) as unknown as Array<{
     ref: string;
     name: string;
@@ -214,7 +218,8 @@ async function peopleLog(f: LogFilters): Promise<LogTable> {
   if (from) q = q.gte("created_at", from);
   if (to) q = q.lte("created_at", to);
 
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) console.error("logs-data query failed", error);
   const raw = (data ?? []) as unknown as Array<{
     first_name: string;
     surname: string;

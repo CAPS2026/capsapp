@@ -12,7 +12,11 @@ export async function listAllPeople(): Promise<{ id: string; name: string }[]> {
   if (!person || !person.id) return [];
 
   const supabase = await createClient();
-  const { data } = await supabase.from("people").select("id, first_name, surname").order("first_name");
+  const { data, error } = await supabase
+    .from("people")
+    .select("id, first_name, surname")
+    .order("first_name");
+  if (error) console.error("listAllPeople failed", error);
 
   return (data ?? []).map((p) => ({ id: p.id, name: `${p.first_name} ${p.surname}` }));
 }

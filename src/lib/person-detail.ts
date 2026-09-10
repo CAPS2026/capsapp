@@ -67,13 +67,24 @@ export type PersonDetail = {
 export async function getPersonDetail(id: string): Promise<PersonDetail | null> {
   const supabase = await createClient();
 
-  const { data: p } = await supabase
-    .from("people")
-    .select(
-      "*, person_roles!person_roles_person_id_fkey(id, role, status, granted_on, ended_on, note, approved_by)",
-    )
-    .eq("id", id)
-    .maybeSingle();
+  // person / volunteer_profile / homecare_profile all key off `id` alone —
+  // one round trip instead of three.
+  const [{ data: p, error: pErr }, { data: vp }, { data: hp }] = await Promise.all([
+    supabase
+      .from("people")
+      .select(
+        "*, person_roles!person_roles_person_id_fkey(id, role, status, granted_on, ended_on, note, approved_by)",
+      )
+      .eq("id", id)
+      .maybeSingle(),
+    supabase
+      .from("volunteer_profile")
+      .select("interests, experience, medical_issues, how_heard, signature_name, signature_date")
+      .eq("person_id", id)
+      .maybeSingle(),
+    supabase.from("homecare_profile").select("*").eq("person_id", id).maybeSingle(),
+  ]);
+  if (pErr) console.error("getPersonDetail: person lookup failed", pErr);
 
   if (!p) return null;
 
@@ -113,18 +124,6 @@ export async function getPersonDetail(id: string): Promise<PersonDetail | null> 
         }>
       | null;
   };
-
-  const { data: vp } = await supabase
-    .from("volunteer_profile")
-    .select("interests, experience, medical_issues, how_heard, signature_name, signature_date")
-    .eq("person_id", id)
-    .maybeSingle();
-
-  const { data: hp } = await supabase
-    .from("homecare_profile")
-    .select("*")
-    .eq("person_id", id)
-    .maybeSingle();
 
   const hpRow = hp as unknown as
     | ({

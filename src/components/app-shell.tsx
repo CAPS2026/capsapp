@@ -69,18 +69,16 @@ export function AppShell({
             </span>
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            {person.isStaff && (
-              <>
-                <Link
-                  href="/settings"
-                  aria-label="Settings"
-                  className="text-lg leading-none text-ink-muted"
-                >
-                  ⚙
-                </Link>
-                <HandOverButton pinIsSet={pinIsSet} />
-              </>
+            {person.isAdmin && (
+              <Link
+                href="/settings"
+                aria-label="Settings"
+                className="text-lg leading-none text-ink-muted"
+              >
+                ⚙
+              </Link>
             )}
+            {person.isStaff && <HandOverButton pinIsSet={pinIsSet} />}
             <form action="/auth/signout" method="post">
               <button
                 type="submit"

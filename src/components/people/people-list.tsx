@@ -21,7 +21,8 @@ function matchesFilter(p: PersonListItem, f: Filter): boolean {
   const active = p.roles.filter((r) => r.status === "active").map((r) => r.role);
   if (f === "volunteers") return active.includes("volunteer");
   if (f === "carers") return active.includes("jailbreak_carer") || active.includes("foster_carer");
-  if (f === "staff") return active.includes("staff") || active.includes("committee");
+  if (f === "staff")
+    return active.includes("staff") || active.includes("committee") || active.includes("admin");
   return true;
 }
 

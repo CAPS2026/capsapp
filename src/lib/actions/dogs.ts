@@ -8,13 +8,13 @@ type Result = { error: string } | { error?: undefined };
 
 /**
  * Permanently delete a dog and everything about it — activity, notes,
- * medical events, confidential record, photos. Staff only, no undo.
+ * medical events, confidential record, photos. Admin only, no undo.
  * Mostly for clearing test rows or a mistaken entry; a real dog that has
  * left should be given `status = 'exited'` instead.
  */
 export async function deleteDog(dogId: string): Promise<Result> {
   const me = await getCurrentPerson();
-  if (!me?.isStaff) return { error: "Staff only." };
+  if (!me?.isAdmin) return { error: "Admin only." };
 
   const admin = createAdminClient();
 

@@ -9,7 +9,8 @@ export type Role =
   | "foster_carer"
   | "adopter"
   | "staff"
-  | "committee";
+  | "committee"
+  | "admin";
 
 export interface CurrentPerson {
   /** Empty string if signed in but not yet linked to a `people` row. */
@@ -20,11 +21,17 @@ export interface CurrentPerson {
   roles: Role[];
   /**
    * Staff and committee get the same access in v1 (see docs/schema.md §11).
-   * There is no separate `admin` role in the database yet — "Admin" nav
-   * items are gated on isStaff for now. Splitting a real admin tier out is
-   * a small enum migration away when it's actually needed.
+   * Everything the app gates as "staff" is available to staff, committee
+   * and admin.
    */
   isStaff: boolean;
+  /**
+   * Admin — a superset of staff. Gates the structural / irreversible /
+   * security operations regular staff shouldn't do: deleting people or
+   * dogs, merging duplicates, the café-mode PIN, granting kiosk access.
+   * The staff/admin split is deliberately light in v1.
+   */
+  isAdmin: boolean;
   /** Experienced volunteer who signs in themselves (`volunteer_plus`). */
   isVolunteerPlus: boolean;
   /**
@@ -35,9 +42,9 @@ export interface CurrentPerson {
   canKiosk: boolean;
   /**
    * This device is in café mode — a staff account handed it to volunteers
-   * (see src/lib/cafe.ts). While true, isStaff is forced false (limited
-   * surface) but canKiosk stays true so walks + yard check in/out still
-   * work. Getting isStaff back needs the shared PIN.
+   * (see src/lib/cafe.ts). While true, isStaff/isAdmin are forced false
+   * (limited surface) but canKiosk stays true so walks + yard check in/out
+   * still work. Getting full access back needs the shared PIN.
    */
   cafeMode: boolean;
 }
@@ -66,11 +73,17 @@ export async function getCurrentPerson(): Promise<CurrentPerson | null> {
   // `person_roles` has two FKs to `people` (person_id, approved_by) — the
   // embed needs the explicit constraint name or PostgREST can't tell which
   // relationship to use (PGRST201).
-  const { data: person } = await supabase
+  const { data: person, error } = await supabase
     .from("people")
     .select("id, first_name, surname, email, person_roles!person_roles_person_id_fkey(role, status)")
     .eq("auth_user_id", user.id)
     .maybeSingle();
+
+  if (error) {
+    // Don't silently fall through to a roleless account — that once masked
+    // a broken embed for days (see project memory 2026-09-06).
+    console.error("getCurrentPerson: people lookup failed", error);
+  }
 
   if (!person) {
     // Signed in via Supabase Auth, but no `people` row is linked yet —
@@ -83,6 +96,7 @@ export async function getCurrentPerson(): Promise<CurrentPerson | null> {
       email: user.email ?? null,
       roles: [],
       isStaff: false,
+      isAdmin: false,
       isVolunteerPlus: false,
       canKiosk: false,
       cafeMode: false,
@@ -93,14 +107,16 @@ export async function getCurrentPerson(): Promise<CurrentPerson | null> {
     .filter((r) => r.status === "active")
     .map((r) => r.role);
 
-  const realIsStaff = roles.includes("staff") || roles.includes("committee");
+  const realIsAdmin = roles.includes("admin");
+  const realIsStaff = realIsAdmin || roles.includes("staff") || roles.includes("committee");
   const realIsPlus = roles.includes("volunteer_plus");
 
-  // Café mode: a staff account that handed this device to volunteers is
-  // treated as Volunteer Plus until the PIN is re-entered — full kiosk for
-  // walks + yard, nothing staff-only.
+  // Café mode: a staff/admin account that handed this device to volunteers
+  // is treated as Volunteer Plus until the PIN is re-entered — full kiosk
+  // for walks + yard, nothing staff-only.
   const cafeMode = realIsStaff && (await cookies()).get(CAFE_COOKIE)?.value === "1";
   const isStaff = realIsStaff && !cafeMode;
+  const isAdmin = realIsAdmin && !cafeMode;
   const isVolunteerPlus = realIsPlus || cafeMode;
 
   return {
@@ -110,6 +126,7 @@ export async function getCurrentPerson(): Promise<CurrentPerson | null> {
     email: person.email,
     roles,
     isStaff,
+    isAdmin,
     isVolunteerPlus,
     canKiosk: isStaff || isVolunteerPlus,
     cafeMode,

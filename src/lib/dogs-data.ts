@@ -14,17 +14,26 @@ type ActivityRow = {
 export async function getDogsListData() {
   const supabase = await createClient();
 
-  const [{ data: statusRows }, { data: settingsRow }, { data: dogRows }] = await Promise.all([
+  const [
+    { data: statusRows, error: statusErr },
+    { data: settingsRow },
+    { data: dogRows, error: dogsErr },
+  ] = await Promise.all([
     supabase.from("dog_statuses").select("code, label, sort_order, is_out").order("sort_order"),
+    // org_settings is staff-read-only under RLS — a plain volunteer gets
+    // nothing here and falls back to the defaults below. maybeSingle so
+    // that's a clean null, not a logged PGRST116.
     supabase
       .from("org_settings")
       .select("walk_alert_after_minutes, yard_alert_after_minutes, needs_walk_after_days")
-      .single(),
+      .maybeSingle(),
     supabase
       .from("dogs")
       .select("id, ref, name, status, experienced_handler_only, current_activity_id, latest_walk_id")
       .neq("status", "exited"),
   ]);
+  if (statusErr) console.error("getDogsListData: statuses read failed", statusErr);
+  if (dogsErr) console.error("getDogsListData: dogs read failed", dogsErr);
 
   const dogs = dogRows ?? [];
 
@@ -34,14 +43,15 @@ export async function getDogsListData() {
     ),
   );
 
-  const { data: activityRows } = activityIds.length
+  const { data: activityRows, error: activityErr } = activityIds.length
     ? await supabase
         .from("dog_activity")
         .select(
           "id, type, started_at, ended_at, due_back, reason, person:people!dog_activity_person_id_fkey(id, first_name, surname)",
         )
         .in("id", activityIds)
-    : { data: [] as ActivityRow[] };
+    : { data: [] as ActivityRow[], error: null };
+  if (activityErr) console.error("getDogsListData: activity read failed", activityErr);
 
   const activityById = new Map<string, ActivityRow>(
     ((activityRows ?? []) as unknown as ActivityRow[]).map((a) => [a.id, a]),

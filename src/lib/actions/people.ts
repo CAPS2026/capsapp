@@ -15,6 +15,12 @@ async function requireStaff() {
   return me;
 }
 
+async function requireAdmin() {
+  const me = await getCurrentPerson();
+  if (!me?.isAdmin || !me.id) return null;
+  return me;
+}
+
 function revalidate(personId: string) {
   revalidatePath("/people");
   revalidatePath(`/people/${personId}`);
@@ -199,8 +205,8 @@ export async function updatePerson(
  * yard. They need an email on file to sign in.
  */
 export async function setVolunteerPlus(personId: string, on: boolean): Promise<Result> {
-  const me = await requireStaff();
-  if (!me) return { error: "Staff only." };
+  const me = await requireAdmin();
+  if (!me) return { error: "Admin only." };
 
   const supabase = await createClient();
 
@@ -244,8 +250,8 @@ export async function setVolunteerPlus(personId: string, on: boolean): Promise<R
  * undo.
  */
 export async function mergePeople(keepId: string, removeId: string): Promise<Result> {
-  const me = await requireStaff();
-  if (!me) return { error: "Staff only." };
+  const me = await requireAdmin();
+  if (!me) return { error: "Admin only." };
   if (keepId === removeId) return { error: "Pick two different records." };
   if (removeId === me.id)
     return { error: "That would delete your own record — keep yours and remove the other one." };
@@ -266,8 +272,8 @@ export async function mergePeople(keepId: string, removeId: string): Promise<Res
  * cleared but the record is kept. Staff only, no undo.
  */
 export async function deletePerson(personId: string): Promise<Result> {
-  const me = await requireStaff();
-  if (!me) return { error: "Staff only." };
+  const me = await requireAdmin();
+  if (!me) return { error: "Admin only." };
   if (me.id === personId) return { error: "You can't delete your own record." };
 
   const admin = createAdminClient();

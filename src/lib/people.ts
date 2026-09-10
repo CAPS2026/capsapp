@@ -11,6 +11,7 @@ export const ROLE_LABEL: Record<Role, string> = {
   adopter: "Adopter",
   staff: "Staff",
   committee: "Committee",
+  admin: "Admin",
 };
 
 export const ROLE_BADGE_CLASS: Record<Role, string> = {
@@ -21,6 +22,7 @@ export const ROLE_BADGE_CLASS: Record<Role, string> = {
   adopter: "bg-gray-tint text-ink-muted",
   staff: "bg-ink text-white",
   committee: "bg-ink text-white",
+  admin: "bg-danger text-white",
 };
 
 export type RoleStatus = "pending" | "active" | "exited" | "declined";

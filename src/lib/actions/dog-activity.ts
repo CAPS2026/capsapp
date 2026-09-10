@@ -126,13 +126,14 @@ export async function listActiveVolunteers(): Promise<{ id: string; name: string
   if (!person || !person.canKiosk) return [];
 
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("person_roles")
     .select(
       "person:people!person_roles_person_id_fkey(id, first_name, surname, volunteer_profile(interests))",
     )
     .eq("role", "volunteer")
     .eq("status", "active");
+  if (error) console.error("listActiveVolunteers failed", error);
 
   return ((data ?? []) as unknown as Array<{
     person: {
@@ -157,11 +158,12 @@ export async function listActiveCarers(type: "jail_break" | "foster"): Promise<{
 
   const role = type === "jail_break" ? "jailbreak_carer" : "foster_carer";
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("person_roles")
     .select("person:people!person_roles_person_id_fkey(id, first_name, surname)")
     .eq("role", role)
     .eq("status", "active");
+  if (error) console.error("listActiveCarers failed", error);
 
   return ((data ?? []) as unknown as Array<{ person: { id: string; first_name: string; surname: string } }>)
     .map((r) => ({ id: r.person.id, name: `${r.person.first_name} ${r.person.surname}` }))

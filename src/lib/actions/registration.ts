@@ -213,7 +213,7 @@ export async function registerVolunteer(input: {
   if (roleErr) return { error: roleErr.message };
 
   if (wantsHomecare) {
-    await supabase.from("homecare_profile").insert({
+    const { error: hpErr } = await supabase.from("homecare_profile").insert({
       person_id: personRow.id,
       over_18: input.over18,
       experience: experienceText,
@@ -222,6 +222,7 @@ export async function registerVolunteer(input: {
       signature_date: today,
       applied_on: today,
     });
+    if (hpErr) console.error("homecare_profile insert failed for", personRow.id, hpErr);
     // Fire-and-log the notification + acknowledgement emails. Never fail
     // the registration over an email problem.
     await sendHomecareEmails({
@@ -292,8 +293,8 @@ async function sendHomecareEmails(opts: {
     });
 
     const [r1, r2] = await Promise.all([
-      sendEmail({ to: adminEmail, subject: admin.subject, text: admin.text }),
-      sendEmail({ to: opts.email, subject: ack.subject, text: ack.text }),
+      sendEmail({ to: adminEmail, subject: admin.subject, text: admin.text, html: admin.html }),
+      sendEmail({ to: opts.email, subject: ack.subject, text: ack.text, html: ack.html }),
     ]);
     if (!r1.ok) console.error("homecare admin email failed:", r1.error);
     if (!r2.ok) console.error("homecare ack email failed:", r2.error);

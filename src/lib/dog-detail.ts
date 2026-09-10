@@ -56,6 +56,14 @@ export type MedicalEvent = {
   vet: string | null;
 };
 
+type MedicalEventRow = {
+  id: string;
+  event_date: string;
+  type: string;
+  detail: string;
+  vet: string | null;
+};
+
 export type ActivityEntry = {
   id: string;
   type: string;
@@ -80,14 +88,61 @@ export type NoteEntry = {
 export async function getDogDetail(dogId: string, isStaff: boolean) {
   const supabase = await createClient();
 
-  const { data: dogRow } = await supabase.from("dogs").select("*").eq("id", dogId).maybeSingle();
+  const { data: dogRow, error: dogErr } = await supabase
+    .from("dogs")
+    .select("*")
+    .eq("id", dogId)
+    .maybeSingle();
+  if (dogErr) console.error("getDogDetail: dog lookup failed", dogErr);
   if (!dogRow) return null;
 
-  const { data: mediaRows } = await supabase
-    .from("dog_media")
-    .select("path, is_primary, sort_order, caption")
-    .eq("dog_id", dogId)
-    .order("sort_order");
+  // These four reads don't depend on each other — run them together.
+  let notesQuery = supabase
+    .from("notes")
+    .select("id, body, visibility, created_at, author:people!notes_author_id_fkey(first_name, surname)")
+    .eq("subject_type", "dog")
+    .eq("subject_id", dogId)
+    .order("created_at", { ascending: false });
+  if (!isStaff) notesQuery = notesQuery.eq("visibility", "all");
+
+  const [
+    { data: mediaRows },
+    { data: activityRows, error: activityErr },
+    { data: noteRows, error: noteErr },
+    { data: confidentialRow },
+    { data: medicalRows },
+  ] = await Promise.all([
+    supabase
+      .from("dog_media")
+      .select("path, is_primary, sort_order, caption")
+      .eq("dog_id", dogId)
+      .order("sort_order"),
+    supabase
+      .from("dog_activity")
+      .select(
+        "id, type, started_at, ended_at, due_back, reason, entered_late, edited_at, person:people!dog_activity_person_id_fkey(id, first_name, surname)",
+      )
+      .eq("dog_id", dogId)
+      .order("started_at", { ascending: false })
+      .limit(60),
+    notesQuery,
+    isStaff
+      ? supabase
+          .from("dog_confidential")
+          .select("behaviour_notes, adoption_history, medical_summary_internal, restrictions")
+          .eq("dog_id", dogId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    isStaff
+      ? supabase
+          .from("medical_events")
+          .select("id, event_date, type, detail, vet")
+          .eq("dog_id", dogId)
+          .order("event_date", { ascending: false })
+      : Promise.resolve({ data: [] as MedicalEventRow[] }),
+  ]);
+  if (activityErr) console.error("getDogDetail: activity read failed", activityErr);
+  if (noteErr) console.error("getDogDetail: notes read failed", noteErr);
 
   const photos = (mediaRows ?? []).map((m) => ({
     path: m.path,
@@ -134,46 +189,28 @@ export async function getDogDetail(dogId: string, isStaff: boolean) {
     photos,
   };
 
-  let confidential: DogConfidential | null = null;
-  let medicalEvents: MedicalEvent[] = [];
+  const c = confidentialRow as {
+    behaviour_notes: string | null;
+    adoption_history: string | null;
+    medical_summary_internal: string | null;
+    restrictions: string | null;
+  } | null;
+  const confidential: DogConfidential | null = c
+    ? {
+        behaviourNotes: c.behaviour_notes,
+        adoptionHistory: c.adoption_history,
+        medicalSummaryInternal: c.medical_summary_internal,
+        restrictions: c.restrictions,
+      }
+    : null;
 
-  if (isStaff) {
-    const { data: c } = await supabase
-      .from("dog_confidential")
-      .select("behaviour_notes, adoption_history, medical_summary_internal, restrictions")
-      .eq("dog_id", dogId)
-      .maybeSingle();
-    confidential = c
-      ? {
-          behaviourNotes: c.behaviour_notes,
-          adoptionHistory: c.adoption_history,
-          medicalSummaryInternal: c.medical_summary_internal,
-          restrictions: c.restrictions,
-        }
-      : null;
-
-    const { data: m } = await supabase
-      .from("medical_events")
-      .select("id, event_date, type, detail, vet")
-      .eq("dog_id", dogId)
-      .order("event_date", { ascending: false });
-    medicalEvents = (m ?? []).map((e) => ({
-      id: e.id,
-      eventDate: e.event_date,
-      type: e.type,
-      detail: e.detail,
-      vet: e.vet,
-    }));
-  }
-
-  const { data: activityRows } = await supabase
-    .from("dog_activity")
-    .select(
-      "id, type, started_at, ended_at, due_back, reason, entered_late, edited_at, person:people!dog_activity_person_id_fkey(id, first_name, surname)",
-    )
-    .eq("dog_id", dogId)
-    .order("started_at", { ascending: false })
-    .limit(60);
+  const medicalEvents: MedicalEvent[] = ((medicalRows ?? []) as MedicalEventRow[]).map((e) => ({
+    id: e.id,
+    eventDate: e.event_date,
+    type: e.type,
+    detail: e.detail,
+    vet: e.vet,
+  }));
 
   const allActivities: ActivityEntry[] = ((activityRows ?? []) as unknown as Array<{
     id: string;
@@ -204,15 +241,6 @@ export async function getDogDetail(dogId: string, isStaff: boolean) {
     type,
     entry: allActivities.find((a) => a.type === type) ?? null,
   }));
-
-  let notesQuery = supabase
-    .from("notes")
-    .select("id, body, visibility, created_at, author:people!notes_author_id_fkey(first_name, surname)")
-    .eq("subject_type", "dog")
-    .eq("subject_id", dogId)
-    .order("created_at", { ascending: false });
-  if (!isStaff) notesQuery = notesQuery.eq("visibility", "all");
-  const { data: noteRows } = await notesQuery;
 
   const notes: NoteEntry[] = ((noteRows ?? []) as unknown as Array<{
     id: string;

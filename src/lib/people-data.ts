@@ -39,13 +39,14 @@ export function ageFromDob(dob: string | null): number | null {
 export async function getPeopleList(): Promise<PersonListItem[]> {
   const supabase = await createClient();
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("people")
     .select(
       "id, first_name, surname, nickname, email, phone, date_of_birth, ec_name, ec_phone, auth_user_id, image_consent, photo_path, updated_at, person_roles!person_roles_person_id_fkey(id, role, status)",
     )
     .order("surname")
     .order("first_name");
+  if (error) console.error("getPeopleList failed", error);
 
   return ((data ?? []) as unknown as Array<{
     id: string;
@@ -99,7 +100,7 @@ export type MergeCandidate = {
  *  picker on the person page. */
 export async function getMergeCandidates(excludeId: string): Promise<MergeCandidate[]> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("people")
     .select(
       "id, first_name, surname, email, phone, auth_user_id, person_roles!person_roles_person_id_fkey(role, status)",
@@ -107,6 +108,7 @@ export async function getMergeCandidates(excludeId: string): Promise<MergeCandid
     .neq("id", excludeId)
     .order("surname")
     .order("first_name");
+  if (error) console.error("getMergeCandidates failed", error);
 
   return ((data ?? []) as unknown as Array<{
     id: string;

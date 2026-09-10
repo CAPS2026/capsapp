@@ -21,7 +21,11 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
       <Link href="/people" className="text-sm font-semibold text-brand-ink">
         ← People
       </Link>
-      <PersonDetailView person={person} mergeCandidates={mergeCandidates} />
+      <PersonDetailView
+        person={person}
+        mergeCandidates={mergeCandidates}
+        viewerIsAdmin={viewer.isAdmin}
+      />
     </div>
   );
 }

@@ -75,14 +75,14 @@ export async function exitCafeMode(pin: string): Promise<{ ok: true } | { error:
   return { ok: true };
 }
 
-/** Set or change the shared staff PIN. Staff only (and not reachable from
- *  café mode, since isStaff is false there — which is the intended guard). */
+/** Set or change the shared staff PIN. Admin only (and not reachable from
+ *  café mode, since isAdmin is false there — which is the intended guard). */
 export async function setStaffPin(
   currentPin: string,
   newPin: string,
 ): Promise<{ ok: true } | { error: string }> {
   const person = await getCurrentPerson();
-  if (!person?.isStaff) return { error: "Staff only." };
+  if (!person?.isAdmin) return { error: "Admin only." };
   if (!isValidPin(newPin)) return { error: "The new PIN must be 4–6 digits." };
 
   const existing = await readPinHash();

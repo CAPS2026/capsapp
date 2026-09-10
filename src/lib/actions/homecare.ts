@@ -92,19 +92,33 @@ export async function approveViaToken(token: string): Promise<ApproveResult> {
 
   const { data: role } = await supabase
     .from("person_roles")
-    .select("id, role, person:people!person_roles_person_id_fkey(id, first_name, email)")
+    .select("id, role, status, person:people!person_roles_person_id_fkey(id, first_name, email)")
     .eq("id", tok.person_role_id)
     .maybeSingle();
   const person = role?.person as unknown as { id: string; first_name: string; email: string | null } | null;
   if (!role || !person) return { error: "The application this link points to is gone." };
+  // Email links only ever approve jail break — foster must go through the
+  // in-app home check. Anything else here means a bad or stale token.
+  if (role.role !== "jailbreak_carer")
+    return { error: "This link can't approve that role — do it from the app." };
+  if (role.status === "active") return { error: "This carer is already approved." };
+
+  // Consume the token atomically first — if a second click (or a mail
+  // scanner) already used it, this updates 0 rows and we stop.
+  const { data: claimed } = await supabase
+    .from("homecare_approval_tokens")
+    .update({ used_at: new Date().toISOString() })
+    .eq("token", token)
+    .is("used_at", null)
+    .select("token");
+  if (!claimed || claimed.length === 0)
+    return { error: "This approval link has already been used." };
 
   const { error: updErr } = await supabase
     .from("person_roles")
     .update({ status: "active", granted_on: today(), note: "Approved via email link" })
     .eq("id", role.id);
   if (updErr) return { error: updErr.message };
-
-  await supabase.from("homecare_approval_tokens").update({ used_at: new Date().toISOString() }).eq("token", token);
 
   if (person.email) {
     const mail = approvedEmail({ firstName: person.first_name, kind: "jail break" });

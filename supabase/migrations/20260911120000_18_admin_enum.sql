@@ -1,0 +1,11 @@
+-- Admin role — can do everything staff can, plus the structural /
+-- irreversible / security operations that regular staff shouldn't:
+-- permanently deleting people or dogs, merging duplicate people, setting
+-- the café-mode staff PIN, granting kiosk (Volunteer Plus) access.
+--
+-- The staff vs admin distinction is deliberately light in v1 (admin
+-- actions are a tighter-gated subset of what the server actions expose);
+-- it's here so it can be leaned on properly later. Run this ON ITS OWN
+-- (ALTER TYPE ... ADD VALUE can't share a transaction with statements
+-- that use the new value), then run migration 19.
+alter type person_role add value if not exists 'admin';

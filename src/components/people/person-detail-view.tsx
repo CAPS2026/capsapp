@@ -48,9 +48,11 @@ function fenceText(hp: NonNullable<PersonDetail["homecareProfile"]>): string | n
 export function PersonDetailView({
   person,
   mergeCandidates,
+  viewerIsAdmin,
 }: {
   person: PersonDetail;
   mergeCandidates: MergeCandidate[];
+  viewerIsAdmin: boolean;
 }) {
   const archived =
     person.roles.length > 0 &&
@@ -86,18 +88,22 @@ export function PersonDetailView({
             Edit
           </Link>
           <PersonArchiveButton personId={person.id} archived={archived} />
-          <MergePersonDialog
-            person={{ id: person.id, name: `${person.firstName} ${person.surname}`, hasAccount: person.hasAccount }}
-            candidates={mergeCandidates}
-          />
-          <ConfirmDeleteButton
-            triggerLabel="Delete"
-            heading={`Delete ${person.firstName} ${person.surname}?`}
-            body="This permanently removes their record, roles, profile, activity and site visits. It can't be undone — use Archive instead if they might come back."
-            confirmLabel="Delete"
-            action={deletePerson.bind(null, person.id)}
-            redirectTo="/people"
-          />
+          {viewerIsAdmin && (
+            <>
+              <MergePersonDialog
+                person={{ id: person.id, name: `${person.firstName} ${person.surname}`, hasAccount: person.hasAccount }}
+                candidates={mergeCandidates}
+              />
+              <ConfirmDeleteButton
+                triggerLabel="Delete"
+                heading={`Delete ${person.firstName} ${person.surname}?`}
+                body="This permanently removes their record, roles, profile, activity and site visits. It can't be undone — use Archive instead if they might come back."
+                confirmLabel="Delete"
+                action={deletePerson.bind(null, person.id)}
+                redirectTo="/people"
+              />
+            </>
+          )}
         </div>
       </div>
 
@@ -141,9 +147,10 @@ export function PersonDetailView({
         ))}
       </Section>
 
-      {person.roles.some(
-        (r) => (r.role === "volunteer" || r.role === "volunteer_plus") && r.status === "active",
-      ) && (
+      {viewerIsAdmin &&
+        person.roles.some(
+          (r) => (r.role === "volunteer" || r.role === "volunteer_plus") && r.status === "active",
+        ) && (
         <Section title="Kiosk access">
           <VolunteerPlusToggle
             personId={person.id}

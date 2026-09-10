@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getDogsListData } from "@/lib/dogs-data";
-import { formatFullDateTime } from "@/lib/format";
+import { formatLogDateTime } from "@/lib/format";
 
 export type ReportTable = {
   key: string;
@@ -58,10 +58,11 @@ export async function getReports(): Promise<ReportTable[]> {
   );
 
   // ---- Length of stay ------------------------------------------------
-  const { data: stayRows } = await supabase
+  const { data: stayRows, error: stayErr } = await supabase
     .from("dogs")
     .select("ref, name, arrival_date")
     .neq("status", "exited");
+  if (stayErr) console.error("getReports: length-of-stay read failed", stayErr);
   const stay = ((stayRows ?? []) as { ref: string; name: string; arrival_date: string | null }[])
     .map((d) => ({ ...d, days: daysSince(d.arrival_date) }))
     .sort((a, b) => (b.days ?? -1) - (a.days ?? -1));
@@ -82,8 +83,8 @@ export async function getReports(): Promise<ReportTable[]> {
         Dog: d.name,
         What: TYPE_LABEL[d.current!.type] ?? d.current!.type,
         With: d.current!.personName ?? (d.current!.reason ?? ""),
-        Since: formatFullDateTime(d.current!.startedAt),
-        "Due back": d.current!.dueBack ? formatFullDateTime(d.current!.dueBack) : "",
+        Since: formatLogDateTime(d.current!.startedAt),
+        "Due back": d.current!.dueBack ? formatLogDateTime(d.current!.dueBack) : "",
       })),
     },
     {
@@ -95,8 +96,8 @@ export async function getReports(): Promise<ReportTable[]> {
         Carer: d.current!.personName ?? "",
         Program: TYPE_LABEL[d.current!.type] ?? d.current!.type,
         Dog: d.name,
-        Since: formatFullDateTime(d.current!.startedAt),
-        "Due back": d.current!.dueBack ? formatFullDateTime(d.current!.dueBack) : "",
+        Since: formatLogDateTime(d.current!.startedAt),
+        "Due back": d.current!.dueBack ? formatLogDateTime(d.current!.dueBack) : "",
       })),
     },
     {

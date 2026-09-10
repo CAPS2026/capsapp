@@ -5,7 +5,7 @@ import { StaffPinForm } from "@/components/settings/staff-pin-form";
 
 export default async function SettingsPage() {
   const person = await getCurrentPerson();
-  if (!person?.isStaff) redirect("/dogs");
+  if (!person?.isAdmin) redirect("/dogs");
 
   const pinIsSet = await staffPinIsSet();
 

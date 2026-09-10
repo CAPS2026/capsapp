@@ -42,6 +42,7 @@ export function DogDetailView({
   latestOfEachType,
   notes,
   isStaff,
+  isAdmin,
   canKiosk,
   currentPersonId,
   currentPersonName,
@@ -54,6 +55,7 @@ export function DogDetailView({
   latestOfEachType: { type: string; entry: ActivityEntry | null }[];
   notes: NoteEntry[];
   isStaff: boolean;
+  isAdmin: boolean;
   canKiosk: boolean;
   currentPersonId: string;
   currentPersonName: string;
@@ -223,7 +225,7 @@ export function DogDetailView({
         <p className="text-sm">{timeWithCaps}</p>
       </Section>
 
-      {isStaff && (
+      {isAdmin && (
         <div className="flex justify-end pt-2">
           <ConfirmDeleteButton
             triggerLabel="Delete this dog"
