@@ -17,6 +17,7 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   { href: "/dogs", label: "Dogs" },
   { href: "/site", label: "Site" },
+  { href: "/staff", label: "Staff", staffOnly: true },
   { href: "/people", label: "People", staffOnly: true },
   { href: "/logs", label: "Logs", staffOnly: true },
   { href: "/reports", label: "Reports", staffOnly: true },
@@ -96,14 +97,14 @@ export function AppShell({
       <main className={`flex-1 pb-20 ${shellWidth} mx-auto w-full`}>{children}</main>
 
       <nav className="fixed bottom-0 inset-x-0 border-t border-line bg-card flex justify-center">
-        <div className={`${shellWidth} w-full flex`}>
+        <div className="max-w-lg w-full flex">
           {visibleItems.map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex-1 flex flex-col items-center justify-center gap-0.5 h-16 text-sm font-semibold ${
+                className={`flex-1 flex flex-col items-center justify-center gap-0.5 h-16 text-[13px] font-semibold ${
                   active ? "text-brand" : "text-ink-muted"
                 }`}
               >

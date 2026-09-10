@@ -321,9 +321,54 @@ insert into site_visits (id, person_id, guest_name, guest_phone, reason, reason_
 ('77777777-7777-4777-8777-000000000006',null,'Katie — RSPCA inspector','0400 222 006','other','Welfare check-in visit', now() - interval '8 days', now() - interval '8 days' + interval '55 minutes')
 on conflict (id) do nothing;
 
+-- ---------------------------------------------------------------------------
+-- STAFF ZONE — 3 caretakers with an active staff role (so the roster picker
+-- has options), recurring task templates, and a rostered today + tomorrow.
+-- ---------------------------------------------------------------------------
+insert into people (id, first_name, surname, email, phone, notes_internal) values
+ ('11111111-1111-4111-8111-000000000030','Robbie','Vale','robbie.vale@example.com','0400 111 030','Test caretaker (seed).'),
+ ('11111111-1111-4111-8111-000000000031','Nina','Cortez','nina.cortez@example.com','0400 111 031','Test caretaker (seed).'),
+ ('11111111-1111-4111-8111-000000000032','Kel','Doughty','kel.doughty@example.com','0400 111 032','Test caretaker (seed).')
+on conflict (id) do nothing;
+insert into person_roles (id, person_id, role, status, granted_on) values
+ ('22222222-2222-4222-8222-000000000030','11111111-1111-4111-8111-000000000030','staff','active','2026-01-15'),
+ ('22222222-2222-4222-8222-000000000031','11111111-1111-4111-8111-000000000031','staff','active','2026-04-20'),
+ ('22222222-2222-4222-8222-000000000032','11111111-1111-4111-8111-000000000032','staff','active','2026-06-10')
+on conflict (id) do nothing;
+
+insert into task_template (id, title, part, repeat, weekdays, day_of_month, sort_order, created_by) values
+ ('88888888-8888-4888-8888-000000000001','Feed all dogs','morning','daily','{}',null,1,'df7265f5-d731-4880-b0e8-e843c54af1b6'),
+ ('88888888-8888-4888-8888-000000000002','Clean and hose kennels','morning','daily','{}',null,2,'df7265f5-d731-4880-b0e8-e843c54af1b6'),
+ ('88888888-8888-4888-8888-000000000003','Fresh water in every pen','morning','daily','{}',null,3,'df7265f5-d731-4880-b0e8-e843c54af1b6'),
+ ('88888888-8888-4888-8888-000000000004','Check medication board','morning','daily','{}',null,4,'df7265f5-d731-4880-b0e8-e843c54af1b6'),
+ ('88888888-8888-4888-8888-000000000005','Evening feed','afternoon','daily','{}',null,1,'df7265f5-d731-4880-b0e8-e843c54af1b6'),
+ ('88888888-8888-4888-8888-000000000006','Lock up and check gates','afternoon','daily','{}',null,2,'df7265f5-d731-4880-b0e8-e843c54af1b6'),
+ ('88888888-8888-4888-8888-000000000007','Take bins out','afternoon','weekly','{2}',null,3,'df7265f5-d731-4880-b0e8-e843c54af1b6'),
+ ('88888888-8888-4888-8888-000000000008','Wash dog bedding','afternoon','weekly','{1,4}',null,4,'df7265f5-d731-4880-b0e8-e843c54af1b6'),
+ ('88888888-8888-4888-8888-000000000009','Worm & flea treatment review','morning','monthly','{}',1,5,'df7265f5-d731-4880-b0e8-e843c54af1b6')
+on conflict (id) do nothing;
+
+insert into roster_session (id, date, part, starts, ends) values
+ ('aaaaaaaa-0000-4000-8000-000000000001', current_date,     'morning',   '06:00','09:00'),
+ ('aaaaaaaa-0000-4000-8000-000000000002', current_date,     'afternoon', '16:00','19:00'),
+ ('aaaaaaaa-0000-4000-8000-000000000003', current_date + 1, 'morning',   '06:00','09:00'),
+ ('aaaaaaaa-0000-4000-8000-000000000004', current_date + 1, 'afternoon', '16:00','19:00')
+on conflict (date, part) do nothing;
+insert into roster_assignment (session_id, person_id) values
+ ('aaaaaaaa-0000-4000-8000-000000000001','11111111-1111-4111-8111-000000000030'),
+ ('aaaaaaaa-0000-4000-8000-000000000001','11111111-1111-4111-8111-000000000031'),
+ ('aaaaaaaa-0000-4000-8000-000000000002','11111111-1111-4111-8111-000000000032'),
+ ('aaaaaaaa-0000-4000-8000-000000000003','11111111-1111-4111-8111-000000000031'),
+ ('aaaaaaaa-0000-4000-8000-000000000004','11111111-1111-4111-8111-000000000030')
+on conflict do nothing;
+
 -- ============================================================================
 -- To remove everything this file seeded:
 -- ============================================================================
+-- delete from roster_assignment where session_id::text like 'aaaaaaaa-0000-%';
+-- delete from roster_session   where id::text like 'aaaaaaaa-0000-%';
+-- delete from task_instance    where template_id::text like '88888888-8888-%' or template_id is null;
+-- delete from task_template    where id::text like '88888888-8888-%';
 -- delete from site_visits    where id::text like '77777777-7777-4777-8777-%';
 -- delete from notes           where id::text like '66666666-6666-4666-8666-%';
 -- delete from medical_events  where id::text like '55555555-5555-4555-8555-%';
