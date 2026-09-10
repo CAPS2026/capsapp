@@ -193,7 +193,13 @@ non-blocking — magic link is the only working path today).
   `isStaff` gate does the work. "Staff access" on the volunteer-mode bar
   takes the shared PIN (scrypt hash in `org_settings.staff_pin_hash`,
   migration 15) to switch back; an idle guard re-locks after 15 min idle
-  or a 3 h ceiling. Set/change the PIN at `/settings` (staff).
+  or a 3 h ceiling. Set/change the PIN at `/settings` (admin).
+- **Admin role** — `admin` is a superset of staff (migrations 18 + 19;
+  `is_staff()` returns true for admins too, so existing RLS still lets
+  them through). Admin-only: deleting a person or dog, merging duplicates,
+  the café-mode PIN + `/settings`, granting kiosk (Volunteer Plus) access.
+  `getCurrentPerson().isAdmin` gates the UI. The seeded staff member is
+  also admin; grant more via SQL — no make-staff/make-admin UI yet.
 - **People photos** — one avatar per person, public `people-photos` bucket
   (migration 16), uploaded staff-only on the person Edit page via a
   service-role server action (so the bucket needs no RLS). Shown on the
@@ -217,7 +223,7 @@ the schema is current. **Run in order; 13 must run on its own**
 `admin_notification_email` + `yard_check_notes`), 12 (`yard_check_outcome`),
 13 (`volunteer_plus` enum value), 14 (`is_volunteer_plus()` +
 `dog_activity` RLS), 15 (`org_settings.staff_pin_hash` — café-mode PIN),
-16 (`people.photo_path` + `people-photos` bucket), 17 (`merge_people()` function). All 10–17 are applied.
+16 (`people.photo_path` + `people-photos` bucket), 17 (`merge_people()`), 18 (`admin` enum value — run alone), 19 (`is_admin()` + `is_staff()` now covers admin + bootstrap the first admin). All 10–19 are applied.
 The app has graceful fallbacks for un-applied 10/11/12.
 
 **Resend** (`RESEND_API_KEY` set in all Vercel envs + `.env.local`) sends
