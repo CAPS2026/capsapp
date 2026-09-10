@@ -4,9 +4,11 @@ import { VOLUNTEER_INTERESTS } from "@/lib/registration";
 import { ROLE_LABEL, STATUS_LABEL, STATUS_TEXT_CLASS, personPhotoUrl } from "@/lib/people";
 import { formatDate } from "@/lib/format";
 import { deletePerson } from "@/lib/actions/people";
+import type { MergeCandidate } from "@/lib/people-data";
 import { PersonRoleActions } from "@/components/people/person-role-actions";
 import { PersonArchiveButton } from "@/components/people/person-archive-button";
 import { VolunteerPlusToggle } from "@/components/people/volunteer-plus-toggle";
+import { MergePersonDialog } from "@/components/people/merge-person-dialog";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { Field } from "@/components/detail-field";
 
@@ -43,7 +45,13 @@ function fenceText(hp: NonNullable<PersonDetail["homecareProfile"]>): string | n
   return parts.length ? parts.join(", ") : null;
 }
 
-export function PersonDetailView({ person }: { person: PersonDetail }) {
+export function PersonDetailView({
+  person,
+  mergeCandidates,
+}: {
+  person: PersonDetail;
+  mergeCandidates: MergeCandidate[];
+}) {
   const archived =
     person.roles.length > 0 &&
     !person.roles.some((r) => r.status === "active" || r.status === "pending");
@@ -70,7 +78,7 @@ export function PersonDetailView({ person }: { person: PersonDetail }) {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           <Link
             href={`/people/${person.id}/edit`}
             className="text-sm font-semibold text-brand-ink underline underline-offset-2"
@@ -78,6 +86,10 @@ export function PersonDetailView({ person }: { person: PersonDetail }) {
             Edit
           </Link>
           <PersonArchiveButton personId={person.id} archived={archived} />
+          <MergePersonDialog
+            person={{ id: person.id, name: `${person.firstName} ${person.surname}`, hasAccount: person.hasAccount }}
+            candidates={mergeCandidates}
+          />
           <ConfirmDeleteButton
             triggerLabel="Delete"
             heading={`Delete ${person.firstName} ${person.surname}?`}

@@ -85,3 +85,48 @@ export async function getPeopleList(): Promise<PersonListItem[]> {
     };
   });
 }
+
+export type MergeCandidate = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  hasAccount: boolean;
+  roleSummary: string;
+};
+
+/** Everyone except `excludeId`, as a slim list for the "merge duplicate"
+ *  picker on the person page. */
+export async function getMergeCandidates(excludeId: string): Promise<MergeCandidate[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("people")
+    .select(
+      "id, first_name, surname, email, phone, auth_user_id, person_roles!person_roles_person_id_fkey(role, status)",
+    )
+    .neq("id", excludeId)
+    .order("surname")
+    .order("first_name");
+
+  return ((data ?? []) as unknown as Array<{
+    id: string;
+    first_name: string;
+    surname: string;
+    email: string | null;
+    phone: string | null;
+    auth_user_id: string | null;
+    person_roles: { role: Role; status: string }[] | null;
+  }>).map((p) => {
+    const live = (p.person_roles ?? []).filter(
+      (r) => r.status === "active" || r.status === "pending",
+    );
+    return {
+      id: p.id,
+      name: `${p.first_name} ${p.surname}`.trim(),
+      email: p.email,
+      phone: p.phone,
+      hasAccount: !!p.auth_user_id,
+      roleSummary: live.map((r) => `${r.role.replace(/_/g, " ")} (${r.status})`).join(", ") || "no roles",
+    };
+  });
+}

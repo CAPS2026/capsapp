@@ -237,6 +237,29 @@ export async function setVolunteerPlus(personId: string, on: boolean): Promise<R
 }
 
 /**
+ * Fold a duplicate person record into another (dedupe part c). Everything
+ * the removed record owns moves to the kept one, blanks on the kept record
+ * are filled in from the removed one, then the removed record is deleted —
+ * all in one DB transaction (the `merge_people` function). Staff only, no
+ * undo.
+ */
+export async function mergePeople(keepId: string, removeId: string): Promise<Result> {
+  const me = await requireStaff();
+  if (!me) return { error: "Staff only." };
+  if (keepId === removeId) return { error: "Pick two different records." };
+  if (removeId === me.id)
+    return { error: "That would delete your own record — keep yours and remove the other one." };
+
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("merge_people", { p_keep: keepId, p_remove: removeId });
+  if (error) return { error: error.message };
+
+  revalidatePath("/people");
+  revalidatePath(`/people/${keepId}`);
+  return {};
+}
+
+/**
  * Permanently delete a person and everything that belongs to them (roles,
  * profiles, their own activity + site-visit rows). Where they appear as an
  * operator / author / approver on someone else's record, their name is
