@@ -223,7 +223,7 @@ the schema is current. **Run in order; 13 must run on its own**
 `admin_notification_email` + `yard_check_notes`), 12 (`yard_check_outcome`),
 13 (`volunteer_plus` enum value), 14 (`is_volunteer_plus()` +
 `dog_activity` RLS), 15 (`org_settings.staff_pin_hash` — café-mode PIN),
-16 (`people.photo_path` + `people-photos` bucket), 17 (`merge_people()`), 18 (`admin` enum value — run alone), 19 (`is_admin()` + `is_staff()` now covers admin + bootstrap the first admin). All 10–19 are applied.
+16 (`people.photo_path` + `people-photos` bucket), 17 (`merge_people()`), 18 (`admin` enum — run alone), 19 (`is_admin()` + `is_staff()` covers admin + bootstrap first admin), 20 (roster tables + `org_settings.roster_*` times), 21 (`task_template` + `task_instance`). All 10–21 are applied.
 The app has graceful fallbacks for un-applied 10/11/12.
 
 **Resend** (`RESEND_API_KEY` set in all Vercel envs + `.env.local`) sends
