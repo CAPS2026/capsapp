@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { PersonDetail } from "@/lib/person-detail";
 import { VOLUNTEER_INTERESTS } from "@/lib/registration";
-import { ROLE_LABEL, STATUS_LABEL, STATUS_TEXT_CLASS } from "@/lib/people";
+import { ROLE_LABEL, STATUS_LABEL, STATUS_TEXT_CLASS, personPhotoUrl } from "@/lib/people";
 import { formatDate } from "@/lib/format";
 import { deletePerson } from "@/lib/actions/people";
 import { PersonRoleActions } from "@/components/people/person-role-actions";
@@ -25,6 +25,19 @@ function numOrNull(n: number | null): string | null {
   return n === null || n === undefined ? null : String(n);
 }
 
+function PersonAvatar({ person }: { person: PersonDetail }) {
+  const url = personPhotoUrl(person.photoPath, person.photoVersion);
+  if (url) {
+    // eslint-disable-next-line @next/next/no-img-element -- external Supabase Storage URL
+    return <img src={url} alt="" className="w-14 h-14 rounded-full object-cover shrink-0" />;
+  }
+  return (
+    <div className="w-14 h-14 rounded-full bg-gray-tint flex items-center justify-center text-lg font-bold text-ink-muted shrink-0">
+      {`${person.firstName.charAt(0)}${person.surname.charAt(0)}`.toUpperCase() || "?"}
+    </div>
+  );
+}
+
 function fenceText(hp: NonNullable<PersonDetail["homecareProfile"]>): string | null {
   const parts = [hp.fenceType, hp.fenceHeight].filter(Boolean);
   return parts.length ? parts.join(", ") : null;
@@ -39,19 +52,22 @@ export function PersonDetailView({ person }: { person: PersonDetail }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
-        <div>
-          <div className="flex items-baseline gap-2 flex-wrap">
-            <h1 className="text-xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
-              {person.firstName} {person.surname}
-            </h1>
-            {person.nickname && <span className="text-sm text-ink-muted">&ldquo;{person.nickname}&rdquo;</span>}
-          </div>
-          <div className="flex items-center gap-2 mt-1 text-xs">
-            {person.isMinor && <span className="font-bold text-warm-ink">Under 18</span>}
-            <span className="text-ink-muted">
-              {person.hasAccount ? "Has an app account" : "No app account"}
-            </span>
-            {archived && <span className="text-ink-muted">· archived</span>}
+        <div className="flex items-start gap-3">
+          <PersonAvatar person={person} />
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <h1 className="text-xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
+                {person.firstName} {person.surname}
+              </h1>
+              {person.nickname && <span className="text-sm text-ink-muted">&ldquo;{person.nickname}&rdquo;</span>}
+            </div>
+            <div className="flex items-center gap-2 mt-1 text-xs flex-wrap">
+              {person.isMinor && <span className="font-bold text-warm-ink">Under 18</span>}
+              <span className="text-ink-muted">
+                {person.hasAccount ? "Has an app account" : "No app account"}
+              </span>
+              {archived && <span className="text-ink-muted">· archived</span>}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-4">

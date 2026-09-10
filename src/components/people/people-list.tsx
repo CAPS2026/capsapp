@@ -78,6 +78,14 @@ export function PeopleList({ people }: { people: PersonListItem[] }) {
         {visible.map((p) => (
           <li key={p.id}>
             <Link href={`/people/${p.id}`} className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-tint">
+              {p.photoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- external Supabase Storage URL
+                <img src={p.photoUrl} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-gray-tint flex items-center justify-center text-xs font-bold text-ink-muted shrink-0">
+                  {p.name.split(" ").map((s) => s.charAt(0)).slice(0, 2).join("").toUpperCase()}
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold truncate">

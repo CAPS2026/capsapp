@@ -38,3 +38,16 @@ export const STATUS_TEXT_CLASS: Record<RoleStatus, string> = {
   exited: "text-ink-muted",
   declined: "text-ink-muted",
 };
+
+/** Public URL for a person's photo (people-photos is a public bucket).
+ *  `version` (their updated_at) busts the browser cache after a re-upload. */
+export function personPhotoUrl(
+  path: string | null | undefined,
+  version?: string | null,
+): string | null {
+  if (!path) return null;
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) return null;
+  const v = version ? `?v=${encodeURIComponent(version)}` : "";
+  return `${base}/storage/v1/object/public/people-photos/${path}${v}`;
+}

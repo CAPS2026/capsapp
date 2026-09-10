@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { personPhotoUrl } from "@/lib/people";
 import type { Role } from "@/lib/auth";
 
 export type RoleRow = {
@@ -19,6 +20,7 @@ export type PersonListItem = {
   hasPending: boolean;
   archived: boolean;
   missingEmergencyContact: boolean;
+  photoUrl: string | null;
 };
 
 export function ageFromDob(dob: string | null): number | null {
@@ -38,7 +40,7 @@ export async function getPeopleList(): Promise<PersonListItem[]> {
   const { data } = await supabase
     .from("people")
     .select(
-      "id, first_name, surname, nickname, email, phone, date_of_birth, ec_name, ec_phone, auth_user_id, person_roles!person_roles_person_id_fkey(id, role, status)",
+      "id, first_name, surname, nickname, email, phone, date_of_birth, ec_name, ec_phone, auth_user_id, photo_path, updated_at, person_roles!person_roles_person_id_fkey(id, role, status)",
     )
     .order("surname")
     .order("first_name");
@@ -54,6 +56,8 @@ export async function getPeopleList(): Promise<PersonListItem[]> {
     ec_name: string | null;
     ec_phone: string | null;
     auth_user_id: string | null;
+    photo_path: string | null;
+    updated_at: string | null;
     person_roles: RoleRow[] | null;
   }>).map((p) => {
     const roles = p.person_roles ?? [];
@@ -73,6 +77,7 @@ export async function getPeopleList(): Promise<PersonListItem[]> {
       // been ended (exited/declined) and none is live.
       archived: roles.length > 0 && !roles.some((r) => r.status === "active" || r.status === "pending"),
       missingEmergencyContact: active.some((r) => r.role === "volunteer") && (!p.ec_name || !p.ec_phone),
+      photoUrl: personPhotoUrl(p.photo_path, p.updated_at),
     };
   });
 }
