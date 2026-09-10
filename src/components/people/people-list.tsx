@@ -112,10 +112,13 @@ export function PeopleList({ people }: { people: PersonListItem[] }) {
                   {p.archived && <span className="text-xs text-ink-muted">archived</span>}
                 </div>
               </div>
-              {p.missingEmergencyContact && (
-                <span className="text-xs text-danger font-semibold shrink-0" title="No emergency contact">
-                  no EC
-                </span>
+              {(p.missingEmergencyContact || p.noImageConsent) && (
+                <div className="flex flex-col items-end gap-0.5 shrink-0 text-xs font-semibold text-danger">
+                  {p.missingEmergencyContact && <span title="No emergency contact">no EC</span>}
+                  {p.noImageConsent && (
+                    <span title="Said no to promotional-image use">no photos</span>
+                  )}
+                </div>
               )}
             </Link>
           </li>
