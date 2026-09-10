@@ -217,7 +217,7 @@ the schema is current. **Run in order; 13 must run on its own**
 `admin_notification_email` + `yard_check_notes`), 12 (`yard_check_outcome`),
 13 (`volunteer_plus` enum value), 14 (`is_volunteer_plus()` +
 `dog_activity` RLS), 15 (`org_settings.staff_pin_hash` — café-mode PIN),
-16 (`people.photo_path` + `people-photos` bucket). All 10–16 are applied.
+16 (`people.photo_path` + `people-photos` bucket), 17 (`merge_people()` function). All 10–17 are applied.
 The app has graceful fallbacks for un-applied 10/11/12.
 
 **Resend** (`RESEND_API_KEY` set in all Vercel envs + `.env.local`) sends
@@ -228,6 +228,13 @@ Resend dashboard → Domains → add `capeanimalprotectionshelter.org.au` →
 add the SPF/DKIM/return-path DNS records → verify → then set `RESEND_FROM`
 (e.g. `CAPS <noreply@capeanimalprotectionshelter.org.au>`) as a Vercel env
 var. Domain was added in Resend 10 Sep; DNS not yet done.
+
+**Merge two people** (dedupe part c) — "Merge" in the person-page header:
+search the duplicate by name/email/phone, choose which record to keep,
+confirm. `merge_people(p_keep, p_remove)` (migration 17) does it in one
+transaction — reassigns roles/activity/notes/visits/profiles, backfills
+blank fields on the kept record, deletes the other. Refuses if both have
+a login account.
 
 **Explicitly paused, not forgotten:**
 - **Café-mode PIN / limited kiosk surface** — the shared iPad should run a
