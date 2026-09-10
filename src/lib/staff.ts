@@ -1,6 +1,15 @@
 // Client-safe constants, types and helpers for the Staff zone (roster +
 // daily tasks). No server imports.
 
+// The shelter is in Weipa, Queensland — UTC+10, no daylight saving. "Today"
+// on the server (UTC on Vercel) is not the shelter's today late in the day,
+// so any server-side calendar-date logic must go through this.
+export const SHELTER_TZ = "Australia/Brisbane";
+export function shelterToday(): string {
+  // en-CA formats as YYYY-MM-DD.
+  return new Intl.DateTimeFormat("en-CA", { timeZone: SHELTER_TZ }).format(new Date());
+}
+
 export type Part = "morning" | "afternoon";
 export const PARTS: Part[] = ["morning", "afternoon"];
 export const PART_LABEL: Record<Part, string> = { morning: "Morning", afternoon: "Afternoon" };
@@ -49,6 +58,9 @@ export type TaskRow = {
   actionedAt: string | null;
   /** True when this open task is being carried over from an earlier day. */
   carriedOver: boolean;
+  /** A future-day preview of a recurring task — not a real row yet, not
+   *  tickable. It becomes a real instance when that day is opened. */
+  isPreview: boolean;
 };
 
 export type TaskTemplateRow = {

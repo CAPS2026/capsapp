@@ -2,8 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import {
   initials,
   parseYmd,
+  shelterToday,
   templateMatchesDate,
-  ymd,
   type Part,
   type RosterPerson,
   type RosterSession,
@@ -153,71 +153,76 @@ function toTaskRow(r: InstanceRow, carriedOver: boolean): TaskRow {
       : null,
     actionedAt: r.actioned_at,
     carriedOver,
+    isPreview: false,
   };
 }
 
+type TemplateForGen = {
+  id: string;
+  title: string;
+  part: Part;
+  repeat: TaskTemplateRow["repeat"];
+  weekdays: number[] | null;
+  day_of_month: number | null;
+  sort_order: number;
+};
+
 /**
- * Tasks for a day: materialises the day's instances from the active
- * templates that fire on that date (idempotent), then returns them plus
- * every still-open instance from earlier days (carried over).
+ * Tasks for a day.
+ *  - Today (shelter time): materialise the day's instances from the active
+ *    templates that fire, then return them + every still-open instance from
+ *    earlier days ("carried over").
+ *  - A past day: its real instances only (history).
+ *  - A future day: a read-only preview of the recurring tasks that will
+ *    fire that day (isPreview), plus its real instances if any were already
+ *    added ad-hoc.
  */
 export async function getTasksForDay(date: string): Promise<{
   today: TaskRow[];
   carriedOver: TaskRow[];
 }> {
   const supabase = await createClient();
-  const today = ymd(new Date());
+  const today = shelterToday();
   const target = parseYmd(date);
   const isPast = date < today;
+  const isFuture = date > today;
 
-  // 1. Materialise today's tasks only — past days keep their real history,
-  //    the future gets generated when it arrives.
-  if (date === today) {
-    const { data: templates } = await supabase
-      .from("task_template")
-      .select("id, title, part, repeat, weekdays, day_of_month, sort_order")
-      .eq("active", true);
+  const { data: templatesRaw } = await supabase
+    .from("task_template")
+    .select("id, title, part, repeat, weekdays, day_of_month, sort_order")
+    .eq("active", true);
+  const dueTemplates = ((templatesRaw ?? []) as TemplateForGen[]).filter((t) =>
+    templateMatchesDate(
+      { repeat: t.repeat, weekdays: t.weekdays ?? [], dayOfMonth: t.day_of_month },
+      target,
+    ),
+  );
 
-    const due = ((templates ?? []) as Array<{
-      id: string;
-      title: string;
-      part: Part;
-      repeat: TaskTemplateRow["repeat"];
-      weekdays: number[];
-      day_of_month: number | null;
-      sort_order: number;
-    }>).filter((t) =>
-      templateMatchesDate(
-        { repeat: t.repeat, weekdays: t.weekdays ?? [], dayOfMonth: t.day_of_month },
-        target,
-      ),
-    );
-
-    if (due.length) {
-      const { data: have } = await supabase
-        .from("task_instance")
-        .select("template_id")
-        .eq("date", date)
-        .not("template_id", "is", null);
-      const haveIds = new Set((have ?? []).map((h) => h.template_id));
-      const toCreate = due.filter((t) => !haveIds.has(t.id));
-      if (toCreate.length) {
-        const { error: insErr } = await supabase.from("task_instance").upsert(
-          toCreate.map((t) => ({
-            template_id: t.id,
-            date,
-            part: t.part,
-            title: t.title,
-            sort_order: t.sort_order,
-          })),
-          { onConflict: "template_id,date", ignoreDuplicates: true },
-        );
-        if (insErr) console.error("task materialise failed", insErr);
-      }
+  // Materialise today's due templates that don't have an instance yet.
+  if (date === today && dueTemplates.length) {
+    const { data: have } = await supabase
+      .from("task_instance")
+      .select("template_id")
+      .eq("date", date)
+      .not("template_id", "is", null);
+    const haveIds = new Set((have ?? []).map((h) => h.template_id));
+    const toCreate = dueTemplates.filter((t) => !haveIds.has(t.id));
+    if (toCreate.length) {
+      const { error: insErr } = await supabase.from("task_instance").insert(
+        toCreate.map((t) => ({
+          template_id: t.id,
+          date,
+          part: t.part,
+          title: t.title,
+          sort_order: t.sort_order,
+        })),
+      );
+      // 23505 = another request materialised the same day first — fine.
+      if (insErr && insErr.code !== "23505") console.error("task materialise failed", insErr);
     }
   }
 
-  // 2. This day's instances.
+  // This day's real instances.
   const { data: todayRows, error: tErr } = await supabase
     .from("task_instance")
     .select(INSTANCE_SELECT)
@@ -227,8 +232,33 @@ export async function getTasksForDay(date: string): Promise<{
     .order("created_at");
   if (tErr) console.error("getTasksForDay: today read failed", tErr);
 
-  // 3. Carried over — open instances from earlier days. Only surface these
-  //    on today / the future, not when browsing history.
+  const realRows = ((todayRows ?? []) as unknown as InstanceRow[]).map((r) => toTaskRow(r, false));
+
+  // Future day: show the recurring tasks that will appear, as previews
+  // (skip any template that's already been added ad-hoc for that day).
+  if (isFuture) {
+    const covered = new Set(realRows.map((r) => r.templateId).filter(Boolean));
+    const previews: TaskRow[] = dueTemplates
+      .filter((t) => !covered.has(t.id))
+      .map((t) => ({
+        id: `preview:${t.id}`,
+        templateId: t.id,
+        date,
+        part: t.part,
+        title: t.title,
+        status: "open" as TaskStatus,
+        note: null,
+        actionedByName: null,
+        actionedByInitials: null,
+        actionedAt: null,
+        carriedOver: false,
+        isPreview: true,
+      }));
+    return { today: [...realRows, ...previews], carriedOver: [] };
+  }
+
+  // Carried over — open instances from earlier days. Not shown when
+  // browsing history.
   let carried: TaskRow[] = [];
   if (!isPast) {
     const { data: openRows, error: oErr } = await supabase
@@ -243,10 +273,7 @@ export async function getTasksForDay(date: string): Promise<{
     carried = ((openRows ?? []) as unknown as InstanceRow[]).map((r) => toTaskRow(r, true));
   }
 
-  return {
-    today: ((todayRows ?? []) as unknown as InstanceRow[]).map((r) => toTaskRow(r, false)),
-    carriedOver: carried,
-  };
+  return { today: realRows, carriedOver: carried };
 }
 
 export async function getTaskTemplates(): Promise<TaskTemplateRow[]> {

@@ -7,6 +7,7 @@ import {
   signOffTask,
   markTaskNotRequired,
   reopenTask,
+  updateTaskNote,
   addAdhocTask,
   deleteAdhocTask,
 } from "@/lib/actions/staff";
@@ -35,15 +36,6 @@ export function TasksSection({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const noteRef = useRef<HTMLDialogElement>(null);
-  const [dialog, setDialog] = useState<{
-    id: string;
-    mode: "note" | "not_required";
-    title: string;
-    status: TaskRow["status"];
-  } | null>(null);
-  const [noteText, setNoteText] = useState("");
-
   const run = (fn: () => Promise<{ error?: string }>, after?: () => void) => {
     setError(null);
     startTransition(async () => {
@@ -56,16 +48,8 @@ export function TasksSection({
     });
   };
 
-  function openDialog(
-    t: TaskRow,
-    mode: "note" | "not_required",
-  ) {
-    setDialog({ id: t.id, mode, title: t.title, status: t.status });
-    setNoteText(mode === "note" ? (t.note ?? "") : "");
-    noteRef.current?.showModal();
-  }
-
   const byPart = (part: Part) => tasks.today.filter((t) => t.part === part);
+  const isFuture = date > today;
 
   return (
     <section className="flex flex-col gap-3">
@@ -73,23 +57,12 @@ export function TasksSection({
       {error && <p className="text-sm text-danger">{error}</p>}
 
       {tasks.carriedOver.length > 0 && (
-        <div className="bg-warm-tint border border-warm/40 rounded-[var(--radius)] p-3 flex flex-col gap-2">
-          <p className="text-xs font-bold uppercase tracking-wide text-warm-ink">
+        <div className="bg-warm-tint border border-warm/40 rounded-[var(--radius)] p-2 flex flex-col gap-1">
+          <p className="text-xs font-bold uppercase tracking-wide text-warm-ink px-1">
             Carried over — still open from earlier
           </p>
           {tasks.carriedOver.map((t) => (
-            <TaskRowView
-              key={t.id}
-              task={t}
-              isAdmin={isAdmin}
-              busy={isPending}
-              showFrom
-              onTick={() => run(() => signOffTask(t.id, t.note ?? ""))}
-              onReopen={() => run(() => reopenTask(t.id))}
-              onNote={() => openDialog(t, "note")}
-              onNotRequired={() => openDialog(t, "not_required")}
-              onDelete={() => run(() => deleteAdhocTask(t.id))}
-            />
+            <TaskItem key={t.id} task={t} isAdmin={isAdmin} busy={isPending} run={run} showFrom />
           ))}
         </div>
       )}
@@ -110,170 +83,156 @@ export function TasksSection({
               <p className="text-sm text-ink-muted p-3">No {PART_LABEL[part].toLowerCase()} tasks.</p>
             ) : (
               byPart(part).map((t) => (
-                <TaskRowView
-                  key={t.id}
-                  task={t}
-                  isAdmin={isAdmin}
-                  busy={isPending}
-                  onTick={() => run(() => signOffTask(t.id, t.note ?? ""))}
-                  onReopen={() => run(() => reopenTask(t.id))}
-                  onNote={() => openDialog(t, "note")}
-                  onNotRequired={() => openDialog(t, "not_required")}
-                  onDelete={() => run(() => deleteAdhocTask(t.id))}
-                />
+                <TaskItem key={t.id} task={t} isAdmin={isAdmin} busy={isPending} run={run} />
               ))
             )}
           </div>
         </div>
       ))}
 
-      {date > today && (
+      {isFuture && (
         <p className="text-xs text-ink-muted">
-          This is a future day — recurring tasks appear on the day itself.
+          <span className="font-bold text-brand-ink">R</span> = recurring task — it becomes tickable
+          on the day itself.
         </p>
       )}
-
-      <dialog
-        ref={noteRef}
-        className="rounded-[var(--radius)] border border-line p-0 backdrop:bg-black/40 w-full max-w-sm"
-        onClick={(e) => e.target === e.currentTarget && noteRef.current?.close()}
-      >
-        {dialog && (
-          <form
-            className="flex flex-col gap-3 p-5"
-            onSubmit={(e) => {
-              e.preventDefault();
-              // "note" mode edits the note in place without changing the
-              // status; "not_required" mode sets that status.
-              const fn =
-                dialog.mode === "not_required" || dialog.status === "not_required"
-                  ? () => markTaskNotRequired(dialog.id, noteText)
-                  : () => signOffTask(dialog.id, noteText);
-              run(fn, () => noteRef.current?.close());
-            }}
-          >
-            <h2 className="font-bold text-lg">
-              {dialog.mode === "not_required" ? "Not needed" : "Note"}
-            </h2>
-            <p className="text-sm text-ink-muted">{dialog.title}</p>
-            <textarea
-              autoFocus
-              value={noteText}
-              onChange={(e) => setNoteText(e.target.value)}
-              rows={3}
-              placeholder={
-                dialog.mode === "not_required" ? "Why wasn't it needed?" : "Optional note"
-              }
-              className="px-3 py-2 rounded-[var(--radius)] border border-line-cool bg-white text-base w-full"
-            />
-            <div className="flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => noteRef.current?.close()}
-                className="h-10 px-4 rounded-[var(--radius)] font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isPending}
-                className={`h-10 px-4 rounded-[var(--radius)] text-white font-bold disabled:opacity-60 ${
-                  dialog.mode === "not_required" ? "bg-warm-ink" : "bg-brand"
-                }`}
-              >
-                Save
-              </button>
-            </div>
-          </form>
-        )}
-      </dialog>
     </section>
   );
 }
 
-function TaskRowView({
+function TaskItem({
   task,
   isAdmin,
   busy,
+  run,
   showFrom,
-  onTick,
-  onReopen,
-  onNote,
-  onNotRequired,
-  onDelete,
 }: {
   task: TaskRow;
   isAdmin: boolean;
   busy: boolean;
+  run: (fn: () => Promise<{ error?: string }>, after?: () => void) => void;
   showFrom?: boolean;
-  onTick: () => void;
-  onReopen: () => void;
-  onNote: () => void;
-  onNotRequired: () => void;
-  onDelete: () => void;
 }) {
   const done = task.status === "done";
   const notReq = task.status === "not_required";
+  const recurring = task.templateId !== null;
+
+  const [note, setNote] = useState(task.note ?? "");
+  const [hint, setHint] = useState<string | null>(null);
+  const noteRef = useRef<HTMLInputElement>(null);
+
+  // Save the note quietly on blur — no page refresh, the box already shows
+  // the value. (Device keyboards' dictation mic works in this field.)
+  function saveNote() {
+    const next = note.trim();
+    if (next === (task.note ?? "")) return;
+    updateTaskNote(task.id, next).then((r) => {
+      if (r?.error) setHint(r.error);
+    });
+  }
+
+  if (task.isPreview) {
+    return (
+      <div className="flex items-center gap-2 p-3 text-sm opacity-60">
+        <span className="w-6 h-6 shrink-0 rounded-md border-2 border-dashed border-line" />
+        <span className="flex-1 min-w-0">{task.title}</span>
+        <span className="text-[11px] font-bold text-brand-ink shrink-0">R</span>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex items-start gap-2 p-3 text-sm">
-      <button
-        type="button"
-        disabled={busy}
-        onClick={done || notReq ? onReopen : onTick}
-        aria-label={done || notReq ? "Reopen" : "Mark done"}
-        className={`mt-0.5 w-6 h-6 shrink-0 rounded-md border-2 flex items-center justify-center font-bold disabled:opacity-50 ${
-          done
-            ? "bg-ok border-ok text-white"
-            : notReq
-              ? "bg-gray-tint border-line text-ink-muted"
-              : "border-line-cool"
-        }`}
-      >
-        {done ? "✓" : notReq ? "–" : ""}
-      </button>
+    <div className="p-3 flex flex-col gap-1.5 text-sm">
+      <div className="flex items-start gap-2 flex-wrap">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => run(done || notReq ? () => reopenTask(task.id) : () => signOffTask(task.id, note))}
+          aria-label={done || notReq ? "Reopen" : "Mark done"}
+          className={`mt-0.5 w-6 h-6 shrink-0 rounded-md border-2 flex items-center justify-center font-bold disabled:opacity-50 ${
+            done
+              ? "bg-ok border-ok text-white"
+              : notReq
+                ? "bg-gray-tint border-line text-ink-muted"
+                : "border-line-cool"
+          }`}
+        >
+          {done ? "✓" : notReq ? "–" : ""}
+        </button>
 
-      <div className="flex-1 min-w-0">
-        <p className={done || notReq ? "text-ink-muted line-through" : "font-medium"}>{task.title}</p>
-
-        <div className="text-xs text-ink-muted flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
-          {showFrom && <span className="text-warm-ink font-semibold">from {shortDate(task.date)}</span>}
-          {done && (
-            <span>
-              ✓ {task.actionedByInitials} · {timeOf(task.actionedAt)}
+        <span className={`flex-1 min-w-[8rem] ${done || notReq ? "text-ink-muted line-through" : "font-medium"}`}>
+          {task.title}
+          {recurring && <span className="ml-1.5 text-[11px] font-bold text-brand-ink no-underline">R</span>}
+          {showFrom && (
+            <span className="ml-1.5 text-xs text-warm-ink font-semibold no-underline">
+              from {shortDate(task.date)}
             </span>
           )}
-          {notReq && <span>Not needed · {task.actionedByInitials}</span>}
-          {task.note && <span className="italic">“{task.note}”</span>}
-        </div>
+          {done && task.actionedByInitials && (
+            <span className="ml-1.5 text-xs text-ok font-semibold no-underline">
+              {task.actionedByInitials} {timeOf(task.actionedAt)}
+            </span>
+          )}
+          {notReq && task.actionedByInitials && (
+            <span className="ml-1.5 text-xs text-ink-muted no-underline">
+              not needed · {task.actionedByInitials}
+            </span>
+          )}
+        </span>
 
-        <div className="flex gap-3 mt-1 text-xs font-semibold">
-          {!done && !notReq && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={onNotRequired}
-              className="text-warm-ink disabled:opacity-50"
-            >
-              Not needed
-            </button>
-          )}
-          {(done || notReq) && (
-            <button type="button" disabled={busy} onClick={onNote} className="text-brand-ink disabled:opacity-50">
-              {task.note ? "Edit note" : "Add note"}
-            </button>
-          )}
-          {(done || notReq) && (
-            <button type="button" disabled={busy} onClick={onReopen} className="text-ink-muted disabled:opacity-50">
-              Reopen
-            </button>
-          )}
-          {isAdmin && task.templateId === null && (
-            <button type="button" disabled={busy} onClick={onDelete} className="text-danger disabled:opacity-50">
-              Delete
-            </button>
-          )}
-        </div>
+        <input
+          ref={noteRef}
+          value={note}
+          disabled={busy}
+          onChange={(e) => {
+            setNote(e.target.value);
+            setHint(null);
+          }}
+          onBlur={saveNote}
+          placeholder="Note"
+          className="flex-1 basis-40 min-w-0 h-8 px-2 rounded-[var(--radius)] border border-line-cool bg-white text-sm"
+        />
+      </div>
+
+      <div className="flex gap-3 pl-8 text-xs font-semibold">
+        {!done && !notReq && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              if (!note.trim()) {
+                setHint("Add a reason in the note box first");
+                noteRef.current?.focus();
+                return;
+              }
+              run(() => markTaskNotRequired(task.id, note));
+            }}
+            className="text-warm-ink disabled:opacity-50"
+          >
+            Not needed
+          </button>
+        )}
+        {(done || notReq) && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => run(() => reopenTask(task.id))}
+            className="text-ink-muted disabled:opacity-50"
+          >
+            Reopen
+          </button>
+        )}
+        {isAdmin && task.templateId === null && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => run(() => deleteAdhocTask(task.id))}
+            className="text-danger disabled:opacity-50"
+          >
+            Delete
+          </button>
+        )}
+        {hint && <span className="text-warm-ink font-normal">{hint}</span>}
       </div>
     </div>
   );

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentPerson } from "@/lib/auth";
 import { getRosterDay, getRosterablePeople, getTasksForDay } from "@/lib/staff-data";
-import { ymd } from "@/lib/staff";
+import { shelterToday } from "@/lib/staff";
 import { DayNav } from "@/components/staff/day-nav";
 import { RosterSection } from "@/components/staff/roster-section";
 import { TasksSection } from "@/components/staff/tasks-section";
@@ -16,7 +16,7 @@ export default async function StaffPage({
   if (!person?.isStaff) redirect("/dogs");
 
   const sp = await searchParams;
-  const today = ymd(new Date());
+  const today = shelterToday();
   const date = /^\d{4}-\d{2}-\d{2}$/.test(sp.date ?? "") ? sp.date! : today;
 
   const [sessions, tasks, rosterable] = await Promise.all([

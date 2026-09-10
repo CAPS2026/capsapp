@@ -221,6 +221,20 @@ export async function reopenTask(instanceId: string): Promise<Result> {
   return {};
 }
 
+/** Save just the note against a task — no status change, no re-stamp.
+ *  Used by the always-there note box on each task row. */
+export async function updateTaskNote(instanceId: string, note: string): Promise<Result> {
+  const me = await requireStaff();
+  if (!me) return { error: "Staff only." };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("task_instance")
+    .update({ note: note.trim() || null })
+    .eq("id", instanceId);
+  if (error) return { error: error.message };
+  return {};
+}
+
 /** A one-off task for a specific day (no template). Admin only. */
 export async function addAdhocTask(date: string, part: Part, title: string): Promise<Result> {
   if (!(await requireAdmin())) return { error: "Admin only." };
