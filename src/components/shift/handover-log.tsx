@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { PART_LABEL, parseYmd, type HandoverNoteRow } from "@/lib/shift";
+import { PART_LABEL, parseYmd } from "@/lib/shift";
+import type { HandoverNoteRow } from "@/lib/shift-data";
 import { addHandoverNote } from "@/lib/actions/shift";
 
 function whenLabel(n: HandoverNoteRow) {
