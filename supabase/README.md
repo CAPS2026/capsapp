@@ -16,7 +16,7 @@ them all as applied.
 reason), checklist `category` + optional task `claimed_by`/`is_extra` on
 `task_template`/`task_instance`, and `handover_note`. Recipient emails for
 the end-of-shift summary live in `org_settings.staff_shift_email_recipients`
-(a data row, set from a settings screen), never in this repo — it's public.
+(a data row, set from a settings screen), never in this repo, it's public.
 Sending isn't wired up yet, on hold. See `docs/staff-app-plan.md`.
 
 Applying a new migration: add a `YYYYMMDDHHMMSS_NN_name.sql` file here and run it

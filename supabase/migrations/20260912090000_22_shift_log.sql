@@ -1,15 +1,15 @@
--- Staff app — shift sign-in/out log (docs/ui-flows.md, Staff zone).
--- `roster_session`/`roster_assignment` (migration 20) are the PLAN — who is
--- supposed to be on. `shift_log` is the RECORD — who actually signed in,
+-- Staff app: shift sign-in/out log (docs/ui-flows.md, Staff zone).
+-- `roster_session`/`roster_assignment` (migration 20) are the PLAN: who is
+-- supposed to be on. `shift_log` is the RECORD: who actually signed in,
 -- when, from where, and when they signed out. A row here is not required
 -- to have a matching roster assignment (someone can cover an unrostered
 -- shift); it's just flagged as such.
 --
 -- Recipient emails (Renee, Shayna) are deliberately NOT in this migration
--- or anywhere in the repo — this is a public GitHub repo. They belong in
+-- or anywhere in the repo. This is a public GitHub repo. They belong in
 -- `org_settings.staff_shift_email_recipients` (a data row in Supabase, set
 -- from an admin settings screen), same pattern as the existing
--- `alert_recipients` column. Actual sending is paused for now — this
+-- `alert_recipients` column. Actual sending is paused for now, this
 -- migration only adds the columns/tables that will support it later.
 
 alter table org_settings
@@ -25,8 +25,8 @@ alter table org_settings
   add column if not exists staff_late_after_minutes int not null default 10,
   -- How long a shift can sit with no ticks past its scheduled end before
   -- the app closes it automatically (see shift_log.auto_closed below).
-  -- Someone genuinely still working — overtime, a late start running
-  -- late — keeps ticking things off, which keeps resetting this clock, so
+  -- Someone genuinely still working, overtime or a late start running
+  -- late, keeps ticking things off, which keeps resetting this clock, so
   -- it only ever catches a shift that was actually abandoned.
   add column if not exists staff_autoclose_grace_minutes int not null default 60;
 

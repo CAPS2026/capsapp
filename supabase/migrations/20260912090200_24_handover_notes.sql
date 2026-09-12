@@ -1,5 +1,5 @@
--- Staff app — shift handover notes. Separate from task_instance.note
--- (which is context on one specific task) — this is a freeform log for
+-- Staff app: shift handover notes. Separate from task_instance.note
+-- (which is context on one specific task), this is a freeform log for
 -- anything worth telling the next shift, shown as its own feed.
 
 create table if not exists handover_note (

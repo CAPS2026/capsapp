@@ -1,15 +1,15 @@
--- Staff app — checklist categories + optional task claiming.
+-- Staff app: checklist categories + optional task claiming.
 --
 -- `task_template`/`task_instance` (migration 21) group tasks by `part`
 -- (morning/afternoon) only. The printed daily checklist groups by section
 -- instead (Opening, Animal Health & Welfare, Kennel & Housing Hygiene,
--- Exercise & Enrichment, Public & Committee Areas, End of Day) — `category`
+-- Exercise & Enrichment, Public & Committee Areas, End of Day). `category`
 -- adds that. Snapshotted onto the instance the same way `title` already
 -- is, so re-categorising a template later doesn't rewrite history.
 --
 -- `claimed_by`/`claimed_at` are optional: a caretaker can "call" a task
 -- before doing it, so two people on one shift don't duplicate work or
--- leave something nobody owns. It's a soft flag, not a lock — whoever
+-- leave something nobody owns. It's a soft flag, not a lock, whoever
 -- actually ticks a task done is who it's attributed to (`actioned_by`,
 -- already on task_instance), claimed or not.
 --
