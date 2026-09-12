@@ -11,6 +11,14 @@ rationale). The files here match the migration history in the Supabase project,
 so once the Supabase CLI is set up locally, `supabase migration list` will show
 them all as applied.
 
+**22–24 (staff app, drafted 12 Sep, not yet applied to the live project):**
+`shift_log` (sign-in/out record, distance from the shelter at sign-in, late
+reason), checklist `category` + optional task `claimed_by`/`is_extra` on
+`task_template`/`task_instance`, and `handover_note`. Recipient emails for
+the end-of-shift summary live in `org_settings.staff_shift_email_recipients`
+(a data row, set from a settings screen), never in this repo — it's public.
+Sending isn't wired up yet, on hold. See `docs/staff-app-plan.md`.
+
 Applying a new migration: add a `YYYYMMDDHHMMSS_NN_name.sql` file here and run it
 against the project (Supabase CLI `supabase db push`, or the dashboard SQL editor,
 or the MCP `apply_migration`).
