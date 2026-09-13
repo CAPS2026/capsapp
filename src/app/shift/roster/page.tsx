@@ -71,20 +71,20 @@ export default async function RosterPage({
       </p>
 
       <div className="flex items-center justify-between">
-        <Link href={`/shift/roster?y=${prevMonth.y}&m=${prevMonth.m}`} className="px-2 text-lg font-extrabold text-brand-ink">
+        <Link href={`/shift/roster?y=${prevMonth.y}&m=${prevMonth.m}`} className="px-2 text-xl font-extrabold text-brand-ink">
           ←
         </Link>
-        <span className="font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
+        <span className="text-lg font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
           {MONTH_NAMES[month - 1]} {year}
         </span>
-        <Link href={`/shift/roster?y=${nextMonth.y}&m=${nextMonth.m}`} className="px-2 text-lg font-extrabold text-brand-ink">
+        <Link href={`/shift/roster?y=${nextMonth.y}&m=${nextMonth.m}`} className="px-2 text-xl font-extrabold text-brand-ink">
           →
         </Link>
       </div>
 
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-1.5">
         {DOW.map((d) => (
-          <div key={d} className="pb-1 text-center text-[10px] font-extrabold uppercase text-ink-muted">
+          <div key={d} className="pb-1.5 text-center text-[11.5px] font-extrabold uppercase text-ink-muted">
             {d}
           </div>
         ))}
@@ -97,18 +97,18 @@ export default async function RosterPage({
             <Link
               key={date}
               href={`/shift/roster?y=${year}&m=${month}&d=${date}`}
-              className={`flex flex-col items-center gap-0.5 rounded-lg border p-1 text-center ${
+              className={`flex min-h-[58px] flex-col items-center gap-1 rounded-lg border p-1.5 text-center ${
                 isSelected ? "border-brand bg-brand-tint" : isToday ? "border-brand" : "border-line bg-card"
               }`}
             >
-              <span className="text-[10px] font-bold text-ink-muted">{Number(date.slice(8))}</span>
+              <span className="text-[13px] font-bold text-ink-muted">{Number(date.slice(8))}</span>
               {cell?.am.length ? (
-                <span className="rounded bg-brand-tint px-1 text-[9px] font-extrabold text-brand-ink">
+                <span className="rounded bg-brand-tint px-1.5 py-0.5 text-[10.5px] font-extrabold text-brand-ink">
                   {cell.am.join(",")}
                 </span>
               ) : null}
               {cell?.pm.length ? (
-                <span className="rounded bg-sun-tint px-1 text-[9px] font-extrabold text-warm-ink">
+                <span className="rounded bg-sun-tint px-1.5 py-0.5 text-[10.5px] font-extrabold text-warm-ink">
                   {cell.pm.join(",")}
                 </span>
               ) : null}
