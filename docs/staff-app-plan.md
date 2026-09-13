@@ -20,8 +20,9 @@ of the design below.
 Since it's one stationary shared tablet, its GPS reading is always the
 same regardless of who's holding it. It verifies the tablet's location,
 not the person. So identity comes from a "who's working right now?" name
-picker (today's rostered names, largest tap targets) plus a short PIN,
-not from location.
+picker (today's rostered names, largest tap targets), not from location.
+No PIN in the actual build: it was floated as an option but never
+confirmed, and there's no schema for one. Easy to add later if wanted.
 
 GPS is still captured at sign-in (`shift_log.signed_in_lat/lng`,
 distance from `org_settings.shelter_lat/lng` in
@@ -69,26 +70,35 @@ own visible signal in the email.
 
 A shift stays open as long as there's recent activity (a tick, a claim),
 no matter how late that runs. Overtime or a late start running long
-never gets cut off. It only auto-closes (`shift_log.auto_closed = true`)
-after `org_settings.staff_autoclose_grace_minutes` (default 60) of **no
-activity at all** past the scheduled end, catching an abandoned session,
-not a busy one. A manual "Add time" action is available for anyone who
-knows in advance they'll run long.
+never gets cut off, because every action bumps `shift_log.last_activity_at`
+(`touchShiftActivity`, called from every checklist action). It only
+auto-closes (`shift_log.auto_closed = true`) once it's both past the
+rostered end time AND silent for
+`org_settings.staff_autoclose_grace_minutes` (default 60), catching an
+abandoned session, not a busy one. No separate "Add time" control needed:
+staying active is what keeps a shift open, there's nothing to press.
 
-## End-of-shift email: schema only for now, sending on hold
+## End-of-shift email
 
-One email per shift session, to `org_settings.staff_shift_email_recipients`
-(Renee, Shayna), split into a clearly separated block per person who
-worked it: done / not needed (with reason) / not done or rolled over /
-claimed-not-done / extras, plus the late-sign-in and off-site flags. A
-task nobody claimed and nobody ticked is listed once against the shift as
-a whole, not attached to a person.
+Built (13 Sep, `src/lib/shift-email.ts`), via the existing `sendEmail`
+helper (`src/lib/email.ts`, Resend). One email per shift session, to
+`org_settings.staff_shift_email_recipients` (Renee, Shayna), split into a
+clearly separated block per person who worked it: done / not needed (with
+reason) / claimed-not-done / extras, plus the late-sign-in and off-site
+flags. A task nobody claimed and nobody ticked is listed once against the
+shift as a whole, not attached to a person.
+
+Sends once, when the last open shift on that session closes (manually via
+"End shift," or via the auto-close check), guarded by
+`roster_session.email_sent_at` so it can't double-send. Only covers that
+session's own tasks (date + part). A task carried over from an earlier
+day isn't repeated in the email, it already shows as carried-over in the
+app itself.
 
 **Recipient addresses are deliberately never written into this repo**, it's
-public. They belong in `org_settings.staff_shift_email_recipients` (data in
+public. They live in `org_settings.staff_shift_email_recipients` (data in
 Supabase, set from a settings screen), the same pattern as the existing
-`org_settings.alert_recipients`. Actual sending is on hold per Julie
-(12 Sep). Build the data model now, wire up Resend later.
+`org_settings.alert_recipients`.
 
 ## Two icons, one tablet
 
@@ -96,16 +106,32 @@ A second `manifest.json` for the staff routes, so "CAPS Staff" installs to
 the tablet's home screen as its own icon, next to the existing "CAPS App"
 icon for the dog side. Same login underneath either way.
 
+## Roster
+
+Read-only for now (`/shift/roster`): a month grid (initials per session)
+and a day-detail card. Assigning people to sessions still happens on the
+old dog-app Staff tab, which still works today, until that's rebuilt here
+too. A real functional gap once that old tab is retired, flagged as a
+known follow-up, not forgotten.
+
 ## Explicitly not doing
 
 - Not touching, editing, or removing anything in the existing dog-enrichment
   app, including the current `/staff` tab. Out of scope, being handled
   separately.
-- Not sending real emails yet (see above).
 - Not blocking on Renee/Shayna's real addresses or the three real caretaker
-  logins to start building, both wire in as settings/data once they exist.
+  logins to build against, both wire in as settings/data once they exist.
+- No scheduled job behind auto-close: it runs opportunistically whenever
+  someone opens `/shift` or `/shift/roster`, so a shift left open with
+  nobody opening the app again stays open until someone does. Fine for a
+  small team that opens the app daily; a real cron job is a possible
+  follow-up if that ever matters.
+- Roster editing (see above).
 
 ## Status
 
-12 Sep 2026. Schema drafted (migrations 22-24), not yet applied to the
-live Supabase project. Screens not started.
+13 Sep 2026. Schema (migrations 22-25) and all four screens built:
+sign-in, checklist (categories, claiming, extras), handover log,
+read-only roster, and the end-of-shift email. Not yet tested against
+real caretaker accounts or a real shelter address (`shelter_lat`/`lng`
+still null).

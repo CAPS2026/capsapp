@@ -62,6 +62,9 @@ export function ShiftHome({
 
       <nav className="flex gap-4 border-b border-line pb-2 text-sm font-bold">
         <span className="text-brand-ink">Checklist</span>
+        <Link href="/shift/roster" className="text-ink-muted">
+          Roster
+        </Link>
         <Link href="/shift/handover" className="text-ink-muted">
           Handover log
         </Link>

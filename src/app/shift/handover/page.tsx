@@ -12,13 +12,18 @@ export default async function HandoverPage() {
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-lg flex-col gap-4 p-4 pb-10">
-      <header className="flex items-center gap-3">
-        <Link href="/shift" className="text-sm font-semibold text-brand-ink">
-          ← Today
+      <header className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Link href="/shift" className="text-sm font-semibold text-brand-ink">
+            ← Today
+          </Link>
+          <h1 className="text-xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
+            Handover log
+          </h1>
+        </div>
+        <Link href="/shift/roster" className="text-sm font-semibold text-ink-muted">
+          Roster
         </Link>
-        <h1 className="text-xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
-          Handover log
-        </h1>
       </header>
 
       <HandoverLog notes={notes} />

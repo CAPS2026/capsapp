@@ -1,10 +1,13 @@
 import { getActiveShiftPerson } from "@/lib/shift-identity";
 import { getOpenShift, getShiftChecklist, getTodayShiftPeople } from "@/lib/shift-data";
+import { checkAutoCloseAndSendEmails } from "@/lib/shift-email";
 import { shelterToday } from "@/lib/shift";
 import { PersonPicker } from "@/components/shift/person-picker";
 import { ShiftHome } from "@/components/shift/shift-home";
 
 export default async function ShiftPage() {
+  await checkAutoCloseAndSendEmails();
+
   const date = shelterToday();
   const active = await getActiveShiftPerson();
   const openShift = active ? await getOpenShift(active.id) : null;

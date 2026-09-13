@@ -8,8 +8,15 @@ import {
   setActiveShiftPerson,
   clearActiveShiftPerson,
 } from "@/lib/shift-identity";
-import { getOpenShift, getShiftSettings, lateMinutesFor, resolvePart } from "@/lib/shift-data";
-import { distanceMetres, shelterToday, type Part } from "@/lib/shift";
+import {
+  ensureRosterSession,
+  getOpenShift,
+  getShiftSettings,
+  resolvePart,
+  touchShiftActivity,
+} from "@/lib/shift-data";
+import { maybeSendShiftEmail } from "@/lib/shift-email";
+import { distanceMetres, minutesLate, shelterToday, type Part } from "@/lib/shift";
 
 type Result = { error: string } | { error?: undefined };
 
@@ -25,10 +32,14 @@ async function requireDeviceStaff() {
 
 /** The person currently "picked" on the who's-on screen, the id every
  *  action below attributes to. Never trust a personId passed in from the
- *  client for this; it always comes from the server-read cookie. */
+ *  client for this; it always comes from the server-read cookie. Every
+ *  call also counts as activity on their open shift, so a genuinely busy
+ *  shift never looks abandoned to the auto-close check. */
 async function requireActingPerson() {
   if (!(await requireDeviceStaff())) return null;
-  return getActiveShiftPerson();
+  const me = await getActiveShiftPerson();
+  if (me) await touchShiftActivity(me.id);
+  return me;
 }
 
 function bust() {
@@ -67,26 +78,18 @@ export async function pickPerson(
   const part = resolvePart(rosteredPart);
   const now = new Date();
 
-  const [lateMinutes, settings] = await Promise.all([
-    lateMinutesFor(date, part, now),
-    getShiftSettings(),
-  ]);
+  const [session, settings] = await Promise.all([ensureRosterSession(date, part), getShiftSettings()]);
+  const late = minutesLate(now, session.starts);
+  const lateMinutes = late > 0 ? late : null;
 
   let distanceM: number | null = null;
   if (lat != null && lng != null && settings.shelterLat != null && settings.shelterLng != null) {
     distanceM = Math.round(distanceMetres(lat, lng, settings.shelterLat, settings.shelterLng));
   }
 
-  const { data: session } = await supabase
-    .from("roster_session")
-    .select("id")
-    .eq("date", date)
-    .eq("part", part)
-    .maybeSingle();
-
   const { error } = await supabase.from("shift_log").insert({
     person_id: personId,
-    roster_session_id: session?.id ?? null,
+    roster_session_id: session.id,
     date,
     part,
     signed_in_at: now.toISOString(),
@@ -139,6 +142,10 @@ export async function endShift(): Promise<Result> {
     .eq("id", open.id);
   if (error) return { error: error.message };
   await clearActiveShiftPerson();
+  // No-op unless this was the last open shift on the session, see
+  // maybeSendShiftEmail. Best-effort: a failed send here shouldn't stop
+  // someone from actually ending their shift.
+  await maybeSendShiftEmail(open.date, open.part).catch((e) => console.error("endShift: email failed", e));
   bust();
   return {};
 }
