@@ -102,8 +102,8 @@ export type RosterSessionRow = {
 };
 
 const DEFAULT_TIMES: Record<Part, { starts: string; ends: string }> = {
-  morning: { starts: "06:00", ends: "09:00" },
-  afternoon: { starts: "16:00", ends: "19:00" },
+  morning: { starts: "06:30", ends: "09:30" },
+  afternoon: { starts: "15:30", ends: "17:30" },
 };
 
 /** The roster session for (date, part), creating it from the org's
