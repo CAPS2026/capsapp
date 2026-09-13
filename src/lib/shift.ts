@@ -76,6 +76,7 @@ export type ShiftTaskRow = {
 export type OpenShift = {
   id: string;
   personId: string;
+  date: string;
   part: Part;
   startedAt: string;
   lateMinutes: number | null;
