@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   CATEGORY_LABEL,
@@ -18,12 +18,16 @@ import { Checklist } from "@/components/shift/checklist";
 export function ShiftHome({
   person,
   shift,
+  sessionEnds,
+  autocloseGraceMinutes,
   byCategory,
   carriedOver,
   extras,
 }: {
   person: { id: string; name: string };
   shift: OpenShift;
+  sessionEnds: string;
+  autocloseGraceMinutes: number;
   byCategory: Record<TaskCategory, ShiftTaskRow[]>;
   carriedOver: ShiftTaskRow[];
   extras: ShiftTaskRow[];
@@ -72,7 +76,14 @@ export function ShiftHome({
 
       {error && <p className="text-sm text-danger">{error}</p>}
 
-      <ShiftStatusCard person={person} shift={shift} busy={isPending} run={run} />
+      <ShiftStatusCard
+        person={person}
+        shift={shift}
+        sessionEnds={sessionEnds}
+        autocloseGraceMinutes={autocloseGraceMinutes}
+        busy={isPending}
+        run={run}
+      />
 
       {carriedOver.length > 0 && (
         <div className="flex flex-col gap-1 rounded-[var(--radius)] border border-warm/40 bg-warm-tint p-2">
@@ -106,19 +117,50 @@ export function ShiftHome({
   );
 }
 
+/** "Xh Ym" (or just "Ym" under an hour). */
+function formatDuration(totalMinutes: number): string {
+  const m = Math.max(0, Math.round(totalMinutes));
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  return h > 0 ? `${h}h ${rem}m` : `${rem}m`;
+}
+
+/** The shift's rostered end, as a real instant. Brisbane has no daylight
+ *  saving, so "+10:00" is always correct, no timezone library needed. */
+function sessionEndInstant(date: string, sessionEnds: string): Date {
+  return new Date(`${date}T${sessionEnds}:00+10:00`);
+}
+
 function ShiftStatusCard({
   person,
   shift,
+  sessionEnds,
+  autocloseGraceMinutes,
   busy,
   run,
 }: {
   person: { id: string; name: string };
   shift: OpenShift;
+  sessionEnds: string;
+  autocloseGraceMinutes: number;
   busy: boolean;
   run: (fn: () => Promise<{ error?: string }>) => void;
 }) {
   const [reason, setReason] = useState(shift.lateReason ?? "");
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
   const startedAt = new Date(shift.startedAt);
+  const endInstant = sessionEndInstant(shift.date, sessionEnds);
+  const minutesToEnd = (endInstant.getTime() - now.getTime()) / 60000;
+  const isOver = minutesToEnd <= 0;
+  // Amber once over time, red once deep enough into overrun that
+  // auto-close would apply to a genuinely quiet shift, so the colour
+  // means something rather than just escalating for its own sake.
+  const overColor = -minutesToEnd >= autocloseGraceMinutes ? "text-danger" : "text-warm-ink";
 
   return (
     <div className="flex flex-col gap-2 rounded-[var(--radius)] border border-line-cool bg-brand-tint p-3.5">
@@ -126,6 +168,12 @@ function ShiftStatusCard({
         <div>
           <p className="font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
             {person.name} &middot; {PART_LABEL[shift.part]} shift
+          </p>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">
+            {isOver ? "Over by" : "Time left"}
+          </p>
+          <p className={`font-mono text-2xl font-extrabold tabular-nums ${isOver ? overColor : "text-brand-ink"}`}>
+            {formatDuration(Math.abs(minutesToEnd))}
           </p>
           <p className="text-xs text-ink-muted">
             Signed in {startedAt.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}

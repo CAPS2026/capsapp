@@ -1,5 +1,11 @@
 import { getActiveShiftPerson } from "@/lib/shift-identity";
-import { getOpenShift, getShiftChecklist, getTodayShiftPeople } from "@/lib/shift-data";
+import {
+  ensureRosterSession,
+  getOpenShift,
+  getShiftChecklist,
+  getShiftSettings,
+  getTodayShiftPeople,
+} from "@/lib/shift-data";
 import { checkAutoCloseAndSendEmails } from "@/lib/shift-email";
 import { shelterToday } from "@/lib/shift";
 import { PersonPicker } from "@/components/shift/person-picker";
@@ -20,12 +26,18 @@ export default async function ShiftPage() {
     return <PersonPicker people={people} />;
   }
 
-  const checklist = await getShiftChecklist();
+  const [checklist, session, settings] = await Promise.all([
+    getShiftChecklist(),
+    ensureRosterSession(openShift.date, openShift.part),
+    getShiftSettings(),
+  ]);
 
   return (
     <ShiftHome
       person={active}
       shift={openShift}
+      sessionEnds={session.ends}
+      autocloseGraceMinutes={settings.autocloseGraceMinutes}
       byCategory={checklist.byCategory}
       carriedOver={checklist.carriedOver}
       extras={checklist.extras}
