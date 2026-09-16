@@ -243,6 +243,102 @@ export async function setVolunteerPlus(personId: string, on: boolean): Promise<R
 }
 
 /**
+ * Add a staff member directly (admin only) — the counterpart to public
+ * self-registration, for people who need Staff-area access without going
+ * through the volunteer application form. Grants roles immediately (no
+ * pending/approve step, unlike jailbreak_carer/foster_carer which need a
+ * home/yard check first — those still go through the normal apply flow,
+ * never through here). "Volunteer" can be granted alongside so the same
+ * person shows up as a walker on the dog-activity side, since that picker
+ * (`listActiveVolunteers`) only looks at the volunteer role, not staff.
+ */
+export async function createStaffMember(input: {
+  firstName: string;
+  surname: string;
+  email: string;
+  phone: string;
+  dateOfBirth: string;
+  address: string;
+  ecName: string;
+  ecPhone: string;
+  ecRelationship: string;
+  ecEmail: string;
+  medicalIssues: string;
+  roles: { admin: boolean; staff: boolean; volunteer: boolean };
+}): Promise<Result> {
+  const me = await requireAdmin();
+  if (!me) return { error: "Admin only." };
+
+  const firstName = input.firstName.trim();
+  const surname = input.surname.trim();
+  if (!firstName || !surname) return { error: "First name and surname are required." };
+
+  const email = input.email.trim().toLowerCase();
+  if (!email) return { error: "Email is required — it's how they'll sign in." };
+  if (!EMAIL_RE.test(email)) return { error: "That email address doesn't look right." };
+
+  const phone = input.phone.trim();
+  const phoneDigits = phone.replace(/\D/g, "");
+  if (phone && (phoneDigits.length < 8 || phoneDigits.length > 15))
+    return { error: "That phone number doesn't look right." };
+  const ecEmail = input.ecEmail.trim().toLowerCase();
+  if (ecEmail && !EMAIL_RE.test(ecEmail)) return { error: "The emergency contact email doesn't look right." };
+
+  if (!input.roles.staff && !input.roles.admin && !input.roles.volunteer)
+    return { error: "Pick at least one role." };
+
+  const supabase = await createClient();
+
+  const { data: person, error: personError } = await supabase
+    .from("people")
+    .insert({
+      first_name: firstName,
+      surname,
+      email,
+      phone: phone || null,
+      date_of_birth: input.dateOfBirth || null,
+      address: input.address.trim() || null,
+      ec_name: input.ecName.trim() || null,
+      ec_phone: input.ecPhone.trim() || null,
+      ec_relationship: input.ecRelationship.trim() || null,
+      ec_email: ecEmail || null,
+    })
+    .select("id")
+    .single();
+
+  if (personError) {
+    if (personError.code === "23505") return { error: "Someone already has that email address." };
+    return { error: personError.message };
+  }
+
+  const roles: Array<"admin" | "staff" | "volunteer"> = [];
+  if (input.roles.admin) roles.push("admin");
+  if (input.roles.staff) roles.push("staff");
+  if (input.roles.volunteer) roles.push("volunteer");
+
+  const { error: rolesError } = await supabase.from("person_roles").insert(
+    roles.map((role) => ({
+      person_id: person.id,
+      role,
+      status: "active" as const,
+      approved_by: me.id,
+      granted_on: today(),
+    })),
+  );
+  if (rolesError) return { error: rolesError.message };
+
+  if (input.medicalIssues.trim()) {
+    const { error: vpError } = await supabase
+      .from("volunteer_profile")
+      .upsert({ person_id: person.id, medical_issues: input.medicalIssues.trim() });
+    if (vpError) return { error: vpError.message };
+  }
+
+  revalidatePath("/people");
+  return {};
+}
+
+/**
  * Fold a duplicate person record into another (dedupe part c). Everything
  * the removed record owns moves to the kept one, blanks on the kept record
  * are filled in from the removed one, then the removed record is deleted —
