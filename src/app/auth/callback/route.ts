@@ -47,22 +47,28 @@ export async function GET(request: Request) {
 async function linkPersonToAuthUser(authUserId: string, email: string): Promise<boolean> {
   const admin = createAdminClient();
 
-  const { data: alreadyLinked } = await admin
+  const { data: alreadyLinked, error: lookupError } = await admin
     .from("people")
     .select("id")
     .eq("auth_user_id", authUserId)
     .maybeSingle();
+  if (lookupError) {
+    console.error("auth/callback: already-linked lookup failed", lookupError);
+  }
   if (alreadyLinked) return true;
 
   // Link by email, but only an unlinked record — never steal an existing
   // link from a different auth user.
-  const { data: linked } = await admin
+  const { data: linked, error: linkError } = await admin
     .from("people")
     .update({ auth_user_id: authUserId })
     .eq("email", email)
     .is("auth_user_id", null)
     .select("id")
     .maybeSingle();
+  if (linkError) {
+    console.error("auth/callback: link update failed", linkError);
+  }
 
   return !!linked;
 }
