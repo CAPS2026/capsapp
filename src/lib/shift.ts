@@ -65,6 +65,7 @@ export type ShiftTaskRow = {
   status: TaskStatus;
   note: string | null;
   isExtra: boolean;
+  skippable: boolean;
   claimedById: string | null;
   claimedByName: string | null;
   actionedByName: string | null;

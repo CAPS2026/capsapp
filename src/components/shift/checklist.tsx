@@ -128,7 +128,7 @@ function TaskRow({
             Unclaim
           </button>
         )}
-        {!done && !notReq && (
+        {!done && !notReq && task.skippable && (
           <button
             type="button"
             disabled={busy}

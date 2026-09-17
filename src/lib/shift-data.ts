@@ -278,6 +278,7 @@ type TemplateForGen = {
   weekdays: number[] | null;
   day_of_month: number | null;
   sort_order: number;
+  skippable: boolean;
 };
 
 function templateMatchesDate(t: TemplateForGen, date: Date): boolean {
@@ -302,13 +303,14 @@ type InstanceRow = {
   status: TaskStatus;
   note: string | null;
   is_extra: boolean;
+  skippable: boolean;
   actioned_at: string | null;
   actioned_by: { first_name: string; surname: string } | null;
   claimed_by: { id: string; first_name: string; surname: string } | null;
 };
 
 const INSTANCE_SELECT =
-  "id, template_id, date, part, category, title, status, note, is_extra, actioned_at, " +
+  "id, template_id, date, part, category, title, status, note, is_extra, skippable, actioned_at, " +
   "actioned_by:people!task_instance_actioned_by_fkey(first_name, surname), " +
   "claimed_by:people!task_instance_claimed_by_fkey(id, first_name, surname)";
 
@@ -323,6 +325,7 @@ function toRow(r: InstanceRow, carriedOver: boolean): ShiftTaskRow {
     status: r.status,
     note: r.note,
     isExtra: r.is_extra,
+    skippable: r.skippable,
     claimedById: r.claimed_by?.id ?? null,
     claimedByName: r.claimed_by ? `${r.claimed_by.first_name} ${r.claimed_by.surname}`.trim() : null,
     actionedByName: r.actioned_by ? `${r.actioned_by.first_name} ${r.actioned_by.surname}`.trim() : null,
@@ -347,7 +350,7 @@ export async function getShiftChecklist(): Promise<{
 
   const { data: templatesRaw } = await supabase
     .from("task_template")
-    .select("id, title, part, category, repeat, weekdays, day_of_month, sort_order")
+    .select("id, title, part, category, repeat, weekdays, day_of_month, sort_order, skippable")
     .eq("active", true);
   const dueTemplates = ((templatesRaw ?? []) as TemplateForGen[]).filter((t) =>
     templateMatchesDate(t, target),
@@ -370,6 +373,7 @@ export async function getShiftChecklist(): Promise<{
           category: t.category,
           title: t.title,
           sort_order: t.sort_order,
+          skippable: t.skippable,
         })),
       );
       if (insErr && insErr.code !== "23505") console.error("shift checklist materialise failed", insErr);
