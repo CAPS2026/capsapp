@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { linkPersonToAuthUser } from "@/lib/link-person";
 
 /**
  * Handles the redirect from a magic-link email or an OAuth provider.
@@ -10,6 +10,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * attaches their login to it. Someone signing in with no matching `people`
  * row hasn't registered — sent to /login with an explanatory message rather
  * than silently given a roleless account.
+ *
+ * Not used by the type-in-code path (src/lib/actions/auth.ts) — that
+ * establishes the session client-side via verifyOtp and never redirects
+ * through here, which is the whole point (no link, no PKCE code-verifier
+ * cookie to lose across a different browser/device/in-app webview).
  */
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -41,34 +46,4 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.redirect(`${origin}/login?error=auth`);
-}
-
-/** Returns true once this auth user is linked to a registered `people` row. */
-async function linkPersonToAuthUser(authUserId: string, email: string): Promise<boolean> {
-  const admin = createAdminClient();
-
-  const { data: alreadyLinked, error: lookupError } = await admin
-    .from("people")
-    .select("id")
-    .eq("auth_user_id", authUserId)
-    .maybeSingle();
-  if (lookupError) {
-    console.error("auth/callback: already-linked lookup failed", lookupError);
-  }
-  if (alreadyLinked) return true;
-
-  // Link by email, but only an unlinked record — never steal an existing
-  // link from a different auth user.
-  const { data: linked, error: linkError } = await admin
-    .from("people")
-    .update({ auth_user_id: authUserId })
-    .eq("email", email)
-    .is("auth_user_id", null)
-    .select("id")
-    .maybeSingle();
-  if (linkError) {
-    console.error("auth/callback: link update failed", linkError);
-  }
-
-  return !!linked;
 }
