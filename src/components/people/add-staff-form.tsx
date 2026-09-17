@@ -45,7 +45,7 @@ export function AddStaffForm() {
     startTransition(async () => {
       const r = await createStaffMember({ ...form, roles });
       if (r.error) setError(r.error);
-      else router.push("/people");
+      else router.push("/shift/roster");
     });
   }
 
@@ -159,7 +159,7 @@ export function AddStaffForm() {
         </button>
         <button
           type="button"
-          onClick={() => router.push("/people")}
+          onClick={() => router.push("/shift/roster")}
           className="h-12 px-5 rounded-[var(--radius)] border border-line-cool font-semibold"
         >
           Cancel

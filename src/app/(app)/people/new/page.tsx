@@ -9,8 +9,8 @@ export default async function AddStaffPage() {
 
   return (
     <div className="flex flex-col gap-4 p-4 pb-8">
-      <Link href="/people" className="text-sm font-semibold text-brand-ink">
-        ← People
+      <Link href="/shift/roster" className="text-sm font-semibold text-brand-ink">
+        ← Roster
       </Link>
       <h1 className="text-xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
         Add staff member
