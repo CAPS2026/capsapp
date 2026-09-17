@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getMonthRoster, getRosterDayDetail } from "@/lib/shift-data";
 import { checkAutoCloseAndSendEmails } from "@/lib/shift-email";
 import { PART_LABEL, parseYmd, shelterToday, shiftDay } from "@/lib/shift";
+import { getCurrentPerson } from "@/lib/auth";
 
 const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MONTH_NAMES = [
@@ -35,6 +36,7 @@ export default async function RosterPage({
 }) {
   await checkAutoCloseAndSendEmails();
 
+  const person = await getCurrentPerson();
   const sp = await searchParams;
   const today = shelterToday();
   const [todayYear, todayMonth] = today.split("-").map(Number);
@@ -69,6 +71,15 @@ export default async function RosterPage({
         Read-only here for now. Assigning people to sessions still happens on the dog app&rsquo;s existing Staff
         tab until that moves over.
       </p>
+
+      {person?.isAdmin && (
+        <Link
+          href="/people/new"
+          className="self-start rounded-[var(--radius)] bg-brand px-3 py-2 text-sm font-bold text-white"
+        >
+          + Add staff member
+        </Link>
+      )}
 
       <div className="flex items-center justify-between">
         <Link href={`/shift/roster?y=${prevMonth.y}&m=${prevMonth.m}`} className="px-2 text-xl font-extrabold text-brand-ink">

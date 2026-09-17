@@ -100,7 +100,7 @@ function LoginForm() {
         {status === "sent" ? (
           <div className="flex flex-col gap-3">
             <p className="text-center text-sm text-ink-muted">
-              Check <strong>{email}</strong> for a 6-digit code and type it in below.
+              Check <strong>{email}</strong> for a sign-in code and type it in below.
             </p>
             <form onSubmit={verifyCode} className="flex flex-col gap-3">
               <label className="flex flex-col gap-1 text-sm">
@@ -112,7 +112,7 @@ function LoginForm() {
                   required
                   value={code}
                   onChange={(e) => setCode(e.target.value.trim())}
-                  placeholder="123456"
+                  placeholder="Sign-in code"
                   className="h-11 px-3 rounded-[var(--radius)] border border-line-cool bg-white text-base text-center tracking-widest"
                 />
               </label>

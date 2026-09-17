@@ -53,5 +53,9 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Lets server components below (app layouts) redirect to /login?next=...
+  // for their own "signed in but not staff/not linked yet" cases, without
+  // each one having to re-derive the current path some other way.
+  supabaseResponse.headers.set("x-pathname", request.nextUrl.pathname);
   return supabaseResponse;
 }

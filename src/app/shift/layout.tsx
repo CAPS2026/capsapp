@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCurrentPerson } from "@/lib/auth";
 
@@ -15,7 +16,10 @@ export const metadata: Metadata = {
 
 export default async function ShiftLayout({ children }: { children: React.ReactNode }) {
   const person = await getCurrentPerson();
-  if (!person?.isStaff) redirect("/login");
+  if (!person?.isStaff) {
+    const pathname = (await headers()).get("x-pathname") ?? "/shift";
+    redirect(`/login?next=${encodeURIComponent(pathname)}`);
+  }
 
   return <div className="min-h-screen bg-background">{children}</div>;
 }
