@@ -67,10 +67,6 @@ export default async function RosterPage({
         </Link>
       </header>
 
-      <p className="text-xs leading-relaxed text-ink-muted">
-        Read-only for everyone except admins, who can use Edit roster below to assign people to sessions.
-      </p>
-
       {person?.isAdmin && (
         <div className="flex flex-wrap gap-2">
           <Link
