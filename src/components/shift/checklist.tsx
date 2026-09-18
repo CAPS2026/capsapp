@@ -65,22 +65,24 @@ function TaskRow({
     });
   }
 
+  const [noteOpen, setNoteOpen] = useState(false);
+
   return (
-    <div className={`flex flex-col gap-1.5 p-3 text-sm ${task.carriedOver ? "bg-warm-tint" : ""}`}>
-      <div className="flex flex-wrap items-start gap-2">
+    <div className={`flex flex-col gap-1 p-3 text-sm ${task.carriedOver ? "bg-warm-tint" : ""}`}>
+      <div className="flex items-start gap-2">
         <button
           type="button"
           disabled={busy}
           onClick={() => run(done || notReq ? () => reopenTask(task.id) : () => signOffTask(task.id, note))}
           aria-label={done || notReq ? "Reopen" : "Mark done"}
-          className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 font-bold disabled:opacity-50 ${
+          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 font-bold disabled:opacity-50 ${
             done ? "border-ok bg-ok text-white" : notReq ? "border-line bg-gray-tint text-ink-muted" : "border-line-cool"
           }`}
         >
           {done ? "✓" : notReq ? "–" : ""}
         </button>
 
-        <span className={`min-w-[8rem] flex-1 ${done || notReq ? "text-ink-muted line-through" : "font-medium"}`}>
+        <span className={`min-w-0 flex-1 ${done || notReq ? "text-ink-muted line-through" : "font-medium"}`}>
           {task.title}
           {task.isExtra && <span className="ml-1.5 rounded bg-brand-tint px-1.5 py-0.5 text-[10px] font-extrabold text-brand-ink no-underline">EXTRA</span>}
           {task.claimedByName && !done && !notReq && (
@@ -100,24 +102,25 @@ function TaskRow({
             <span className="ml-1.5 text-xs text-ink-muted no-underline">not needed{task.note ? `: ${task.note}` : ""}</span>
           )}
         </span>
-
-        {!done && !notReq && (
-          <input
-            ref={noteRef}
-            value={note}
-            disabled={busy}
-            onChange={(e) => {
-              setNote(e.target.value);
-              setHint(null);
-            }}
-            onBlur={saveNote}
-            placeholder="Note"
-            className="h-8 min-w-0 flex-1 basis-40 rounded-[var(--radius)] border border-line-cool bg-white px-2 text-sm"
-          />
-        )}
       </div>
 
-      <div className="flex flex-wrap gap-3 pl-8 text-xs font-semibold">
+      {!done && !notReq && (noteOpen || task.note) && (
+        <input
+          ref={noteRef}
+          value={note}
+          disabled={busy}
+          autoFocus={noteOpen}
+          onChange={(e) => {
+            setNote(e.target.value);
+            setHint(null);
+          }}
+          onBlur={saveNote}
+          placeholder="Note"
+          className="ml-7 h-8 w-48 rounded-[var(--radius)] border border-line-cool bg-white px-2 text-sm"
+        />
+      )}
+
+      <div className="flex flex-wrap items-center gap-3 pl-7 text-xs font-semibold">
         {!done && !notReq && !task.claimedByName && (
           <button type="button" disabled={busy} onClick={() => run(() => claimTask(task.id))} className="text-brand-ink disabled:opacity-50">
             Claim
@@ -128,12 +131,18 @@ function TaskRow({
             Unclaim
           </button>
         )}
+        {!done && !notReq && !noteOpen && !task.note && (
+          <button type="button" disabled={busy} onClick={() => setNoteOpen(true)} className="text-ink-muted disabled:opacity-50">
+            + Note
+          </button>
+        )}
         {!done && !notReq && task.skippable && (
           <button
             type="button"
             disabled={busy}
             onClick={() => {
               if (!note.trim()) {
+                setNoteOpen(true);
                 setHint("Add a reason in the note box first");
                 noteRef.current?.focus();
                 return;
