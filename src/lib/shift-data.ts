@@ -5,6 +5,7 @@ import {
   minutesLate,
   partForTime,
   shelterToday,
+  shiftDay,
   CATEGORY_ORDER,
   type OpenShift,
   type Part,
@@ -533,6 +534,46 @@ export async function getRosterDayDetail(date: string): Promise<RosterDaySession
   return (["morning", "afternoon"] as Part[]).map(
     (part) => byPart.get(part) ?? { part, starts: DEFAULT_TIMES[part].starts, ends: DEFAULT_TIMES[part].ends, people: [] },
   );
+}
+
+export type RosterEditRow = { date: string; morningPersonId: string | null; afternoonPersonId: string | null };
+
+/** `days` dates starting at `startDate`, each with whoever's currently
+ *  rostered (first assignment only, this editor is one person per
+ *  session, matching how the roster's actually used so far, not the
+ *  data model's own ceiling of more than one). Blank where nobody is. */
+export async function getRosterEditRange(startDate: string, days: number): Promise<RosterEditRow[]> {
+  const supabase = await createClient();
+  const from = startDate;
+  const to = shiftDay(startDate, days - 1);
+
+  const { data, error } = await supabase
+    .from("roster_session")
+    .select("date, part, roster_assignment(person_id)")
+    .gte("date", from)
+    .lte("date", to);
+  if (error) console.error("getRosterEditRange failed", error);
+
+  const byDate = new Map<string, { morningPersonId: string | null; afternoonPersonId: string | null }>();
+  for (const s of (data ?? []) as unknown as Array<{
+    date: string;
+    part: Part;
+    roster_assignment: { person_id: string }[] | null;
+  }>) {
+    const row = byDate.get(s.date) ?? { morningPersonId: null, afternoonPersonId: null };
+    const personId = s.roster_assignment?.[0]?.person_id ?? null;
+    if (s.part === "morning") row.morningPersonId = personId;
+    else row.afternoonPersonId = personId;
+    byDate.set(s.date, row);
+  }
+
+  const out: RosterEditRow[] = [];
+  for (let i = 0; i < days; i++) {
+    const date = shiftDay(startDate, i);
+    const row = byDate.get(date) ?? { morningPersonId: null, afternoonPersonId: null };
+    out.push({ date, ...row });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------

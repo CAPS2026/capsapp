@@ -108,11 +108,17 @@ icon for the dog side. Same login underneath either way.
 
 ## Roster
 
-Read-only for now (`/shift/roster`): a month grid (initials per session)
-and a day-detail card. Assigning people to sessions still happens on the
-old dog-app Staff tab, which still works today, until that's rebuilt here
-too. A real functional gap once that old tab is retired, flagged as a
-known follow-up, not forgotten.
+`/shift/roster`: a month grid (initials per session) and a day-detail
+card, read-only for everyone. Admins additionally get `/shift/roster/edit`,
+a fast one-person-per-session dropdown entry screen (date range in,
+morning/afternoon dropdown per day, save), built 18 Sep 2026 after
+Shayna asked for a way to get her monthly roster into the app. Deliberately
+simple: no file upload, no parsing, her roster document (PDF or PNG so
+far) is a rendered calendar image with no machine-readable structure, so
+automatic reading would need a paid AI-vision step and a review screen
+before trusting it, not worth the ongoing cost against typing it in
+directly. That AI-reading version is a possible follow-up if manual entry
+turns out to be too slow in practice, not built now.
 
 ## Explicitly not doing
 
@@ -126,7 +132,8 @@ known follow-up, not forgotten.
   nobody opening the app again stays open until someone does. Fine for a
   small team that opens the app daily; a real cron job is a possible
   follow-up if that ever matters.
-- Roster editing (see above).
+- Automatic reading of an uploaded roster document (see Roster above);
+  built as manual dropdown entry instead.
 
 ## Status
 

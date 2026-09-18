@@ -68,17 +68,24 @@ export default async function RosterPage({
       </header>
 
       <p className="text-xs leading-relaxed text-ink-muted">
-        Read-only here for now. Assigning people to sessions still happens on the dog app&rsquo;s existing Staff
-        tab until that moves over.
+        Read-only for everyone except admins, who can use Edit roster below to assign people to sessions.
       </p>
 
       {person?.isAdmin && (
-        <Link
-          href="/people/new"
-          className="self-start rounded-[var(--radius)] bg-brand px-3 py-2 text-sm font-bold text-white"
-        >
-          + Add staff member
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/people/new"
+            className="rounded-[var(--radius)] bg-brand px-3 py-2 text-sm font-bold text-white"
+          >
+            + Add staff member
+          </Link>
+          <Link
+            href="/shift/roster/edit"
+            className="rounded-[var(--radius)] border border-line-cool px-3 py-2 text-sm font-bold text-brand-ink"
+          >
+            Edit roster
+          </Link>
+        </div>
       )}
 
       <div className="flex items-center justify-between">
