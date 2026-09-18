@@ -33,7 +33,7 @@ export function ShiftChecklist({
   };
 
   return (
-    <div className="flex max-w-3xl flex-col gap-4">
+    <div className="flex max-w-4xl flex-col gap-4">
       {error && <p className="text-sm text-danger">{error}</p>}
 
       {carriedOver.length > 0 && (
@@ -45,25 +45,33 @@ export function ShiftChecklist({
         </div>
       )}
 
-      {CATEGORY_ORDER.map((cat) => (
-        <details key={cat} className="rounded-[var(--radius)] border border-line bg-card" open>
-          <summary className="flex cursor-pointer list-none items-center justify-between p-3">
-            <span className="font-bold">{CATEGORY_LABEL[cat]}</span>
-            <span className="text-xs font-bold text-ink-muted">
-              {byCategory[cat].filter((t) => t.status !== "open").length}/{byCategory[cat].length}
-            </span>
-          </summary>
-          <div className="border-t border-line">
-            {byCategory[cat].length === 0 ? (
-              <p className="p-3 text-sm text-ink-muted">Nothing in this section.</p>
-            ) : (
-              <Checklist tasks={byCategory[cat]} busy={isPending} run={run} />
-            )}
-          </div>
-        </details>
-      ))}
+      <div className="columns-1 gap-4 lg:columns-2">
+        {CATEGORY_ORDER.map((cat) => (
+          <details
+            key={cat}
+            className="mb-4 inline-block w-full break-inside-avoid rounded-[var(--radius)] border border-line bg-card align-top"
+            open
+          >
+            <summary className="flex cursor-pointer list-none items-center justify-between p-3">
+              <span className="font-bold">{CATEGORY_LABEL[cat]}</span>
+              <span className="text-xs font-bold text-ink-muted">
+                {byCategory[cat].filter((t) => t.status !== "open").length}/{byCategory[cat].length}
+              </span>
+            </summary>
+            <div className="border-t border-line">
+              {byCategory[cat].length === 0 ? (
+                <p className="p-3 text-sm text-ink-muted">Nothing in this section.</p>
+              ) : (
+                <Checklist tasks={byCategory[cat]} busy={isPending} run={run} />
+              )}
+            </div>
+          </details>
+        ))}
 
-      <ExtrasSection extras={extras} busy={isPending} run={run} />
+        <div className="mb-4 inline-block w-full break-inside-avoid align-top">
+          <ExtrasSection extras={extras} busy={isPending} run={run} />
+        </div>
+      </div>
     </div>
   );
 }

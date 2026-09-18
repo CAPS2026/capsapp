@@ -3,8 +3,9 @@
 import Image from "next/image";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { PART_LABEL, type OpenShift } from "@/lib/shift";
+import { PART_LABEL, type OpenShift, type Part } from "@/lib/shift";
 import { endShift, setLateReason, switchPerson } from "@/lib/actions/shift";
+import type { RosterDaySession } from "@/lib/shift-data";
 
 /** "Xh Ym" (or just "Ym" under an hour). */
 function formatDuration(totalMinutes: number): string {
@@ -30,12 +31,14 @@ export function ShiftSidebar({
   sessionEnds,
   autocloseGraceMinutes,
   latestHandover,
+  todayRoster,
 }: {
   person: { id: string; name: string };
   shift: OpenShift;
   sessionEnds: string;
   autocloseGraceMinutes: number;
   latestHandover: { personName: string; body: string } | null;
+  todayRoster: RosterDaySession[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -77,6 +80,8 @@ export function ShiftSidebar({
           <p className="text-[10.5px] font-semibold text-ink-muted">{latestHandover.personName}</p>
         </div>
       )}
+
+      <TodayRoster sessions={todayRoster} />
 
       <button
         type="button"
@@ -163,6 +168,35 @@ function ShiftStatus({
       >
         End shift
       </button>
+    </div>
+  );
+}
+
+const PART_ORDER: Part[] = ["morning", "afternoon"];
+
+function TodayRoster({ sessions }: { sessions: RosterDaySession[] }) {
+  const byPart = new Map(sessions.map((s) => [s.part, s]));
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="px-1 text-[10.5px] font-extrabold uppercase tracking-wide text-ink-muted">Today&rsquo;s roster</p>
+      {PART_ORDER.map((part) => {
+        const s = byPart.get(part);
+        if (!s || s.people.length === 0) {
+          return (
+            <p key={part} className="border-t border-line px-1 py-1 text-xs font-semibold text-ink-muted first:border-0">
+              {PART_LABEL[part]}: unstaffed
+            </p>
+          );
+        }
+        return (
+          <div key={part} className="flex items-center justify-between border-t border-line px-1 py-1 text-xs first:border-0">
+            <span className="font-bold text-ink">{s.people.join(", ")}</span>
+            <span className="text-ink-muted">
+              {s.starts}&ndash;{s.ends}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
