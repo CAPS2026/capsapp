@@ -302,32 +302,31 @@ async function requireAdmin() {
   return me?.isAdmin ? me : null;
 }
 
-/** Replaces the roster for a run of dates, one person per session (this
- *  editor's whole point is fast entry from a document that's never shown
- *  more than one person per session; the data model can still hold more,
- *  just not from here). Each date/part gets its own roster_session
- *  (created via ensureRosterSession if it doesn't exist yet) and its
- *  existing assignment, if any, is replaced outright rather than merged,
- *  so re-saving a row you've corrected doesn't leave the old name
- *  sitting alongside the new one. */
+/** Replaces the roster for a run of dates. Up to two people per session,
+ *  covers the common case (one caretaker) and the frequent one (two on
+ *  at once when all three are around and nobody's on leave). Each
+ *  date/part gets its own roster_session (created via ensureRosterSession
+ *  if it doesn't exist yet) and its existing assignments are replaced
+ *  outright rather than merged, so re-saving a corrected row doesn't
+ *  leave a stale name sitting alongside the new ones. */
 export async function saveRosterEntries(
-  entries: { date: string; morningPersonId: string | null; afternoonPersonId: string | null }[],
+  entries: { date: string; morningPersonIds: string[]; afternoonPersonIds: string[] }[],
 ): Promise<Result> {
   if (!(await requireAdmin())) return { error: "Admin only." };
   const supabase = await createClient();
 
   for (const row of entries) {
     for (const part of ["morning", "afternoon"] as Part[]) {
-      const personId = part === "morning" ? row.morningPersonId : row.afternoonPersonId;
+      const personIds = (part === "morning" ? row.morningPersonIds : row.afternoonPersonIds).filter(Boolean);
       const session = await ensureRosterSession(row.date, part);
 
       const { error: delErr } = await supabase.from("roster_assignment").delete().eq("session_id", session.id);
       if (delErr) return { error: delErr.message };
 
-      if (personId) {
+      if (personIds.length) {
         const { error: insErr } = await supabase
           .from("roster_assignment")
-          .insert({ session_id: session.id, person_id: personId });
+          .insert(personIds.map((personId) => ({ session_id: session.id, person_id: personId })));
         if (insErr) return { error: insErr.message };
       }
     }

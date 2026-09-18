@@ -8,6 +8,20 @@ import type { RosterEditRow } from "@/lib/shift-data";
 
 const selectClass = "h-10 w-full rounded-[var(--radius)] border border-line-cool bg-white px-2 text-sm";
 
+/** UI-only shape: each part always shows 1 or 2 dropdown slots. A slot
+ *  can be "" (nothing picked yet), filtered out before saving. Separate
+ *  from RosterEditRow so an empty second slot never gets sent to the
+ *  server as if it meant something. */
+type EditRow = { date: string; morning: string[]; afternoon: string[] };
+
+function toEditRow(r: RosterEditRow): EditRow {
+  return {
+    date: r.date,
+    morning: r.morningPersonIds.length ? r.morningPersonIds : [""],
+    afternoon: r.afternoonPersonIds.length ? r.afternoonPersonIds : [""],
+  };
+}
+
 export function RosterEditForm({
   start,
   days,
@@ -22,12 +36,28 @@ export function RosterEditForm({
   const router = useRouter();
   const [rangeStart, setRangeStart] = useState(start);
   const [rangeDays, setRangeDays] = useState(days);
-  const [rows, setRows] = useState(initialRows);
+  const [rows, setRows] = useState<EditRow[]>(initialRows.map(toEditRow));
   const [isPending, startTransition] = useTransition();
   const [status, setStatus] = useState<string | null>(null);
 
-  function setPerson(date: string, part: "morningPersonId" | "afternoonPersonId", value: string) {
-    setRows((rs) => rs.map((r) => (r.date === date ? { ...r, [part]: value || null } : r)));
+  function setSlot(date: string, key: "morning" | "afternoon", index: number, value: string) {
+    setRows((rs) =>
+      rs.map((r) => {
+        if (r.date !== date) return r;
+        const next = [...r[key]];
+        next[index] = value;
+        return { ...r, [key]: next };
+      }),
+    );
+    setStatus(null);
+  }
+
+  function addSecond(date: string, key: "morning" | "afternoon") {
+    setRows((rs) => rs.map((r) => (r.date === date ? { ...r, [key]: [...r[key], ""] } : r)));
+  }
+
+  function removeSecond(date: string, key: "morning" | "afternoon") {
+    setRows((rs) => rs.map((r) => (r.date === date ? { ...r, [key]: [r[key][0]] } : r)));
     setStatus(null);
   }
 
@@ -38,7 +68,12 @@ export function RosterEditForm({
   function save() {
     setStatus(null);
     startTransition(async () => {
-      const r = await saveRosterEntries(rows);
+      const entries = rows.map((r) => ({
+        date: r.date,
+        morningPersonIds: r.morning.filter(Boolean),
+        afternoonPersonIds: r.afternoon.filter(Boolean),
+      }));
+      const r = await saveRosterEntries(entries);
       setStatus(r.error ?? "Saved.");
     });
   }
@@ -82,36 +117,45 @@ export function RosterEditForm({
               {parseYmd(row.date).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}
             </p>
             <div className="grid grid-cols-2 gap-2">
-              <label className="flex flex-col gap-1 text-xs font-semibold text-ink-muted">
-                Morning
-                <select
-                  className={selectClass}
-                  value={row.morningPersonId ?? ""}
-                  onChange={(e) => setPerson(row.date, "morningPersonId", e.target.value)}
-                >
-                  <option value="">Nobody rostered</option>
-                  {people.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
+              {(["morning", "afternoon"] as const).map((key) => (
+                <div key={key} className="flex flex-col gap-1">
+                  <span className="text-xs font-semibold text-ink-muted">
+                    {key === "morning" ? "Morning" : "Afternoon"}
+                  </span>
+                  {row[key].map((personId, i) => (
+                    <select
+                      key={i}
+                      className={selectClass}
+                      value={personId}
+                      onChange={(e) => setSlot(row.date, key, i, e.target.value)}
+                    >
+                      <option value="">{i === 0 ? "Nobody rostered" : "Second person"}</option>
+                      {people.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
                   ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-xs font-semibold text-ink-muted">
-                Afternoon
-                <select
-                  className={selectClass}
-                  value={row.afternoonPersonId ?? ""}
-                  onChange={(e) => setPerson(row.date, "afternoonPersonId", e.target.value)}
-                >
-                  <option value="">Nobody rostered</option>
-                  {people.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  {row[key].length < 2 ? (
+                    <button
+                      type="button"
+                      onClick={() => addSecond(row.date, key)}
+                      className="self-start text-xs font-semibold text-brand-ink"
+                    >
+                      + Add second person
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => removeSecond(row.date, key)}
+                      className="self-start text-xs font-semibold text-ink-muted"
+                    >
+                      Remove second person
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         ))}

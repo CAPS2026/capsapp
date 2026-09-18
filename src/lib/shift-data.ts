@@ -536,12 +536,12 @@ export async function getRosterDayDetail(date: string): Promise<RosterDaySession
   );
 }
 
-export type RosterEditRow = { date: string; morningPersonId: string | null; afternoonPersonId: string | null };
+export type RosterEditRow = { date: string; morningPersonIds: string[]; afternoonPersonIds: string[] };
 
 /** `days` dates starting at `startDate`, each with whoever's currently
- *  rostered (first assignment only, this editor is one person per
- *  session, matching how the roster's actually used so far, not the
- *  data model's own ceiling of more than one). Blank where nobody is. */
+ *  rostered, one or two people per session (both caretakers on at once
+ *  happens a lot when all three are around and nobody's on leave).
+ *  Empty array where nobody is. */
 export async function getRosterEditRange(startDate: string, days: number): Promise<RosterEditRow[]> {
   const supabase = await createClient();
   const from = startDate;
@@ -554,23 +554,23 @@ export async function getRosterEditRange(startDate: string, days: number): Promi
     .lte("date", to);
   if (error) console.error("getRosterEditRange failed", error);
 
-  const byDate = new Map<string, { morningPersonId: string | null; afternoonPersonId: string | null }>();
+  const byDate = new Map<string, { morningPersonIds: string[]; afternoonPersonIds: string[] }>();
   for (const s of (data ?? []) as unknown as Array<{
     date: string;
     part: Part;
     roster_assignment: { person_id: string }[] | null;
   }>) {
-    const row = byDate.get(s.date) ?? { morningPersonId: null, afternoonPersonId: null };
-    const personId = s.roster_assignment?.[0]?.person_id ?? null;
-    if (s.part === "morning") row.morningPersonId = personId;
-    else row.afternoonPersonId = personId;
+    const row = byDate.get(s.date) ?? { morningPersonIds: [], afternoonPersonIds: [] };
+    const ids = (s.roster_assignment ?? []).map((a) => a.person_id);
+    if (s.part === "morning") row.morningPersonIds = ids;
+    else row.afternoonPersonIds = ids;
     byDate.set(s.date, row);
   }
 
   const out: RosterEditRow[] = [];
   for (let i = 0; i < days; i++) {
     const date = shiftDay(startDate, i);
-    const row = byDate.get(date) ?? { morningPersonId: null, afternoonPersonId: null };
+    const row = byDate.get(date) ?? { morningPersonIds: [], afternoonPersonIds: [] };
     out.push({ date, ...row });
   }
   return out;
