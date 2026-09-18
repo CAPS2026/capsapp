@@ -3,7 +3,8 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCurrentPerson } from "@/lib/auth";
 import { getActiveShiftPerson } from "@/lib/shift-identity";
-import { ensureRosterSession, getHandoverNotes, getOpenShift, getShiftSettings } from "@/lib/shift-data";
+import { ensureRosterSession, getHandoverNotes, getOpenShift, getRosterDayDetail, getShiftSettings } from "@/lib/shift-data";
+import { shelterToday } from "@/lib/shift";
 import { ShiftSidebar } from "@/components/shift/shift-sidebar";
 import { ShiftTabs } from "@/components/shift/shift-tabs";
 
@@ -33,10 +34,11 @@ export default async function ShiftLayout({ children }: { children: React.ReactN
   }
 
   const active = await getActiveShiftPerson();
-  const [openShift, settings, notes] = await Promise.all([
+  const [openShift, settings, notes, todayRoster] = await Promise.all([
     active ? getOpenShift(active.id) : Promise.resolve(null),
     getShiftSettings(),
     getHandoverNotes(1),
+    getRosterDayDetail(shelterToday()),
   ]);
   const session = openShift ? await ensureRosterSession(openShift.date, openShift.part) : null;
 
@@ -49,6 +51,7 @@ export default async function ShiftLayout({ children }: { children: React.ReactN
           sessionEnds={session.ends}
           autocloseGraceMinutes={settings.autocloseGraceMinutes}
           latestHandover={notes[0] ? { personName: notes[0].personName, body: notes[0].body } : null}
+          todayRoster={todayRoster}
         />
       )}
       <div className="flex min-w-0 flex-1 flex-col">
