@@ -20,6 +20,10 @@ function sessionEndInstant(date: string, sessionEnds: string): Date {
   return new Date(`${date}T${sessionEnds}:00+10:00`);
 }
 
+/** Only ever mounted once someone's actually signed in, see the "active
+ *  && openShift && session" check in layout.tsx. No "nobody signed in"
+ *  fallback state here on purpose, that's what NOT showing this sidebar
+ *  at all is for. */
 export function ShiftSidebar({
   person,
   shift,
@@ -27,9 +31,9 @@ export function ShiftSidebar({
   autocloseGraceMinutes,
   latestHandover,
 }: {
-  person: { id: string; name: string } | null;
-  shift: OpenShift | null;
-  sessionEnds: string | null;
+  person: { id: string; name: string };
+  shift: OpenShift;
+  sessionEnds: string;
   autocloseGraceMinutes: number;
   latestHandover: { personName: string; body: string } | null;
 }) {
@@ -57,21 +61,14 @@ export function ShiftSidebar({
 
       {error && <p className="text-sm text-danger">{error}</p>}
 
-      {person && shift && sessionEnds ? (
-        <ShiftStatus
-          person={person}
-          shift={shift}
-          sessionEnds={sessionEnds}
-          autocloseGraceMinutes={autocloseGraceMinutes}
-          busy={isPending}
-          run={run}
-        />
-      ) : (
-        <div className="flex flex-col gap-2 rounded-[var(--radius)] border border-line-cool bg-brand-tint p-3.5">
-          <p className="text-sm font-bold">Nobody signed in yet</p>
-          <p className="text-xs text-ink-muted">Go to the Checklist tab and tap your name.</p>
-        </div>
-      )}
+      <ShiftStatus
+        person={person}
+        shift={shift}
+        sessionEnds={sessionEnds}
+        autocloseGraceMinutes={autocloseGraceMinutes}
+        busy={isPending}
+        run={run}
+      />
 
       {latestHandover && (
         <div className="flex flex-col gap-1.5 rounded-[var(--radius)] border border-[#F0D69A] bg-warm-tint p-3">
@@ -81,16 +78,14 @@ export function ShiftSidebar({
         </div>
       )}
 
-      {person && (
-        <button
-          type="button"
-          disabled={isPending}
-          onClick={() => run(() => switchPerson().then(() => ({})))}
-          className="mt-auto text-left text-sm font-semibold text-brand-ink disabled:opacity-50"
-        >
-          Switch person
-        </button>
-      )}
+      <button
+        type="button"
+        disabled={isPending}
+        onClick={() => run(() => switchPerson().then(() => ({})))}
+        className="mt-auto text-left text-sm font-semibold text-brand-ink disabled:opacity-50"
+      >
+        Switch person
+      </button>
     </aside>
   );
 }
