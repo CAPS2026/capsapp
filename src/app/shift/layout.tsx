@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCurrentPerson } from "@/lib/auth";
+import { getActiveShiftPerson } from "@/lib/shift-identity";
+import { ensureRosterSession, getHandoverNotes, getOpenShift, getShiftSettings } from "@/lib/shift-data";
+import { ShiftSidebar } from "@/components/shift/shift-sidebar";
+import { ShiftTabs } from "@/components/shift/shift-tabs";
 
 // Overrides the root layout's manifest for everything under /shift, so
 // this installs to the tablet's home screen as its own "CAPS Staff" icon,
@@ -14,6 +18,9 @@ export const metadata: Metadata = {
   manifest: "/shift-manifest.json",
 };
 
+/** Landscape tablet layout (the office device sits landscape, on a stand):
+ *  a fixed sidebar with identity, shift status and the latest handover
+ *  note, always visible, next to whichever tab's content is showing. */
 export default async function ShiftLayout({ children }: { children: React.ReactNode }) {
   const person = await getCurrentPerson();
   if (!person?.isStaff) {
@@ -21,5 +28,27 @@ export default async function ShiftLayout({ children }: { children: React.ReactN
     redirect(`/login?next=${encodeURIComponent(pathname)}`);
   }
 
-  return <div className="min-h-screen bg-background">{children}</div>;
+  const active = await getActiveShiftPerson();
+  const [openShift, settings, notes] = await Promise.all([
+    active ? getOpenShift(active.id) : Promise.resolve(null),
+    getShiftSettings(),
+    getHandoverNotes(1),
+  ]);
+  const session = openShift ? await ensureRosterSession(openShift.date, openShift.part) : null;
+
+  return (
+    <div className="flex min-h-screen bg-paper">
+      <ShiftSidebar
+        person={active}
+        shift={openShift}
+        sessionEnds={session?.ends ?? null}
+        autocloseGraceMinutes={settings.autocloseGraceMinutes}
+        latestHandover={notes[0] ? { personName: notes[0].personName, body: notes[0].body } : null}
+      />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <ShiftTabs />
+        <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+      </div>
+    </div>
+  );
 }

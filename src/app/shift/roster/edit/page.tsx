@@ -20,7 +20,7 @@ export default async function RosterEditPage({
   const [people, rows] = await Promise.all([getRosterablePeople(), getRosterEditRange(start, days)]);
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-lg flex-col gap-4 p-4 pb-10">
+    <div className="flex max-w-2xl flex-col gap-4">
       <header className="flex items-center gap-3">
         <Link href="/shift/roster" className="text-sm font-semibold text-brand-ink">
           ← Roster

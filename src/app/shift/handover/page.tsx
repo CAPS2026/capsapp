@@ -1,7 +1,6 @@
-import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getActiveShiftPerson } from "@/lib/shift-identity";
 import { getHandoverNotes } from "@/lib/shift-data";
-import { redirect } from "next/navigation";
 import { HandoverLog } from "@/components/shift/handover-log";
 
 export default async function HandoverPage() {
@@ -11,21 +10,7 @@ export default async function HandoverPage() {
   const notes = await getHandoverNotes();
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-lg flex-col gap-4 p-4 pb-10">
-      <header className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Link href="/shift" className="text-sm font-semibold text-brand-ink">
-            ← Today
-          </Link>
-          <h1 className="text-xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
-            Handover log
-          </h1>
-        </div>
-        <Link href="/shift/roster" className="text-sm font-semibold text-ink-muted">
-          Roster
-        </Link>
-      </header>
-
+    <div className="max-w-2xl">
       <HandoverLog notes={notes} />
     </div>
   );
