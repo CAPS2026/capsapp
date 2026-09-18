@@ -52,21 +52,7 @@ export default async function RosterPage({
   const nextMonth = month === 12 ? { y: year + 1, m: 1 } : { y: year, m: month + 1 };
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-lg flex-col gap-4 p-4 pb-10">
-      <header className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Link href="/shift" className="text-sm font-semibold text-brand-ink">
-            ← Today
-          </Link>
-          <h1 className="text-xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
-            Roster
-          </h1>
-        </div>
-        <Link href="/shift/handover" className="text-sm font-semibold text-ink-muted">
-          Handover log
-        </Link>
-      </header>
-
+    <div className="flex max-w-4xl flex-col gap-4">
       {person?.isAdmin && (
         <div className="flex flex-wrap gap-2">
           <Link
@@ -84,88 +70,96 @@ export default async function RosterPage({
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <Link href={`/shift/roster?y=${prevMonth.y}&m=${prevMonth.m}`} className="px-2 text-xl font-extrabold text-brand-ink">
-          ←
-        </Link>
-        <span className="text-lg font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
-          {MONTH_NAMES[month - 1]} {year}
-        </span>
-        <Link href={`/shift/roster?y=${nextMonth.y}&m=${nextMonth.m}`} className="px-2 text-xl font-extrabold text-brand-ink">
-          →
-        </Link>
-      </div>
-
-      <div className="grid grid-cols-7 gap-1.5">
-        {DOW.map((d) => (
-          <div key={d} className="pb-1.5 text-center text-[11.5px] font-extrabold uppercase text-ink-muted">
-            {d}
-          </div>
-        ))}
-        {weeks.flat().map((date, i) => {
-          if (!date) return <div key={i} />;
-          const cell = grid[date];
-          const isToday = date === today;
-          const isSelected = date === selected;
-          return (
-            <Link
-              key={date}
-              href={`/shift/roster?y=${year}&m=${month}&d=${date}`}
-              className={`flex min-h-[58px] flex-col items-center gap-1 rounded-lg border p-1.5 text-center ${
-                isSelected ? "border-brand bg-brand-tint" : isToday ? "border-brand" : "border-line bg-card"
-              }`}
-            >
-              <span className="text-[13px] font-bold text-ink-muted">{Number(date.slice(8))}</span>
-              {cell?.am.length ? (
-                <span className="rounded bg-brand-tint px-1.5 py-0.5 text-[10.5px] font-extrabold text-brand-ink">
-                  {cell.am.join(",")}
-                </span>
-              ) : null}
-              {cell?.pm.length ? (
-                <span className="rounded bg-sun-tint px-1.5 py-0.5 text-[10.5px] font-extrabold text-warm-ink">
-                  {cell.pm.join(",")}
-                </span>
-              ) : null}
+      <div className="grid grid-cols-[1.6fr_1fr] items-start gap-5">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <Link href={`/shift/roster?y=${prevMonth.y}&m=${prevMonth.m}`} className="px-2 text-xl font-extrabold text-brand-ink">
+              ←
             </Link>
-          );
-        })}
-      </div>
-
-      <div className="flex gap-3 text-xs font-semibold text-ink-muted">
-        <span>
-          <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-brand-tint align-middle" /> Morning
-        </span>
-        <span>
-          <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-sun-tint align-middle" /> Afternoon
-        </span>
-      </div>
-
-      <div className="flex flex-col gap-2 rounded-[var(--radius)] border border-line bg-card p-3.5">
-        <p className="font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
-          {parseYmd(selected).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" })}
-        </p>
-        {dayDetail.map((s) => (
-          <div key={s.part} className="flex items-center justify-between border-t border-line py-2 first:border-0 first:pt-0">
-            <div>
-              <p className="text-sm font-bold">{PART_LABEL[s.part]}</p>
-              <p className="text-xs text-ink-muted">
-                {s.starts}–{s.ends}
-              </p>
-            </div>
-            <p className="max-w-[55%] text-right text-sm text-ink-muted">
-              {s.people.length ? s.people.join(", ") : "Nobody rostered"}
-            </p>
+            <span className="text-lg font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
+              {MONTH_NAMES[month - 1]} {year}
+            </span>
+            <Link href={`/shift/roster?y=${nextMonth.y}&m=${nextMonth.m}`} className="px-2 text-xl font-extrabold text-brand-ink">
+              →
+            </Link>
           </div>
-        ))}
-      </div>
 
-      <div className="flex justify-between text-xs">
-        <Link href={`/shift/roster?d=${shiftDay(selected, -1)}&y=${year}&m=${month}`} className="font-semibold text-brand-ink">
-          ← Previous day
-        </Link>
-        <Link href={`/shift/roster?d=${shiftDay(selected, 1)}&y=${year}&m=${month}`} className="font-semibold text-brand-ink">
-          Next day →
-        </Link>
+          <div className="grid grid-cols-7 gap-1.5">
+            {DOW.map((d) => (
+              <div key={d} className="pb-1.5 text-center text-[11.5px] font-extrabold uppercase text-ink-muted">
+                {d}
+              </div>
+            ))}
+            {weeks.flat().map((date, i) => {
+              if (!date) return <div key={i} />;
+              const cell = grid[date];
+              const isToday = date === today;
+              const isSelected = date === selected;
+              return (
+                <Link
+                  key={date}
+                  href={`/shift/roster?y=${year}&m=${month}&d=${date}`}
+                  className={`flex min-h-[62px] flex-col items-center gap-1 rounded-lg border p-1.5 text-center ${
+                    isSelected ? "border-brand bg-brand-tint" : isToday ? "border-brand" : "border-line bg-card"
+                  }`}
+                >
+                  <span className={`text-[13px] font-bold ${isToday ? "text-brand-ink" : "text-ink-muted"}`}>
+                    {Number(date.slice(8))}
+                  </span>
+                  {cell?.am.length ? (
+                    <span className="rounded bg-brand-tint px-1.5 py-0.5 text-[10.5px] font-extrabold text-brand-ink">
+                      {cell.am.join(",")}
+                    </span>
+                  ) : null}
+                  {cell?.pm.length ? (
+                    <span className="rounded bg-sun-tint px-1.5 py-0.5 text-[10.5px] font-extrabold text-warm-ink">
+                      {cell.pm.join(",")}
+                    </span>
+                  ) : null}
+                </Link>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-3 text-xs font-semibold text-ink-muted">
+            <span>
+              <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-brand-tint align-middle" /> Morning
+            </span>
+            <span>
+              <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-sun-tint align-middle" /> Afternoon
+            </span>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2 rounded-[var(--radius)] border border-line bg-card p-3.5">
+            <p className="font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
+              {parseYmd(selected).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" })}
+            </p>
+            {dayDetail.map((s) => (
+              <div key={s.part} className="flex items-center justify-between border-t border-line py-2 first:border-0 first:pt-0">
+                <div>
+                  <p className="text-sm font-bold">{PART_LABEL[s.part]}</p>
+                  <p className="text-xs text-ink-muted">
+                    {s.starts}–{s.ends}
+                  </p>
+                </div>
+                <p className="max-w-[55%] text-right text-sm text-ink-muted">
+                  {s.people.length ? s.people.join(", ") : "Nobody rostered"}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-between text-xs">
+            <Link href={`/shift/roster?d=${shiftDay(selected, -1)}&y=${year}&m=${month}`} className="font-semibold text-brand-ink">
+              ← Previous day
+            </Link>
+            <Link href={`/shift/roster?d=${shiftDay(selected, 1)}&y=${year}&m=${month}`} className="font-semibold text-brand-ink">
+              Next day →
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
   );

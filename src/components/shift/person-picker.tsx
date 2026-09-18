@@ -42,7 +42,7 @@ export function PersonPicker({ people }: { people: ShiftPerson[] }) {
   const others = people.filter((p) => !p.part);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-5 p-6 text-center">
+    <div className="flex h-full flex-col items-center justify-center gap-5 p-6 text-center">
       <Image src="/logo.jpg" alt="" width={56} height={56} className="rounded-full" />
       <div>
         <h1 className="text-xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
