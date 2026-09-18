@@ -31,9 +31,8 @@ export default async function RosterEditPage({
       </header>
 
       <p className="text-xs leading-relaxed text-ink-muted">
-        Pick who&rsquo;s on for each day below, morning and afternoon. Leave a dropdown on
-        &ldquo;Nobody rostered&rdquo; if it&rsquo;s genuinely unstaffed. Nothing here is saved until you press
-        Save at the bottom.
+        Select who is on for each shift, morning and afternoon. Remember to press the Save at the bottom
+        before you exit this screen!
       </p>
 
       <RosterEditForm start={start} days={days} people={people} initialRows={rows} />
