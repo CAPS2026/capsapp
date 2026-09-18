@@ -292,3 +292,46 @@ export async function addHandoverNote(body: string): Promise<Result> {
   revalidatePath("/shift/handover");
   return {};
 }
+
+// ---------------------------------------------------------------------------
+// Roster editing (admin only)
+// ---------------------------------------------------------------------------
+
+async function requireAdmin() {
+  const me = await getCurrentPerson();
+  return me?.isAdmin ? me : null;
+}
+
+/** Replaces the roster for a run of dates. Up to two people per session,
+ *  covers the common case (one caretaker) and the frequent one (two on
+ *  at once when all three are around and nobody's on leave). Each
+ *  date/part gets its own roster_session (created via ensureRosterSession
+ *  if it doesn't exist yet) and its existing assignments are replaced
+ *  outright rather than merged, so re-saving a corrected row doesn't
+ *  leave a stale name sitting alongside the new ones. */
+export async function saveRosterEntries(
+  entries: { date: string; morningPersonIds: string[]; afternoonPersonIds: string[] }[],
+): Promise<Result> {
+  if (!(await requireAdmin())) return { error: "Admin only." };
+  const supabase = await createClient();
+
+  for (const row of entries) {
+    for (const part of ["morning", "afternoon"] as Part[]) {
+      const personIds = (part === "morning" ? row.morningPersonIds : row.afternoonPersonIds).filter(Boolean);
+      const session = await ensureRosterSession(row.date, part);
+
+      const { error: delErr } = await supabase.from("roster_assignment").delete().eq("session_id", session.id);
+      if (delErr) return { error: delErr.message };
+
+      if (personIds.length) {
+        const { error: insErr } = await supabase
+          .from("roster_assignment")
+          .insert(personIds.map((personId) => ({ session_id: session.id, person_id: personId })));
+        if (insErr) return { error: insErr.message };
+      }
+    }
+  }
+
+  revalidatePath("/shift/roster");
+  return {};
+}
