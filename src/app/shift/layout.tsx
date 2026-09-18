@@ -20,7 +20,11 @@ export const metadata: Metadata = {
 
 /** Landscape tablet layout (the office device sits landscape, on a stand):
  *  a fixed sidebar with identity, shift status and the latest handover
- *  note, always visible, next to whichever tab's content is showing. */
+ *  note, next to whichever tab's content is showing. The sidebar only
+ *  appears once someone's actually signed in, nobody picked yet means no
+ *  shift status to show, so it stays out of the way rather than sitting
+ *  there saying "nobody signed in" next to the exact screen that fixes
+ *  that. The tab bar stays up regardless, so navigation always works. */
 export default async function ShiftLayout({ children }: { children: React.ReactNode }) {
   const person = await getCurrentPerson();
   if (!person?.isStaff) {
@@ -38,13 +42,15 @@ export default async function ShiftLayout({ children }: { children: React.ReactN
 
   return (
     <div className="flex min-h-screen bg-paper">
-      <ShiftSidebar
-        person={active}
-        shift={openShift}
-        sessionEnds={session?.ends ?? null}
-        autocloseGraceMinutes={settings.autocloseGraceMinutes}
-        latestHandover={notes[0] ? { personName: notes[0].personName, body: notes[0].body } : null}
-      />
+      {active && openShift && session && (
+        <ShiftSidebar
+          person={active}
+          shift={openShift}
+          sessionEnds={session.ends}
+          autocloseGraceMinutes={settings.autocloseGraceMinutes}
+          latestHandover={notes[0] ? { personName: notes[0].personName, body: notes[0].body } : null}
+        />
+      )}
       <div className="flex min-w-0 flex-1 flex-col">
         <ShiftTabs />
         <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>

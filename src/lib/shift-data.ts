@@ -15,13 +15,17 @@ import {
   type TaskStatus,
 } from "@/lib/shift";
 
-/** People who can appear on the shift picker: active staff/committee/admin. */
+/** People who can appear on the shift picker and the roster editor:
+ *  actual caretakers, the "staff" role specifically. Committee and admin
+ *  give app access but aren't caretakers, and don't work shifts, so they
+ *  don't belong on either screen (Julie flagged herself and Paul showing
+ *  up here despite neither of them being rostered caretakers). */
 export async function getRosterablePeople(): Promise<{ id: string; name: string }[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("person_roles")
     .select("person:people!person_roles_person_id_fkey(id, first_name, surname)")
-    .in("role", ["staff", "committee", "admin"])
+    .eq("role", "staff")
     .eq("status", "active");
   if (error) console.error("getRosterablePeople failed", error);
 
