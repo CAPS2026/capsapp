@@ -15,7 +15,7 @@ import {
   resolvePart,
   touchShiftActivity,
 } from "@/lib/shift-data";
-import { maybeSendShiftEmail } from "@/lib/shift-email";
+import { getShiftEmailPreview, maybeSendShiftEmail, type EmailPreview } from "@/lib/shift-email";
 import { distanceMetres, minutesLate, shelterToday, type Part } from "@/lib/shift";
 
 type Result = { error: string } | { error?: undefined };
@@ -105,6 +105,16 @@ export async function pickPerson(
   await setActiveShiftPerson(personId);
   bust();
   return {};
+}
+
+/** What the end-of-shift email would say for the caller's current shift,
+ *  built by the same code that builds the real one. Sends nothing. */
+export async function previewShiftEmail(): Promise<{ error: string } | { error?: undefined; preview: EmailPreview }> {
+  const me = await requireActingPerson();
+  if (!me) return { error: "Pick who you are first." };
+  const open = await getOpenShift(me.id);
+  if (!open) return { error: "You don't have an open shift." };
+  return { preview: await getShiftEmailPreview(open.date, open.part) };
 }
 
 /** Hand the tablet to someone else without ending the active person's

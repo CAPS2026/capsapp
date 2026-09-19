@@ -6,7 +6,7 @@
 
 import { sendEmail } from "@/lib/email";
 import { createClient } from "@/lib/supabase/server";
-import { PART_LABEL, CATEGORY_LABEL, parseYmd, type Part } from "@/lib/shift";
+import { PART_LABEL, CATEGORY_LABEL, clock12, parseYmd, type Part } from "@/lib/shift";
 import {
   autocloseStaleShifts,
   ensureRosterSession,
@@ -19,7 +19,7 @@ import {
   type SessionTasksRow,
 } from "@/lib/shift-data";
 
-type PersonBlock = {
+export type PersonBlock = {
   name: string;
   startedAt: string;
   endedAt: string | null;
@@ -30,8 +30,17 @@ type PersonBlock = {
   extraDone: string[];
 };
 
+export type EmailPreview = {
+  date: string;
+  part: Part;
+  people: PersonBlock[];
+  unclaimed: string[];
+  /** False when nobody's configured to receive it (so preview still works). */
+  hasRecipients: boolean;
+};
+
 function timeLabel(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" });
+  return clock12(iso);
 }
 
 function buildBlocks(shifts: SessionShiftRow[], tasks: SessionTasksRow[], radiusM: number): {
@@ -83,15 +92,15 @@ function textBody(date: string, part: Part, blocks: ReturnType<typeof buildBlock
   for (const p of blocks.people) {
     lines.push(`${p.name} (signed in ${timeLabel(p.startedAt)}${p.endedAt ? `, out ${timeLabel(p.endedAt)}` : ", still signed in"})`);
     for (const f of p.flags) lines.push(`  ! ${f}`);
-    if (p.done.length) lines.push(`  Done: ${p.done.join(", ")}`);
-    if (p.notNeeded.length) lines.push(`  Not needed: ${p.notNeeded.join(", ")}`);
-    if (p.claimedNotDone.length) lines.push(`  Claimed, not done: ${p.claimedNotDone.join(", ")}`);
-    if (p.extraDone.length) lines.push(`  Extra, off the checklist: ${p.extraDone.join(", ")}`);
+    if (p.done.length) lines.push(`  Done (${p.done.length}): ${p.done.join(", ")}`);
+    if (p.notNeeded.length) lines.push(`  Not needed (${p.notNeeded.length}): ${p.notNeeded.join(", ")}`);
+    if (p.claimedNotDone.length) lines.push(`  Nominated, not done (${p.claimedNotDone.length}): ${p.claimedNotDone.join(", ")}`);
+    if (p.extraDone.length) lines.push(`  Extra, off the checklist (${p.extraDone.length}): ${p.extraDone.join(", ")}`);
     lines.push("");
   }
 
   if (blocks.unclaimed.length) {
-    lines.push("Not done, nobody claimed it:");
+    lines.push(`Not done, nobody nominated for it (${blocks.unclaimed.length}):`);
     lines.push(`  ${blocks.unclaimed.join(", ")}`);
   }
 
@@ -110,15 +119,15 @@ function htmlBody(date: string, part: Part, blocks: ReturnType<typeof buildBlock
         </span>
       </p>
       ${p.flags.map((f) => `<p style="margin:4px 0;color:#C1800F;font-size:13px;">${esc(f)}</p>`).join("")}
-      ${p.done.length ? `<p style="margin:6px 0 0;font-size:14px;"><b>Done:</b> ${esc(p.done.join(", "))}</p>` : ""}
-      ${p.notNeeded.length ? `<p style="margin:6px 0 0;font-size:14px;"><b>Not needed:</b> ${esc(p.notNeeded.join(", "))}</p>` : ""}
-      ${p.claimedNotDone.length ? `<p style="margin:6px 0 0;font-size:14px;"><b>Claimed, not done:</b> ${esc(p.claimedNotDone.join(", "))}</p>` : ""}
-      ${p.extraDone.length ? `<p style="margin:6px 0 0;font-size:14px;"><b>Extra, off the checklist:</b> ${esc(p.extraDone.join(", "))}</p>` : ""}
+      ${p.done.length ? `<p style="margin:6px 0 0;font-size:14px;"><b>Done (${p.done.length}):</b> ${esc(p.done.join(", "))}</p>` : ""}
+      ${p.notNeeded.length ? `<p style="margin:6px 0 0;font-size:14px;"><b>Not needed (${p.notNeeded.length}):</b> ${esc(p.notNeeded.join(", "))}</p>` : ""}
+      ${p.claimedNotDone.length ? `<p style="margin:6px 0 0;font-size:14px;"><b>Nominated, not done (${p.claimedNotDone.length}):</b> ${esc(p.claimedNotDone.join(", "))}</p>` : ""}
+      ${p.extraDone.length ? `<p style="margin:6px 0 0;font-size:14px;"><b>Extra, off the checklist (${p.extraDone.length}):</b> ${esc(p.extraDone.join(", "))}</p>` : ""}
     </div>`;
 
   const unclaimed = blocks.unclaimed.length
     ? `<div style="border:1px solid #F0D69A;background:#FEF3DC;border-radius:10px;padding:14px;">
-        <p style="margin:0;font-size:14px;"><b>Not done, nobody claimed it:</b> ${esc(blocks.unclaimed.join(", "))}</p>
+        <p style="margin:0;font-size:14px;"><b>Not done, nobody nominated for it (${blocks.unclaimed.length}):</b> ${esc(blocks.unclaimed.join(", "))}</p>
       </div>`
     : "";
 
@@ -163,6 +172,20 @@ export async function maybeSendShiftEmail(date: string, part: Part): Promise<voi
   } else {
     console.error("maybeSendShiftEmail: send failed", result.error);
   }
+}
+
+/** What the summary for (date, part) would say right now, built by the
+ *  same code as the real email, so the on-screen preview can never drift
+ *  from what actually gets sent. Sends nothing and changes nothing. */
+export async function getShiftEmailPreview(date: string, part: Part): Promise<EmailPreview> {
+  const [shifts, tasks, { radiusM }, recipients] = await Promise.all([
+    getSessionShifts(date, part),
+    getSessionTasks(date, part),
+    getShiftSettings(),
+    getShiftEmailRecipients(),
+  ]);
+  const blocks = buildBlocks(shifts, tasks, radiusM);
+  return { date, part, people: blocks.people, unclaimed: blocks.unclaimed, hasRecipients: recipients.length > 0 };
 }
 
 /** Call this wherever the staff app loads (no scheduled job behind it

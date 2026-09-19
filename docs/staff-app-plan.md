@@ -140,5 +140,42 @@ turns out to be too slow in practice, not built now.
 13 Sep 2026. Schema (migrations 22-25) and all four screens built:
 sign-in, checklist (categories, claiming, extras), handover log,
 read-only roster, and the end-of-shift email. Not yet tested against
-real caretaker accounts or a real shelter address (`shelter_lat`/`lng`
-still null).
+real caretaker accounts or a real shelter address as of that date (the
+coordinates, recipients and the three caretakers were all set up by 17 Sep).
+
+## Layout and look (19 Sep 2026)
+
+The real app is a landscape tablet layout that follows the approved
+mockup: a fixed sidebar (shift card with live countdown, "also on",
+on-site confirmation, email preview link, latest handover, today's
+roster, switch person) next to Checklist / Roster / Handover log tabs.
+The sidebar only appears once someone has signed in; the sign-in screen
+gets the full screen.
+
+Additions on top of the mockup, both requested by Julie: each checklist
+section is colour-coded (Opening amber, Animal Health coral, Kennel blue,
+Exercise green, Public and Committee purple, End of Day slate), and
+"Claim" is worded "Nominate" (her original word).
+
+Known differences from the mockup, on purpose or not yet built:
+
+- The mockup's post-tap sign-in confirmation ("on site, 40m from...")
+  lives on the sidebar shift card instead, because signing in swaps the
+  whole page to the checklist immediately.
+- Roster day card: the mockup's "flagged to the committee chat at 2pm if
+  nobody's assigned" is not built, so the card just says which sessions
+  are unstaffed.
+- Extras go into the shift email but not into the handover log; the
+  mockup's footnote said both.
+
+## Fixed after first real use
+
+- Auto-close compared clock time only, ignoring the date, so a shift left
+  open from the day before stayed open until the clock passed the same end
+  time the next day. Now compares real instants.
+- The end-of-shift email formatted times without a timezone, so on the
+  server (UTC) they were ten hours out. Now always shelter-local.
+- "Rostered" was true for every shift (every shift gets a session row);
+  it now means actually assigned to that session.
+- Someone rostered for both morning and afternoon signs in against
+  whichever part it is now, not whichever row came back first.

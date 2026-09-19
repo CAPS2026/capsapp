@@ -4,6 +4,7 @@ import {
   initials,
   minutesLate,
   partForTime,
+  sessionInstant,
   shelterToday,
   shiftDay,
   CATEGORY_ORDER,
@@ -50,24 +51,40 @@ export async function getTodayShiftPeople(date: string): Promise<ShiftPerson[]> 
 
   const { data: sessions, error } = await supabase
     .from("roster_session")
-    .select("part, roster_assignment(person_id)")
+    .select("part, starts, ends, roster_assignment(person_id)")
     .eq("date", date);
   if (error) console.error("getTodayShiftPeople: roster read failed", error);
 
-  const partByPerson = new Map<string, Part>();
+  // Everyone's rostered sessions today (someone can be down for both).
+  const byPerson = new Map<string, Array<{ part: Part; starts: string; ends: string }>>();
   for (const s of (sessions ?? []) as unknown as Array<{
     part: Part;
+    starts: string;
+    ends: string;
     roster_assignment: { person_id: string }[] | null;
   }>) {
     for (const a of s.roster_assignment ?? []) {
-      // If someone's rostered for both parts, keep the first we see,
-      // good enough for "which session is this sign-in against".
-      if (!partByPerson.has(a.person_id)) partByPerson.set(a.person_id, s.part);
+      const list = byPerson.get(a.person_id) ?? [];
+      list.push({ part: s.part, starts: String(s.starts).slice(0, 5), ends: String(s.ends).slice(0, 5) });
+      byPerson.set(a.person_id, list);
     }
   }
 
+  // Someone rostered for both parts signs in against whichever one it is
+  // right now, not whichever row happened to come back first.
+  const nowPart = partForTime();
   return people
-    .map((p) => ({ id: p.id, name: p.name, part: partByPerson.get(p.id) ?? null }))
+    .map((p): ShiftPerson => {
+      const mine = byPerson.get(p.id) ?? [];
+      const pick = mine.find((m) => m.part === nowPart) ?? mine[0] ?? null;
+      return {
+        id: p.id,
+        name: p.name,
+        part: pick?.part ?? null,
+        starts: pick?.starts ?? null,
+        ends: pick?.ends ?? null,
+      };
+    })
     .sort((a, b) => {
       if (!!a.part !== !!b.part) return a.part ? -1 : 1;
       return a.name.localeCompare(b.name);
@@ -175,12 +192,27 @@ export async function getOpenShift(personId: string): Promise<OpenShift | null> 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("shift_log")
-    .select("id, person_id, date, part, signed_in_at, late_minutes, late_reason, roster_session_id")
+    .select("id, person_id, date, part, signed_in_at, late_minutes, late_reason, roster_session_id, signed_in_distance_m")
     .eq("person_id", personId)
     .is("signed_out_at", null)
     .maybeSingle();
   if (error) console.error("getOpenShift failed", error);
   if (!data) return null;
+
+  // "Rostered" means actually assigned to this session. (Every shift gets
+  // a roster_session row, someone covering included, so the presence of
+  // a session id says nothing about it.)
+  let rostered = false;
+  if (data.roster_session_id) {
+    const { data: assignment } = await supabase
+      .from("roster_assignment")
+      .select("id")
+      .eq("session_id", data.roster_session_id)
+      .eq("person_id", personId)
+      .maybeSingle();
+    rostered = assignment !== null;
+  }
+
   return {
     id: data.id,
     personId: data.person_id,
@@ -189,7 +221,8 @@ export async function getOpenShift(personId: string): Promise<OpenShift | null> 
     startedAt: data.signed_in_at,
     lateMinutes: data.late_minutes,
     lateReason: data.late_reason,
-    rostered: data.roster_session_id !== null,
+    rostered,
+    distanceM: data.signed_in_distance_m != null ? Number(data.signed_in_distance_m) : null,
   };
 }
 
@@ -231,7 +264,11 @@ export async function autocloseStaleShifts(): Promise<Array<{ date: string; part
 
   for (const s of open as Array<{ id: string; date: string; part: Part; last_activity_at: string }>) {
     const session = await ensureRosterSession(s.date, s.part);
-    const pastEnd = minutesLate(now, session.ends) > 0;
+    // Compare real instants, not clock times: a shift from yesterday is
+    // over whatever time it is now. (This used to compare time-of-day
+    // only, so an abandoned shift from the previous day stayed "open"
+    // until today's clock passed the same end time.)
+    const pastEnd = now.getTime() > sessionInstant(s.date, session.ends).getTime();
     if (!pastEnd) continue;
 
     const idleMinutes = (now.getTime() - new Date(s.last_activity_at).getTime()) / 60000;
@@ -507,15 +544,24 @@ export async function getMonthRoster(year: number, month: number): Promise<Recor
   return grid;
 }
 
-export type RosterDaySession = { part: Part; starts: string; ends: string; people: string[] };
+export type RosterAttendee = { id: string; first: string; full: string };
+export type RosterDaySession = {
+  part: Part;
+  starts: string;
+  ends: string;
+  /** Full names, in roster order. */
+  people: string[];
+  /** Same people with ids and first names, for avatars and short labels. */
+  attendees: RosterAttendee[];
+};
 
-/** One day's roster in full (both sessions, full names) for the day-detail
- *  card under the month grid. */
+/** One day's roster in full (both sessions) for the day-detail card
+ *  under the month grid and the sidebar's "Today's roster". */
 export async function getRosterDayDetail(date: string): Promise<RosterDaySession[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("roster_session")
-    .select("part, starts, ends, roster_assignment(person:people(first_name, surname))")
+    .select("part, starts, ends, roster_assignment(person:people(id, first_name, surname))")
     .eq("date", date);
   if (error) console.error("getRosterDayDetail failed", error);
 
@@ -524,19 +570,32 @@ export async function getRosterDayDetail(date: string): Promise<RosterDaySession
     part: Part;
     starts: string;
     ends: string;
-    roster_assignment: { person: { first_name: string; surname: string } | null }[] | null;
+    roster_assignment: { person: { id: string; first_name: string; surname: string } | null }[] | null;
   }>) {
+    const attendees: RosterAttendee[] = (s.roster_assignment ?? [])
+      .map((a) =>
+        a.person
+          ? { id: a.person.id, first: a.person.first_name, full: `${a.person.first_name} ${a.person.surname}`.trim() }
+          : null,
+      )
+      .filter((n): n is RosterAttendee => n !== null);
     byPart.set(s.part, {
       part: s.part,
       starts: String(s.starts).slice(0, 5),
       ends: String(s.ends).slice(0, 5),
-      people: (s.roster_assignment ?? [])
-        .map((a) => (a.person ? `${a.person.first_name} ${a.person.surname}`.trim() : null))
-        .filter((n): n is string => n !== null),
+      people: attendees.map((a) => a.full),
+      attendees,
     });
   }
   return (["morning", "afternoon"] as Part[]).map(
-    (part) => byPart.get(part) ?? { part, starts: DEFAULT_TIMES[part].starts, ends: DEFAULT_TIMES[part].ends, people: [] },
+    (part) =>
+      byPart.get(part) ?? {
+        part,
+        starts: DEFAULT_TIMES[part].starts,
+        ends: DEFAULT_TIMES[part].ends,
+        people: [],
+        attendees: [],
+      },
   );
 }
 

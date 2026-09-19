@@ -161,7 +161,7 @@ export function RosterEditForm({
         ))}
       </div>
 
-      <div className="sticky bottom-0 flex items-center gap-3 border-t border-line bg-paper py-3">
+      <div className="sticky bottom-0 flex items-center gap-3 border-t border-line bg-background py-3">
         <button
           type="button"
           disabled={isPending}
