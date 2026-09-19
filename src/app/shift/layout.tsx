@@ -33,30 +33,47 @@ export default async function ShiftLayout({ children }: { children: React.ReactN
     redirect(`/login?next=${encodeURIComponent(pathname)}`);
   }
 
+  const today = shelterToday();
   const active = await getActiveShiftPerson();
   const [openShift, settings, notes, todayRoster] = await Promise.all([
     active ? getOpenShift(active.id) : Promise.resolve(null),
     getShiftSettings(),
     getHandoverNotes(1),
-    getRosterDayDetail(shelterToday()),
+    getRosterDayDetail(today),
   ]);
   const session = openShift ? await ensureRosterSession(openShift.date, openShift.part) : null;
 
+  // Anyone else rostered on the same session as the person signed in.
+  let alsoOn: string[] = [];
+  if (active && openShift) {
+    const detail = openShift.date === today ? todayRoster : await getRosterDayDetail(openShift.date);
+    const sess = detail.find((s) => s.part === openShift.part);
+    alsoOn = (sess?.attendees ?? []).filter((a) => a.id !== active.id).map((a) => a.first);
+  }
+
+  const latest = notes[0];
+
   return (
-    <div className="flex min-h-screen bg-paper">
+    <div className="flex min-h-screen bg-background">
       {active && openShift && session && (
         <ShiftSidebar
           person={active}
           shift={openShift}
-          sessionEnds={session.ends}
+          session={{ starts: session.starts, ends: session.ends }}
+          alsoOn={alsoOn}
           autocloseGraceMinutes={settings.autocloseGraceMinutes}
-          latestHandover={notes[0] ? { personName: notes[0].personName, body: notes[0].body } : null}
+          radiusM={settings.radiusM}
+          latestHandover={
+            latest ? { personName: latest.personName, body: latest.body, part: latest.part, date: latest.date } : null
+          }
           todayRoster={todayRoster}
         />
       )}
       <div className="flex min-w-0 flex-1 flex-col">
         <ShiftTabs />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto border-t border-line bg-background p-4 md:px-[18px] md:pb-6 md:pt-3.5">
+          {children}
+        </main>
       </div>
     </div>
   );

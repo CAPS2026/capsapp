@@ -3,8 +3,9 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { PART_LABEL, type ShiftPerson } from "@/lib/shift";
+import { PART_LABEL, firstName, timeRange, type ShiftPerson } from "@/lib/shift";
 import { pickPerson } from "@/lib/actions/shift";
+import { PersonAvatar } from "@/components/shift/person-avatar";
 
 /** Best-effort location: resolves to null (never rejects) if the browser
  *  has no geolocation, permission is denied, or it just times out, a
@@ -20,6 +21,8 @@ function getLocation(): Promise<{ lat: number; lng: number } | null> {
   });
 }
 
+/** "Who's working right now?", the mockup's sign-in moment: one card per
+ *  caretaker, tap yours. */
 export function PersonPicker({ people }: { people: ShiftPerson[] }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -38,72 +41,55 @@ export function PersonPicker({ people }: { people: ShiftPerson[] }) {
     });
   }
 
-  const rostered = people.filter((p) => p.part);
-  const others = people.filter((p) => !p.part);
+  // Two people sharing a first name (unlikely on a team this size) get
+  // their full names so the cards can't be mixed up.
+  const firstNames = people.map((p) => firstName(p.name));
+  const label = (p: ShiftPerson) =>
+    firstNames.filter((f) => f === firstName(p.name)).length > 1 ? p.name : firstName(p.name);
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-5 p-6 text-center">
-      <Image src="/logo.jpg" alt="" width={56} height={56} className="rounded-full" />
-      <div>
-        <h1 className="text-xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
+    <div className="flex h-full items-center justify-center p-6">
+      <div className="flex w-full max-w-[560px] flex-col gap-3.5 rounded-[14px] border border-line bg-card p-6 shadow-[0_20px_40px_rgba(0,0,0,0.08)]">
+        <Image src="/logo.jpg" alt="" width={48} height={48} className="mx-auto rounded-full" />
+        <h1 className="m-0 text-center text-lg font-extrabold text-foreground" style={{ fontFamily: "var(--font-display)" }}>
           Who&rsquo;s working right now?
         </h1>
-        <p className="mt-1.5 max-w-xs text-sm text-ink-muted">
-          Shared tablet. Choose your name so today&rsquo;s checklist knows who&rsquo;s doing what.
+        <p className="m-0 text-center text-xs leading-relaxed text-ink-muted">
+          Shared tablet. Tap your name, that&rsquo;s it, no PIN, so every tick stays attributed to the right person.
         </p>
-      </div>
 
-      {error && <p className="text-sm text-danger">{error}</p>}
+        {error && <p className="m-0 text-center text-sm text-danger">{error}</p>}
 
-      <div className="grid w-full max-w-sm grid-cols-1 gap-2.5">
-        {rostered.map((p) => (
-          <PersonCard key={p.id} person={p} busy={isPending && busyId === p.id} disabled={isPending} onPick={pick} />
-        ))}
-        {others.length > 0 && (
-          <>
-            <p className="mt-2 text-xs font-bold uppercase tracking-wide text-ink-muted">Not rostered today</p>
-            {others.map((p) => (
-              <PersonCard key={p.id} person={p} busy={isPending && busyId === p.id} disabled={isPending} onPick={pick} dimmed />
+        {people.length === 0 ? (
+          <p className="m-0 text-center text-sm text-ink-muted">
+            No caretakers are set up yet. An admin can add them from the Roster tab.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2.5">
+            {people.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                disabled={isPending}
+                onClick={() => pick(p)}
+                className={`flex min-w-[120px] flex-1 flex-col items-center gap-1.5 rounded-[var(--radius)] border-[1.5px] bg-card px-1.5 pb-3 pt-3.5 disabled:cursor-wait ${
+                  busyId === p.id ? "border-brand bg-brand-tint" : "border-line"
+                } ${p.part ? "" : "opacity-[0.55]"}`}
+              >
+                <PersonAvatar name={p.name} size={34} />
+                <span className="text-xs font-extrabold text-foreground">{label(p)}</span>
+                <span className="text-[9.5px] font-bold text-ink-muted">
+                  {busyId === p.id
+                    ? "Signing in…"
+                    : p.part && p.starts && p.ends
+                      ? `${PART_LABEL[p.part]} · ${timeRange(p.starts, p.ends)}`
+                      : "Not rostered today"}
+                </span>
+              </button>
             ))}
-          </>
+          </div>
         )}
       </div>
     </div>
-  );
-}
-
-function PersonCard({
-  person,
-  busy,
-  disabled,
-  dimmed,
-  onPick,
-}: {
-  person: ShiftPerson;
-  busy: boolean;
-  disabled: boolean;
-  dimmed?: boolean;
-  onPick: (p: ShiftPerson) => void;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => onPick(person)}
-      className={`flex items-center gap-3 rounded-[var(--radius)] border p-3.5 text-left disabled:opacity-50 ${
-        dimmed ? "border-line bg-gray-tint" : "border-line-cool bg-card"
-      }`}
-    >
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand text-base font-extrabold text-white">
-        {person.name.charAt(0).toUpperCase()}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate font-bold">{person.name}</span>
-        <span className="block text-xs text-ink-muted">
-          {person.part ? `${PART_LABEL[person.part]} shift` : "Tap if you're covering today"}
-        </span>
-      </span>
-      {busy && <span className="text-xs font-bold text-brand-ink">…</span>}
-    </button>
   );
 }
