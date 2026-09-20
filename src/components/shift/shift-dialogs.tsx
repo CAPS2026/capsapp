@@ -1,23 +1,18 @@
 "use client";
 
-import { useEffect, useState, useTransition, type ReactNode } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { endShift, extendShift, flagHealthConcern } from "@/lib/actions/shift";
 
-/** Shared pop-up shell, same look as the late-reason prompt. */
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
+/** Shared pop-up shell, same look as the late-reason prompt. Deliberately
+ *  does NOT close on a click outside the box or on Escape: someone halfway
+ *  through typing would lose it all. Only the buttons inside close it. */
+function Modal({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(44,44,42,0.4)] p-6" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(44,44,42,0.4)] p-6">
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        onClick={(e) => e.stopPropagation()}
         className="flex max-h-[92vh] w-full max-w-[480px] flex-col gap-3 overflow-y-auto rounded-[14px] bg-background p-6 shadow-[0_20px_40px_rgba(0,0,0,0.25)]"
       >
         <h2 className="m-0 text-lg font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
@@ -60,7 +55,7 @@ export function EndEarlyDialog({
   }
 
   return (
-    <Modal title="Finishing early?" onClose={onClose}>
+    <Modal title="Finishing early?">
       <p className="m-0 text-sm leading-relaxed text-ink-muted">
         Your shift isn&rsquo;t due to finish for another {minutesEarly} minutes. Please say why you&rsquo;re finishing
         early. This is required and goes in the shift email.
@@ -106,7 +101,7 @@ export function ExtendShiftDialog({ onClose, onSaved }: { onClose: () => void; o
   }
 
   return (
-    <Modal title="Extend your shift" onClose={onClose}>
+    <Modal title="Extend your shift">
       <p className="m-0 text-sm leading-relaxed text-ink-muted">
         Staying on past the rostered finish? Say how long you stayed on after it, and why. It goes in the shift email.
       </p>
@@ -171,6 +166,10 @@ export function HealthConcernDialog({ onClose }: { onClose: () => void }) {
   const [isPending, startTransition] = useTransition();
 
   function submit() {
+    if (!dogName.trim()) {
+      setError("Enter the dog's name.");
+      return;
+    }
     if (!body.trim()) {
       setError("Describe the concern first.");
       return;
@@ -185,7 +184,7 @@ export function HealthConcernDialog({ onClose }: { onClose: () => void }) {
 
   if (result) {
     return (
-      <Modal title="Health concern recorded" onClose={onClose}>
+      <Modal title="Health concern recorded">
         {result.emailed ? (
           <p className="m-0 text-sm leading-relaxed text-foreground">
             It has been emailed to Shayna now, and it will also appear in this shift&rsquo;s email.
@@ -204,14 +203,14 @@ export function HealthConcernDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Modal title="Flag a health concern" onClose={onClose}>
+    <Modal title="Flag a health concern">
       <label className="flex flex-col gap-1 text-xs font-bold text-foreground">
-        Dog (optional)
-        <input value={dogName} onChange={(e) => setDogName(e.target.value)} className={`${FIELD} h-10`} />
+        Dog&rsquo;s name (required)
+        <input autoFocus required value={dogName} onChange={(e) => setDogName(e.target.value)} className={`${FIELD} h-10`} />
       </label>
       <label className="flex flex-col gap-1 text-xs font-bold text-foreground">
         What is the concern?
-        <textarea autoFocus rows={4} value={body} onChange={(e) => setBody(e.target.value)} className={FIELD} />
+        <textarea rows={4} value={body} onChange={(e) => setBody(e.target.value)} className={FIELD} />
       </label>
       <label className="flex items-center gap-2 text-sm font-bold text-foreground">
         <input type="checkbox" checked={urgent} onChange={(e) => setUrgent(e.target.checked)} className="h-5 w-5" />
