@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import {
   CATEGORY_LABEL,
   CATEGORY_ORDER,
@@ -25,16 +24,18 @@ export function ShiftChecklist({
   carriedOver: ShiftTaskRow[];
   extras: ShiftTaskRow[];
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  // No router.refresh() afterwards: every checklist action already
+  // revalidates /shift, which sends the fresh page back in the same
+  // response. Refreshing again as well made the server rebuild the whole
+  // page a second time for nothing, which was most of the lag on a tick.
   const run = (fn: () => Promise<{ error?: string }>) => {
     setError(null);
     startTransition(async () => {
       const r = await fn();
       if (r.error) setError(r.error);
-      else router.refresh();
     });
   };
 

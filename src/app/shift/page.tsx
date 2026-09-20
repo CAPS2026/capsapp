@@ -6,10 +6,11 @@ import { PersonPicker } from "@/components/shift/person-picker";
 import { ShiftChecklist } from "@/components/shift/shift-checklist";
 
 export default async function ShiftPage() {
-  await checkAutoCloseAndSendEmails();
+  // Independent, so together. (The open-shift lookup has to come after
+  // the auto-close check, which may close it.)
+  const [, active] = await Promise.all([checkAutoCloseAndSendEmails(), getActiveShiftPerson()]);
 
   const date = shelterToday();
-  const active = await getActiveShiftPerson();
   const openShift = active ? await getOpenShift(active.id) : null;
 
   // A cookie with nobody actually signed in behind it (shouldn't normally

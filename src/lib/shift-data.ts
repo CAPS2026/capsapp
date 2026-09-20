@@ -227,15 +227,23 @@ export async function getOpenShift(personId: string): Promise<OpenShift | null> 
 }
 
 /** Bumps the person's open shift's activity clock, called on every
- *  checklist action so a busy shift never looks abandoned. No-op if
- *  they don't have an open shift (shouldn't normally happen). */
-export async function touchShiftActivity(personId: string): Promise<void> {
+ *  checklist action so a busy shift never looks abandoned. Returns the
+ *  shift's lateness fields from the same round trip (the update already
+ *  touches that row), so callers can check "has this late person given
+ *  their reason yet" without a second query. Null if they don't have an
+ *  open shift (shouldn't normally happen). */
+export async function touchShiftActivity(
+  personId: string,
+): Promise<{ lateMinutes: number | null; lateReason: string | null } | null> {
   const supabase = await createClient();
-  await supabase
+  const { data } = await supabase
     .from("shift_log")
     .update({ last_activity_at: new Date().toISOString() })
     .eq("person_id", personId)
-    .is("signed_out_at", null);
+    .is("signed_out_at", null)
+    .select("late_minutes, late_reason")
+    .maybeSingle();
+  return data ? { lateMinutes: data.late_minutes, lateReason: data.late_reason } : null;
 }
 
 /** Closes any shift that's both past its rostered end time and silent
@@ -390,56 +398,67 @@ export async function getShiftChecklist(): Promise<{
   const date = shelterToday();
   const target = new Date();
 
-  const { data: templatesRaw } = await supabase
-    .from("task_template")
-    .select("id, title, part, category, repeat, weekdays, day_of_month, sort_order, skippable")
-    .eq("active", true);
-  const dueTemplates = ((templatesRaw ?? []) as TemplateForGen[]).filter((t) =>
+  const readToday = () =>
+    supabase
+      .from("task_instance")
+      .select(INSTANCE_SELECT)
+      .eq("date", date)
+      .order("category")
+      .order("sort_order")
+      .order("created_at");
+
+  // Everything needed to draw the page, fetched together in one round
+  // trip. This runs on every tick, so it used to do five queries in a row
+  // (templates, "do today's tasks exist yet", insert, today, carried);
+  // the normal case is that today's tasks already exist, and that is now
+  // a single trip.
+  const [templatesRes, todayRes, openRes] = await Promise.all([
+    supabase
+      .from("task_template")
+      .select("id, title, part, category, repeat, weekdays, day_of_month, sort_order, skippable")
+      .eq("active", true),
+    readToday(),
+    supabase
+      .from("task_instance")
+      .select(INSTANCE_SELECT)
+      .eq("status", "open")
+      .lt("date", date)
+      .order("date")
+      .order("category")
+      .order("sort_order"),
+  ]);
+  if (todayRes.error) console.error("getShiftChecklist: today read failed", todayRes.error);
+  if (openRes.error) console.error("getShiftChecklist: carried read failed", openRes.error);
+
+  let todayRows = todayRes.data;
+  const openRows = openRes.data;
+
+  // Create any of today's tasks that don't exist yet (first visit of the
+  // day, or a template added since), then read today again to include them.
+  const dueTemplates = ((templatesRes.data ?? []) as TemplateForGen[]).filter((t) =>
     templateMatchesDate(t, target),
   );
-
-  if (dueTemplates.length) {
-    const { data: have } = await supabase
-      .from("task_instance")
-      .select("template_id")
-      .eq("date", date)
-      .not("template_id", "is", null);
-    const haveIds = new Set((have ?? []).map((h) => h.template_id));
-    const toCreate = dueTemplates.filter((t) => !haveIds.has(t.id));
-    if (toCreate.length) {
-      const { error: insErr } = await supabase.from("task_instance").insert(
-        toCreate.map((t) => ({
-          template_id: t.id,
-          date,
-          part: t.part,
-          category: t.category,
-          title: t.title,
-          sort_order: t.sort_order,
-          skippable: t.skippable,
-        })),
-      );
-      if (insErr && insErr.code !== "23505") console.error("shift checklist materialise failed", insErr);
-    }
+  const haveIds = new Set(
+    ((todayRows ?? []) as unknown as InstanceRow[]).map((r) => r.template_id).filter((id): id is string => id !== null),
+  );
+  const toCreate = dueTemplates.filter((t) => !haveIds.has(t.id));
+  if (toCreate.length) {
+    const { error: insErr } = await supabase.from("task_instance").insert(
+      toCreate.map((t) => ({
+        template_id: t.id,
+        date,
+        part: t.part,
+        category: t.category,
+        title: t.title,
+        sort_order: t.sort_order,
+        skippable: t.skippable,
+      })),
+    );
+    if (insErr && insErr.code !== "23505") console.error("shift checklist materialise failed", insErr);
+    const again = await readToday();
+    if (again.error) console.error("getShiftChecklist: today re-read failed", again.error);
+    else todayRows = again.data;
   }
-
-  const { data: todayRows, error: tErr } = await supabase
-    .from("task_instance")
-    .select(INSTANCE_SELECT)
-    .eq("date", date)
-    .order("category")
-    .order("sort_order")
-    .order("created_at");
-  if (tErr) console.error("getShiftChecklist: today read failed", tErr);
-
-  const { data: openRows, error: oErr } = await supabase
-    .from("task_instance")
-    .select(INSTANCE_SELECT)
-    .eq("status", "open")
-    .lt("date", date)
-    .order("date")
-    .order("category")
-    .order("sort_order");
-  if (oErr) console.error("getShiftChecklist: carried read failed", oErr);
 
   const byCategory = Object.fromEntries(CATEGORY_ORDER.map((c) => [c, [] as ShiftTaskRow[]])) as Record<
     TaskCategory,

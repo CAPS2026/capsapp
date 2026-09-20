@@ -101,14 +101,14 @@ function EmailModal({ preview, onClose }: { preview: EmailPreview; onClose: () =
 
         {preview.unclaimed.length > 0 && (
           <div className="rounded-[var(--radius)] border border-[#F0D69A] bg-warm-tint p-3 text-xs leading-relaxed">
-            <b className="font-extrabold">Not done, nobody nominated for it ({preview.unclaimed.length}):</b>{" "}
+            <b className="font-extrabold">Not done, nobody claimed it ({preview.unclaimed.length}):</b>{" "}
             {preview.unclaimed.join(", ")}
           </div>
         )}
 
         <p className="m-0 text-[11px] leading-relaxed text-ink-muted">
           Sent automatically when the last person on this shift signs out. A task with no name against it (nobody
-          nominated for it, nobody ticked it) is listed once under the shift as a whole, not attached to any one person.
+          claimed it, nobody ticked it) is listed once under the shift as a whole, not attached to any one person.
         </p>
       </div>
     </div>
@@ -119,7 +119,7 @@ function PersonEmailBlock({ block }: { block: PersonBlock }) {
   const lines: Array<[string, string[]]> = [
     ["Done", block.done],
     ["Not needed", block.notNeeded],
-    ["Nominated, not done", block.claimedNotDone],
+    ["Claimed, not done", block.claimedNotDone],
     ["Extra, off the checklist", block.extraDone],
   ];
   return (

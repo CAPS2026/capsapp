@@ -94,13 +94,13 @@ function textBody(date: string, part: Part, blocks: ReturnType<typeof buildBlock
     for (const f of p.flags) lines.push(`  ! ${f}`);
     if (p.done.length) lines.push(`  Done (${p.done.length}): ${p.done.join(", ")}`);
     if (p.notNeeded.length) lines.push(`  Not needed (${p.notNeeded.length}): ${p.notNeeded.join(", ")}`);
-    if (p.claimedNotDone.length) lines.push(`  Nominated, not done (${p.claimedNotDone.length}): ${p.claimedNotDone.join(", ")}`);
+    if (p.claimedNotDone.length) lines.push(`  Claimed, not done (${p.claimedNotDone.length}): ${p.claimedNotDone.join(", ")}`);
     if (p.extraDone.length) lines.push(`  Extra, off the checklist (${p.extraDone.length}): ${p.extraDone.join(", ")}`);
     lines.push("");
   }
 
   if (blocks.unclaimed.length) {
-    lines.push(`Not done, nobody nominated for it (${blocks.unclaimed.length}):`);
+    lines.push(`Not done, nobody claimed it (${blocks.unclaimed.length}):`);
     lines.push(`  ${blocks.unclaimed.join(", ")}`);
   }
 
@@ -121,13 +121,13 @@ function htmlBody(date: string, part: Part, blocks: ReturnType<typeof buildBlock
       ${p.flags.map((f) => `<p style="margin:4px 0;color:#C1800F;font-size:13px;">${esc(f)}</p>`).join("")}
       ${p.done.length ? `<p style="margin:6px 0 0;font-size:14px;"><b>Done (${p.done.length}):</b> ${esc(p.done.join(", "))}</p>` : ""}
       ${p.notNeeded.length ? `<p style="margin:6px 0 0;font-size:14px;"><b>Not needed (${p.notNeeded.length}):</b> ${esc(p.notNeeded.join(", "))}</p>` : ""}
-      ${p.claimedNotDone.length ? `<p style="margin:6px 0 0;font-size:14px;"><b>Nominated, not done (${p.claimedNotDone.length}):</b> ${esc(p.claimedNotDone.join(", "))}</p>` : ""}
+      ${p.claimedNotDone.length ? `<p style="margin:6px 0 0;font-size:14px;"><b>Claimed, not done (${p.claimedNotDone.length}):</b> ${esc(p.claimedNotDone.join(", "))}</p>` : ""}
       ${p.extraDone.length ? `<p style="margin:6px 0 0;font-size:14px;"><b>Extra, off the checklist (${p.extraDone.length}):</b> ${esc(p.extraDone.join(", "))}</p>` : ""}
     </div>`;
 
   const unclaimed = blocks.unclaimed.length
     ? `<div style="border:1px solid #F0D69A;background:#FEF3DC;border-radius:10px;padding:14px;">
-        <p style="margin:0;font-size:14px;"><b>Not done, nobody nominated for it (${blocks.unclaimed.length}):</b> ${esc(blocks.unclaimed.join(", "))}</p>
+        <p style="margin:0;font-size:14px;"><b>Not done, nobody claimed it (${blocks.unclaimed.length}):</b> ${esc(blocks.unclaimed.join(", "))}</p>
       </div>`
     : "";
 

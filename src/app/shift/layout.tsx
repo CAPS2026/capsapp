@@ -5,6 +5,7 @@ import { getCurrentPerson } from "@/lib/auth";
 import { getActiveShiftPerson } from "@/lib/shift-identity";
 import { ensureRosterSession, getHandoverNotes, getOpenShift, getRosterDayDetail, getShiftSettings } from "@/lib/shift-data";
 import { shelterToday } from "@/lib/shift";
+import { LateReasonGate } from "@/components/shift/late-reason-gate";
 import { ShiftSidebar } from "@/components/shift/shift-sidebar";
 import { ShiftTabs } from "@/components/shift/shift-tabs";
 
@@ -27,14 +28,15 @@ export const metadata: Metadata = {
  *  there saying "nobody signed in" next to the exact screen that fixes
  *  that. The tab bar stays up regardless, so navigation always works. */
 export default async function ShiftLayout({ children }: { children: React.ReactNode }) {
-  const person = await getCurrentPerson();
+  // Independent lookups, run together (each is a network round trip and
+  // this layout re-renders on every tick).
+  const [person, active] = await Promise.all([getCurrentPerson(), getActiveShiftPerson()]);
   if (!person?.isStaff) {
     const pathname = (await headers()).get("x-pathname") ?? "/shift";
     redirect(`/login?next=${encodeURIComponent(pathname)}`);
   }
 
   const today = shelterToday();
-  const active = await getActiveShiftPerson();
   const [openShift, settings, notes, todayRoster] = await Promise.all([
     active ? getOpenShift(active.id) : Promise.resolve(null),
     getShiftSettings(),
@@ -53,8 +55,24 @@ export default async function ShiftLayout({ children }: { children: React.ReactN
 
   const latest = notes[0];
 
+  // Late by more than the grace period and no reason given yet: the reason
+  // is required, so a prompt covers the screen until it's given.
+  const lateReasonOwed =
+    openShift !== null &&
+    openShift.lateMinutes !== null &&
+    openShift.lateMinutes > settings.lateAfterMinutes &&
+    !openShift.lateReason;
+
   return (
     <div className="flex min-h-screen bg-background">
+      {active && openShift && session && lateReasonOwed && (
+        <LateReasonGate
+          personName={active.name}
+          part={openShift.part}
+          lateMinutes={openShift.lateMinutes as number}
+          starts={session.starts}
+        />
+      )}
       {active && openShift && session && (
         <ShiftSidebar
           person={active}

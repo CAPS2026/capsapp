@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { clock12, firstName, parseYmd, shelterToday, type ShiftTaskRow } from "@/lib/shift";
+import { useEffect, useRef, useState } from "react";
+import { clock12, firstName, parseYmd, shelterToday, type ShiftTaskRow, type TaskStatus } from "@/lib/shift";
 import {
   claimTask,
   markTaskNotRequired,
@@ -50,9 +50,30 @@ function TaskRow({
   busy: boolean;
   run: (fn: () => Promise<{ error?: string }>) => void;
 }) {
-  const done = task.status === "done";
-  const notReq = task.status === "not_required";
+  // Show a tick the instant it's tapped, and let the server catch up:
+  // waiting for the save and the page rebuild before anything changed on
+  // screen is what made ticking feel laggy. Cleared once the real row
+  // arrives (status or timestamp changes), or straight away if the save
+  // fails, so the screen never keeps a tick the server refused.
+  const [optimistic, setOptimistic] = useState<TaskStatus | null>(null);
+  useEffect(() => {
+    setOptimistic(null);
+  }, [task.status, task.actionedAt]);
+
+  const status = optimistic ?? task.status;
+  const done = status === "done";
+  const notReq = status === "not_required";
   const open = !done && !notReq;
+
+  function toggle() {
+    const wasOpen = open;
+    setOptimistic(wasOpen ? "done" : "open");
+    run(async () => {
+      const r = wasOpen ? await signOffTask(task.id, note) : await reopenTask(task.id);
+      if (r.error) setOptimistic(null);
+      return r;
+    });
+  }
 
   const [note, setNote] = useState(task.note ?? "");
   const [hint, setHint] = useState<string | null>(null);
@@ -71,10 +92,9 @@ function TaskRow({
     <div className={`flex items-start gap-2 px-3 py-[9px] ${task.carriedOver && open ? "bg-warm-tint" : ""}`}>
       <button
         type="button"
-        disabled={busy}
-        onClick={() => run(open ? () => signOffTask(task.id, note) : () => reopenTask(task.id))}
+        onClick={toggle}
         aria-label={open ? "Mark done" : "Reopen"}
-        className={`mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] border-2 text-xs font-extrabold disabled:opacity-50 ${
+        className={`mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] border-2 text-xs font-extrabold ${
           done
             ? "border-ok bg-ok text-white"
             : notReq
@@ -141,7 +161,7 @@ function TaskRow({
                 onClick={() => run(() => claimTask(task.id))}
                 className="rounded-md border border-dashed border-line-cool px-[7px] py-0.5 text-[10.5px] font-extrabold text-brand-ink disabled:opacity-50"
               >
-                Nominate
+                Claim task
               </button>
             ) : (
               <button
@@ -150,7 +170,7 @@ function TaskRow({
                 onClick={() => run(() => unclaimTask(task.id))}
                 className="rounded-md border border-dashed border-line-cool px-[7px] py-0.5 text-[10.5px] font-extrabold text-ink-muted disabled:opacity-50"
               >
-                Withdraw
+                Unclaim
               </button>
             )}
             {!noteOpen && (

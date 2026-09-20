@@ -14,7 +14,7 @@ import {
   type OpenShift,
   type Part,
 } from "@/lib/shift";
-import { endShift, setLateReason, switchPerson } from "@/lib/actions/shift";
+import { endShift, switchPerson } from "@/lib/actions/shift";
 import type { RosterDaySession } from "@/lib/shift-data";
 import { EmailPreviewLink } from "@/components/shift/email-preview";
 import { PersonAvatar } from "@/components/shift/person-avatar";
@@ -133,7 +133,6 @@ function ShiftStatus({
   busy: boolean;
   run: (fn: () => Promise<{ error?: string }>) => void;
 }) {
-  const [reason, setReason] = useState(shift.lateReason ?? "");
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30000);
@@ -186,25 +185,6 @@ function ShiftStatus({
       </div>
 
       <GeoLine distanceM={shift.distanceM} radiusM={radiusM} />
-
-      {shift.lateMinutes && !shift.lateReason && (
-        <div className="flex items-center gap-2">
-          <input
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Reason for being late (optional)"
-            className="h-9 min-w-0 flex-1 rounded-[var(--radius)] border border-line-cool bg-white px-2 text-xs"
-          />
-          <button
-            type="button"
-            disabled={busy || !reason.trim()}
-            onClick={() => run(() => setLateReason(reason))}
-            className="h-9 shrink-0 rounded-[var(--radius)] bg-ok px-3 text-xs font-bold text-white disabled:opacity-50"
-          >
-            Save
-          </button>
-        </div>
-      )}
 
       <button
         type="button"
