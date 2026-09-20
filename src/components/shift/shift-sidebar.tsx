@@ -16,6 +16,7 @@ import {
 } from "@/lib/shift";
 import { endShift, switchPerson } from "@/lib/actions/shift";
 import type { RosterDaySession } from "@/lib/shift-data";
+import { formatLeaveDates } from "@/lib/leave";
 import { EmailPreviewLink } from "@/components/shift/email-preview";
 import { PersonAvatar } from "@/components/shift/person-avatar";
 import { EndEarlyDialog, ExtendShiftDialog, HealthConcernDialog } from "@/components/shift/shift-dialogs";
@@ -44,6 +45,7 @@ export function ShiftSidebar({
   radiusM,
   latestHandover,
   todayRoster,
+  leaveNotices,
 }: {
   person: { id: string; name: string };
   shift: OpenShift;
@@ -58,6 +60,8 @@ export function ShiftSidebar({
   radiusM: number;
   latestHandover: { personName: string; body: string; part: Part; date: string } | null;
   todayRoster: RosterDaySession[];
+  /** Leave decisions to show once, on the first shift after they were made. */
+  leaveNotices: { id: string; status: "approved" | "declined"; startDate: string; endDate: string; message: string | null }[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -113,6 +117,10 @@ export function ShiftSidebar({
       {healthOpen && <HealthConcernDialog onClose={() => setHealthOpen(false)} />}
 
       <EmailPreviewLink part={shift.part} />
+
+      {leaveNotices.map((n) => (
+        <LeaveNotice key={n.id} notice={n} />
+      ))}
 
       {latestHandover && <HandoverBanner note={latestHandover} />}
 
@@ -332,6 +340,29 @@ function TodayRoster({ sessions }: { sessions: RosterDaySession[] }) {
           ));
         })}
       </div>
+    </div>
+  );
+}
+
+/** A leave decision, shown once: the first shift after Shayna decided. After
+ *  that it only lives on the Roster tab. */
+function LeaveNotice({
+  notice,
+}: {
+  notice: { status: "approved" | "declined"; startDate: string; endDate: string; message: string | null };
+}) {
+  const approved = notice.status === "approved";
+  return (
+    <div
+      className={`flex flex-col gap-1 rounded-[var(--radius)] border px-3 py-2.5 ${
+        approved ? "border-[#BFE0CE] bg-[#E9F5EF]" : "border-[#F0C4B8] bg-[#FCEDE8]"
+      }`}
+    >
+      <span className={`text-[10px] font-extrabold uppercase tracking-[0.05em] ${approved ? "text-ok" : "text-[#9A3A26]"}`}>
+        Leave {approved ? "approved" : "declined"}
+      </span>
+      <p className="m-0 text-xs font-semibold text-foreground">{formatLeaveDates(notice.startDate, notice.endDate)}</p>
+      {notice.message && <p className="m-0 text-xs text-foreground">&quot;{notice.message}&quot;</p>}
     </div>
   );
 }

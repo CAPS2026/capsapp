@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveRosterEntries } from "@/lib/actions/shift";
 import { parseYmd } from "@/lib/shift";
+import { leaveCoversSession, type RosterLeave } from "@/lib/leave";
 import type { RosterEditRow } from "@/lib/shift-data";
 
 const selectClass = "h-10 w-full rounded-[var(--radius)] border border-line-cool bg-white px-2 text-sm";
@@ -27,11 +28,14 @@ export function RosterEditForm({
   days,
   people,
   initialRows,
+  leave,
 }: {
   start: string;
   days: number;
   people: { id: string; name: string }[];
   initialRows: RosterEditRow[];
+  /** Approved leave in this range, so people away are labelled in the dropdown. */
+  leave: RosterLeave[];
 }) {
   const router = useRouter();
   const [rangeStart, setRangeStart] = useState(start);
@@ -132,7 +136,7 @@ export function RosterEditForm({
                       <option value="">{i === 0 ? "Nobody rostered" : "Second person"}</option>
                       {people.map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.name}
+                          {`${p.name}${leave.some((l) => l.personId === p.id && leaveCoversSession(l, row.date, key)) ? " (on leave)" : ""}`}
                         </option>
                       ))}
                     </select>

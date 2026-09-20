@@ -2,7 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentPerson } from "@/lib/auth";
 import { getRosterablePeople, getRosterEditRange } from "@/lib/shift-data";
-import { shelterToday } from "@/lib/shift";
+import { getApprovedLeave } from "@/lib/leave-data";
+import { shelterToday, shiftDay } from "@/lib/shift";
 import { RosterEditForm } from "@/components/shift/roster-edit-form";
 
 export default async function RosterEditPage({
@@ -17,7 +18,11 @@ export default async function RosterEditPage({
   const start = /^\d{4}-\d{2}-\d{2}$/.test(sp.start ?? "") ? sp.start! : shelterToday();
   const days = Math.min(31, Math.max(1, Number(sp.days) || 14));
 
-  const [people, rows] = await Promise.all([getRosterablePeople(), getRosterEditRange(start, days)]);
+  const [people, rows, leave] = await Promise.all([
+    getRosterablePeople(),
+    getRosterEditRange(start, days),
+    getApprovedLeave(start, shiftDay(start, days - 1)),
+  ]);
 
   return (
     <div className="flex max-w-2xl flex-col gap-4">
@@ -37,7 +42,7 @@ export default async function RosterEditPage({
 
       {/* key: a new date range must remount the form, otherwise it keeps
           showing the previous range's rows (useState ignores new props). */}
-      <RosterEditForm key={`${start}:${days}`} start={start} days={days} people={people} initialRows={rows} />
+      <RosterEditForm key={`${start}:${days}`} start={start} days={days} people={people} initialRows={rows} leave={leave} />
     </div>
   );
 }
