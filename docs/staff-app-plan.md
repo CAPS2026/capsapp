@@ -40,10 +40,14 @@ misreport "somewhere else entirely," not just imprecisely.
 ## Late sign-in
 
 If sign-in is more than `org_settings.staff_late_after_minutes` (default
-10) after the rostered session start, prompt for an optional reason
-(`shift_log.late_reason`). Not mandatory for on-time sign-ins, no added
-friction for the common case. A late sign-in with no reason given is its
-own visible signal in the email.
+10) after the rostered session start, the reason (`shift_log.late_reason`)
+is **required** (changed 20 Sep 2026, it was optional). A full-screen
+prompt covers the app until it's given, and every checklist action also
+refuses on the server until then, so it can't be skipped by going round
+the screen. On-time sign-ins, and ones within the grace period, are never
+asked, no added friction for the common case. The minutes late are still
+recorded for any lateness and ride along in the email. Setting the
+threshold to 0 makes any lateness need a reason.
 
 ## Checklist: categories, claiming, extras
 
@@ -155,7 +159,7 @@ gets the full screen.
 Additions on top of the mockup, both requested by Julie: each checklist
 section is colour-coded (Opening amber, Animal Health coral, Kennel blue,
 Exercise green, Public and Committee purple, End of Day slate), and
-"Claim" is worded "Nominate" (her original word).
+"Claim task" / "Unclaim" are the button words (Julie settled on these after trying "Nominate").
 
 Known differences from the mockup, on purpose or not yet built:
 

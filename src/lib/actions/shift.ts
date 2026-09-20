@@ -36,11 +36,21 @@ async function requireDeviceStaff() {
  *  call also counts as activity on their open shift, so a genuinely busy
  *  shift never looks abandoned to the auto-close check. */
 async function requireActingPerson() {
-  if (!(await requireDeviceStaff())) return null;
-  const me = await getActiveShiftPerson();
-  if (me) await touchShiftActivity(me.id);
-  return me;
+  // Independent lookups, so run them together rather than one after the
+  // other (each is a network round trip, and this runs on every tick).
+  const [device, me] = await Promise.all([requireDeviceStaff(), getActiveShiftPerson()]);
+  if (!device || !me) return null;
+
+  const [late, settings] = await Promise.all([touchShiftActivity(me.id), getShiftSettings()]);
+  // Signed in more than the grace period late, and hasn't said why yet:
+  // the reason is required, so checklist actions refuse until it's given
+  // (the screen also covers everything with a prompt for it).
+  const lateBlocked =
+    late !== null && late.lateMinutes !== null && late.lateMinutes > settings.lateAfterMinutes && !late.lateReason;
+  return { ...me, lateBlocked };
 }
+
+const LATE_REASON_REQUIRED = "Please give your reason for being late first.";
 
 function bust() {
   revalidatePath("/shift");
@@ -124,17 +134,16 @@ export async function switchPerson(): Promise<void> {
   bust();
 }
 
-/** Add or update the optional reason for a late sign-in. */
+/** The reason for a late sign-in. Required, so it can't be blank. */
 export async function setLateReason(reason: string): Promise<Result> {
   const me = await requireActingPerson();
   if (!me) return { error: "Pick who you are first." };
+  const clean = reason.trim();
+  if (!clean) return { error: "Please give a reason for being late." };
   const supabase = await createClient();
   const open = await getOpenShift(me.id);
   if (!open) return { error: "No open shift to add a reason to." };
-  const { error } = await supabase
-    .from("shift_log")
-    .update({ late_reason: reason.trim() || null })
-    .eq("id", open.id);
+  const { error } = await supabase.from("shift_log").update({ late_reason: clean }).eq("id", open.id);
   if (error) return { error: error.message };
   bust();
   return {};
@@ -167,6 +176,7 @@ export async function endShift(): Promise<Result> {
 export async function signOffTask(instanceId: string, note: string): Promise<Result> {
   const me = await requireActingPerson();
   if (!me) return { error: "Pick who you are first." };
+  if (me.lateBlocked) return { error: LATE_REASON_REQUIRED };
   const supabase = await createClient();
   const { error } = await supabase
     .from("task_instance")
@@ -185,6 +195,7 @@ export async function signOffTask(instanceId: string, note: string): Promise<Res
 export async function markTaskNotRequired(instanceId: string, note: string): Promise<Result> {
   const me = await requireActingPerson();
   if (!me) return { error: "Pick who you are first." };
+  if (me.lateBlocked) return { error: LATE_REASON_REQUIRED };
   if (!note.trim()) return { error: "Add a short note saying why it wasn't needed." };
   const supabase = await createClient();
   const { error } = await supabase
@@ -204,6 +215,7 @@ export async function markTaskNotRequired(instanceId: string, note: string): Pro
 export async function reopenTask(instanceId: string): Promise<Result> {
   const me = await requireActingPerson();
   if (!me) return { error: "Pick who you are first." };
+  if (me.lateBlocked) return { error: LATE_REASON_REQUIRED };
   const supabase = await createClient();
   const { error } = await supabase
     .from("task_instance")
@@ -217,6 +229,7 @@ export async function reopenTask(instanceId: string): Promise<Result> {
 export async function updateTaskNote(instanceId: string, note: string): Promise<Result> {
   const me = await requireActingPerson();
   if (!me) return { error: "Pick who you are first." };
+  if (me.lateBlocked) return { error: LATE_REASON_REQUIRED };
   const supabase = await createClient();
   const { error } = await supabase
     .from("task_instance")
@@ -231,6 +244,7 @@ export async function updateTaskNote(instanceId: string, note: string): Promise<
 export async function claimTask(instanceId: string): Promise<Result> {
   const me = await requireActingPerson();
   if (!me) return { error: "Pick who you are first." };
+  if (me.lateBlocked) return { error: LATE_REASON_REQUIRED };
   const supabase = await createClient();
   const { error } = await supabase
     .from("task_instance")
@@ -244,6 +258,7 @@ export async function claimTask(instanceId: string): Promise<Result> {
 export async function unclaimTask(instanceId: string): Promise<Result> {
   const me = await requireActingPerson();
   if (!me) return { error: "Pick who you are first." };
+  if (me.lateBlocked) return { error: LATE_REASON_REQUIRED };
   const supabase = await createClient();
   const { error } = await supabase
     .from("task_instance")
@@ -261,6 +276,7 @@ export async function unclaimTask(instanceId: string): Promise<Result> {
 export async function addExtraTask(title: string): Promise<Result> {
   const me = await requireActingPerson();
   if (!me) return { error: "Pick who you are first." };
+  if (me.lateBlocked) return { error: LATE_REASON_REQUIRED };
   if (!title.trim()) return { error: "Say what you did." };
   const supabase = await createClient();
   const date = shelterToday();
