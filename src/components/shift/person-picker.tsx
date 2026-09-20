@@ -65,11 +65,8 @@ export function PersonPicker({ people }: { people: ShiftPerson[] }) {
       <div className="flex w-full max-w-[560px] flex-col gap-3.5 rounded-[14px] border border-line bg-card p-6 shadow-[0_20px_40px_rgba(0,0,0,0.08)]">
         <Image src="/logo.jpg" alt="" width={48} height={48} className="mx-auto rounded-full" />
         <h1 className="m-0 text-center text-lg font-extrabold text-foreground" style={{ fontFamily: "var(--font-display)" }}>
-          Who&rsquo;s working right now?
+          Click your name to start your shift
         </h1>
-        <p className="m-0 text-center text-xs leading-relaxed text-ink-muted">
-          Shared tablet. Tap your name, that&rsquo;s it, no PIN, so every tick stays attributed to the right person.
-        </p>
 
         {error && <p className="m-0 text-center text-sm text-danger">{error}</p>}
 
