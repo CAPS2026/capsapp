@@ -7,6 +7,7 @@ const TABS = [
   { href: "/shift", label: "Checklist" },
   { href: "/shift/roster", label: "Roster" },
   { href: "/shift/handover", label: "Handover log" },
+  { href: "/shift/leave", label: "Leave" },
 ];
 
 /** The mockup's segmented tabs: rounded-top pills sitting on the panel,

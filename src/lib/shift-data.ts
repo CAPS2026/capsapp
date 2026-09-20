@@ -405,6 +405,15 @@ function toRow(r: InstanceRow, carriedOver: boolean): ShiftTaskRow {
   };
 }
 
+/** The first day the staff app is really in use (org_settings.staff_go_live_date),
+ *  or null if none is set. Tasks dated before it are never carried over, so
+ *  the first real morning shift starts with nothing left over from testing. */
+export async function getGoLiveDate(): Promise<string | null> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("org_settings").select("staff_go_live_date").maybeSingle();
+  return data?.staff_go_live_date ?? null;
+}
+
 /** PostgREST filter for tasks carried into `part` of `date`: earlier than
  *  this session, and either still open or ticked since this session began
  *  (midnight for the morning, noon for the afternoon, Brisbane time). */
@@ -448,7 +457,8 @@ export async function getShiftChecklist(part: Part): Promise<{
   // (templates, "do today's tasks exist yet", insert, today, carried);
   // the normal case is that today's tasks already exist, and that is now
   // a single trip.
-  const [templatesRes, todayRes, openRes] = await Promise.all([
+  const [goLive, templatesRes, todayRes, openRes] = await Promise.all([
+    getGoLiveDate(),
     supabase
       .from("task_template")
       .select("id, title, part, category, repeat, weekdays, day_of_month, sort_order, skippable")
@@ -513,7 +523,10 @@ export async function getShiftChecklist(part: Part): Promise<{
     else if (row.category) byCategory[row.category].push(row);
   }
 
-  const carriedOver = ((openRows ?? []) as unknown as InstanceRow[]).map((r) => toRow(r, true));
+  // Nothing from before go-live is ever carried over (see getGoLiveDate).
+  const carriedOver = ((openRows ?? []) as unknown as InstanceRow[])
+    .filter((r) => !goLive || r.date >= goLive)
+    .map((r) => toRow(r, true));
 
   return { byCategory, carriedOver, extras };
 }
@@ -812,7 +825,8 @@ export type SessionTasksRow = ShiftTaskRow;
  *  Nothing is dropped because of who did it. */
 export async function getSessionTasks(date: string, part: Part): Promise<SessionTasksRow[]> {
   const supabase = await createClient();
-  const [own, older, shifts] = await Promise.all([
+  const [goLive, own, older, shifts] = await Promise.all([
+    getGoLiveDate(),
     supabase.from("task_instance").select(INSTANCE_SELECT).eq("date", date).eq("part", part),
     supabase
       .from("task_instance")
@@ -842,12 +856,15 @@ export async function getSessionTasks(date: string, part: Part): Promise<Session
       .in("status", ["done", "not_required"])
       .gte("actioned_at", from)
       .lte("actioned_at", to);
-    doneCarried = ((data ?? []) as unknown as InstanceRow[]).filter((r) => !(r.date === date && r.part === part));
+    doneCarried = ((data ?? []) as unknown as InstanceRow[]).filter(
+      (r) => !(r.date === date && r.part === part) && (!goLive || r.date >= goLive),
+    );
   }
 
   const rows = new Map<string, ShiftTaskRow>();
   for (const r of (own.data ?? []) as unknown as InstanceRow[]) rows.set(r.id, toRow(r, false));
-  for (const r of (older.data ?? []) as unknown as InstanceRow[]) if (!rows.has(r.id)) rows.set(r.id, toRow(r, true));
+  for (const r of (older.data ?? []) as unknown as InstanceRow[])
+    if (!rows.has(r.id) && (!goLive || r.date >= goLive)) rows.set(r.id, toRow(r, true));
   for (const r of doneCarried) if (!rows.has(r.id)) rows.set(r.id, toRow(r, true));
   return [...rows.values()];
 }
