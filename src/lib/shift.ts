@@ -157,6 +157,8 @@ export type OpenShift = {
   rostered: boolean;
   /** Metres from the shelter at sign-in, null if location wasn't shared. */
   distanceM: number | null;
+  /** Overtime logged with "Extend shift", minutes past the rostered end. */
+  extendedMinutes: number | null;
 };
 
 /** "Jo B" -> "JB". Falls back to the first initial, then "?". */

@@ -80,6 +80,7 @@ export default async function ShiftLayout({ children }: { children: React.ReactN
           session={{ starts: session.starts, ends: session.ends }}
           alsoOn={alsoOn}
           autocloseGraceMinutes={settings.autocloseGraceMinutes}
+          lateAfterMinutes={settings.lateAfterMinutes}
           radiusM={settings.radiusM}
           latestHandover={
             latest ? { personName: latest.personName, body: latest.body, part: latest.part, date: latest.date } : null
