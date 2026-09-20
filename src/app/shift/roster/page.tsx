@@ -1,9 +1,13 @@
 import Link from "next/link";
-import { getMonthRoster, getRosterDayDetail } from "@/lib/shift-data";
+import { Fragment } from "react";
+import { getMonthRoster, getRosterDayDetail, getRosterablePeople } from "@/lib/shift-data";
 import { checkAutoCloseAndSendEmails } from "@/lib/shift-email";
 import { PART_LABEL, parseYmd, shelterToday, shiftDay, timeRange } from "@/lib/shift";
 import { getCurrentPerson } from "@/lib/auth";
 import { PersonAvatar } from "@/components/shift/person-avatar";
+import { getAllLeaveRequests, getApprovedLeave, getMyLeaveRequests, resolveRequester } from "@/lib/leave-data";
+import { LEAVE_SCOPE_LABEL, formatLeaveDates, leaveCoversDate, leaveCoversSession, scopeShort } from "@/lib/leave";
+import { AskForLeave, CancelLeaveButton, DecisionButtons, StatusBadge } from "@/components/shift/leave-forms";
 
 const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MONTH_NAMES = [
@@ -46,7 +50,18 @@ export default async function RosterPage({
   const month = Number(sp.m) || todayMonth;
   const selected = /^\d{4}-\d{2}-\d{2}$/.test(sp.d ?? "") ? sp.d! : today;
 
-  const [grid, dayDetail] = await Promise.all([getMonthRoster(year, month), getRosterDayDetail(selected)]);
+  const monthFrom = `${year}-${String(month).padStart(2, "0")}-01`;
+  const monthTo = `${year}-${String(month).padStart(2, "0")}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
+  const [grid, dayDetail, leave, requester, people, allRequests] = await Promise.all([
+    getMonthRoster(year, month),
+    getRosterDayDetail(selected),
+    getApprovedLeave(monthFrom, monthTo),
+    resolveRequester(),
+    getRosterablePeople(),
+    person?.isAdmin ? getAllLeaveRequests() : Promise.resolve([]),
+  ]);
+  const mine = requester ? await getMyLeaveRequests(requester.id) : [];
+  const leaveOn = (date: string) => leave.filter((l) => leaveCoversDate(l, date));
   const weeks = monthGrid(year, month);
 
   const prevMonth = month === 1 ? { y: year - 1, m: 12 } : { y: year, m: month - 1 };
@@ -124,6 +139,11 @@ export default async function RosterPage({
                       {cell.pm.join(",")}
                     </span>
                   ) : null}
+                  {leaveOn(date).length > 0 && (
+                    <span className="rounded-[5px] bg-[#FCEDE8] px-1 py-0.5 text-center text-[10.5px] font-extrabold leading-[1.4] text-[#9A3A26]">
+                      Leave {leaveOn(date).map((l) => l.name.charAt(0).toUpperCase()).join(",")}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -137,6 +157,10 @@ export default async function RosterPage({
             <span className="inline-flex items-center gap-1">
               <span className="h-[9px] w-[9px] rounded-[3px] bg-sun-tint" />
               Afternoon
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="h-[9px] w-[9px] rounded-[3px] bg-[#FCEDE8]" />
+              On leave
             </span>
           </div>
         </div>
@@ -155,7 +179,8 @@ export default async function RosterPage({
             </div>
 
             {dayDetail.map((s) => (
-              <div key={s.part} className="flex items-center justify-between border-t border-line py-2 first:border-0">
+              <Fragment key={s.part}>
+              <div className="flex items-center justify-between border-t border-line py-2 first:border-0">
                 <div>
                   <div className="text-[13px] font-extrabold text-foreground">{PART_LABEL[s.part]}</div>
                   <div className="text-[11.5px] font-semibold text-ink-muted">{timeRange(s.starts, s.ends)}</div>
@@ -180,7 +205,26 @@ export default async function RosterPage({
                   )}
                 </div>
               </div>
+              {s.attendees
+                .filter((a) => leave.some((l) => l.personId === a.id && leaveCoversSession(l, selected, s.part)))
+                .map((a) => (
+                  <p key={a.id} className="m-0 -mt-1 pb-1 text-[11.5px] font-bold text-warm-ink">
+                    {a.first} is on leave, needs cover
+                  </p>
+                ))}
+              </Fragment>
             ))}
+
+            {leaveOn(selected).length > 0 && (
+              <div className="border-t border-line pt-2">
+                <div className="text-[13px] font-extrabold text-[#9A3A26]">On leave</div>
+                {leaveOn(selected).map((l) => (
+                  <p key={l.id} className="m-0 text-[12.5px] font-semibold">
+                    {l.name} ({scopeShort(l.scope)})
+                  </p>
+                ))}
+              </div>
+            )}
 
             {dayDetail.some((s) => s.attendees.length === 0) && (
               <p className="m-0 text-[11px] leading-normal text-ink-muted">
@@ -203,6 +247,51 @@ export default async function RosterPage({
           </div>
         </div>
       </div>
+
+      <section className="mt-2 flex flex-col gap-3 border-t border-line pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="m-0 text-base font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
+            Leave this month
+          </h2>
+          <AskForLeave requester={requester} people={people} mine={mine} />
+        </div>
+        {leave.length === 0 ? (
+          <p className="m-0 text-sm text-ink-muted">Nobody is on leave this month.</p>
+        ) : (
+          <ul className="m-0 flex list-none flex-col gap-1 p-0">
+            {leave.map((l) => (
+              <li key={l.id} className="text-sm">
+                <b>{l.name}</b> on leave, {formatLeaveDates(l.startDate, l.endDate)} ({scopeShort(l.scope)})
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {person?.isAdmin && (
+        <section className="flex flex-col gap-2 border-t border-line pt-4">
+          <h2 className="m-0 text-base font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
+            Leave requests (admins only)
+          </h2>
+          {allRequests.length === 0 && <p className="m-0 text-sm text-ink-muted">No leave requests yet.</p>}
+          {allRequests.map((r) => (
+            <div key={r.id} className="flex flex-col gap-2 rounded-[var(--radius)] border border-line bg-card p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="m-0 text-sm font-extrabold">{r.personName}</p>
+                  <p className="m-0 text-sm">{formatLeaveDates(r.startDate, r.endDate)}</p>
+                  <p className="m-0 text-xs text-ink-muted">{LEAVE_SCOPE_LABEL[r.scope]}</p>
+                </div>
+                <StatusBadge status={r.status} />
+              </div>
+              {r.note && <p className="m-0 text-xs">Reason: {r.note}</p>}
+              {r.decisionNote && <p className="m-0 text-xs text-ink-muted">Message sent: {r.decisionNote}</p>}
+              {r.status === "pending" && <DecisionButtons id={r.id} />}
+              {r.status === "approved" && <CancelLeaveButton id={r.id} />}
+            </div>
+          ))}
+        </section>
+      )}
     </div>
   );
 }

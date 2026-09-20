@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentPerson } from "@/lib/auth";
+import { markLeaveNoticesForShift } from "@/lib/leave-data";
 import {
   getActiveShiftPerson,
   setActiveShiftPerson,
@@ -125,6 +126,13 @@ export async function pickPerson(
   // 23505 = they already have an open shift (a near-simultaneous double
   // tap), fine, just proceed as a resume.
   if (error && error.code !== "23505") return { error: error.message };
+
+  // A fresh sign-in: any leave decision they haven't been shown yet gets
+  // tied to this shift, so the sidebar shows it once (this shift only).
+  if (!error) {
+    const opened = await getOpenShift(personId);
+    if (opened) await markLeaveNoticesForShift(personId, opened.id);
+  }
 
   await setActiveShiftPerson(personId);
   bust();

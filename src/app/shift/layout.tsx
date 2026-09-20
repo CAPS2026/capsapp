@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCurrentPerson } from "@/lib/auth";
 import { getActiveShiftPerson } from "@/lib/shift-identity";
+import { getLeaveNoticesForShift } from "@/lib/leave-data";
 import { ensureRosterSession, getHandoverNotes, getOpenShift, getRosterDayDetail, getShiftSettings } from "@/lib/shift-data";
 import { shelterToday } from "@/lib/shift";
 import { LateReasonGate } from "@/components/shift/late-reason-gate";
@@ -43,7 +44,10 @@ export default async function ShiftLayout({ children }: { children: React.ReactN
     getHandoverNotes(1),
     getRosterDayDetail(today),
   ]);
-  const session = openShift ? await ensureRosterSession(openShift.date, openShift.part) : null;
+  const [session, leaveNotices] = await Promise.all([
+    openShift ? ensureRosterSession(openShift.date, openShift.part) : Promise.resolve(null),
+    openShift ? getLeaveNoticesForShift(openShift.id) : Promise.resolve([]),
+  ]);
 
   // Anyone else rostered on the same session as the person signed in.
   let alsoOn: string[] = [];
@@ -86,6 +90,7 @@ export default async function ShiftLayout({ children }: { children: React.ReactN
             latest ? { personName: latest.personName, body: latest.body, part: latest.part, date: latest.date } : null
           }
           todayRoster={todayRoster}
+          leaveNotices={leaveNotices}
         />
       )}
       <div className="flex min-w-0 flex-1 flex-col">

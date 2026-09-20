@@ -2,7 +2,7 @@ import Image from "next/image";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getLeaveByToken, getLeaveContext } from "@/lib/leave-data";
-import { LEAVE_SCOPE_LABEL, LEAVE_TYPE_LABEL, formatLeaveDates } from "@/lib/leave";
+import { LEAVE_SCOPE_LABEL, formatLeaveDates } from "@/lib/leave";
 import { DecisionButtons, StatusBadge } from "@/components/shift/leave-forms";
 
 // Public landing page for the link in the leave request email (the
@@ -30,7 +30,6 @@ export default async function LeaveDecisionPage({ params }: { params: Promise<{ 
               </h1>
             </div>
             <div className="m-0 flex flex-col gap-1 border-t border-line pt-3 text-sm">
-              <p className="m-0"><b>Type:</b> {LEAVE_TYPE_LABEL[req.leaveType]}</p>
               <p className="m-0"><b>Dates:</b> {formatLeaveDates(req.startDate, req.endDate)}</p>
               <p className="m-0"><b>Shifts:</b> {LEAVE_SCOPE_LABEL[req.scope]}</p>
               <p className="m-0"><b>Reason:</b> {req.note ?? "None given"}</p>
