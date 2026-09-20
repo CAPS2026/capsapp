@@ -21,7 +21,8 @@ export default async function ShiftPage() {
     return <PersonPicker people={people} />;
   }
 
-  const checklist = await getShiftChecklist();
+  // Only this shift's own tasks: the morning and afternoon lists are separate.
+  const checklist = await getShiftChecklist(openShift.part);
 
   return (
     <ShiftChecklist byCategory={checklist.byCategory} carriedOver={checklist.carriedOver} extras={checklist.extras} />

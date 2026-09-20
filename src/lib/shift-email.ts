@@ -3,30 +3,43 @@
 // closes (see maybeSendShiftEmail, called from endShift and from the
 // auto-close check). Recipients come from
 // org_settings.staff_shift_email_recipients, never from this file.
+//
+// It lists: what each person did, whether they were late, finished early
+// or stayed on, every task still outstanding, the handover log entries
+// and any health concerns raised. (Health concerns are also emailed the
+// moment they are raised, see sendHealthConcernEmail.)
 
 import { sendEmail } from "@/lib/email";
 import { createClient } from "@/lib/supabase/server";
-import { PART_LABEL, CATEGORY_LABEL, clock12, parseYmd, type Part } from "@/lib/shift";
+import { PART_LABEL, CATEGORY_LABEL, clock12, parseYmd, sessionInstant, type Part } from "@/lib/shift";
 import {
   autocloseStaleShifts,
   ensureRosterSession,
+  getHealthConcernRecipients,
+  getSessionHandover,
+  getSessionHealthConcerns,
   getSessionShifts,
   getSessionTasks,
   getShiftEmailRecipients,
   getShiftSettings,
   hasOpenShiftsForSession,
+  type SessionHandoverRow,
+  type SessionHealthConcern,
   type SessionShiftRow,
   type SessionTasksRow,
 } from "@/lib/shift-data";
 
 export type PersonBlock = {
   name: string;
-  startedAt: string;
+  /** Null for someone who ticked tasks but never signed in to this session. */
+  startedAt: string | null;
   endedAt: string | null;
+  /** Plain-English lines: on time or late, full shift or early, overtime. */
+  status: string[];
+  /** Things worth attention (off site, covering, closed automatically). */
   flags: string[];
   done: string[];
   notNeeded: string[];
-  claimedNotDone: string[];
   extraDone: string[];
 };
 
@@ -34,109 +47,239 @@ export type EmailPreview = {
   date: string;
   part: Part;
   people: PersonBlock[];
-  unclaimed: string[];
+  outstanding: string[];
+  handover: SessionHandoverRow[];
+  health: SessionHealthConcern[];
   /** False when nobody's configured to receive it (so preview still works). */
   hasRecipients: boolean;
 };
+
+type Built = Pick<EmailPreview, "people" | "outstanding" | "handover" | "health">;
 
 function timeLabel(iso: string) {
   return clock12(iso);
 }
 
-function buildBlocks(shifts: SessionShiftRow[], tasks: SessionTasksRow[], radiusM: number): {
-  people: PersonBlock[];
-  unclaimed: string[];
-} {
+function dayShort(date: string) {
+  return parseYmd(date).toLocaleDateString("en-AU", { weekday: "short" });
+}
+
+function taskLabel(t: SessionTasksRow) {
+  const base = t.category ? `${t.title} (${CATEGORY_LABEL[t.category]})` : t.title;
+  return t.isExtra ? `${base} (extra)` : base;
+}
+
+/** The status lines for one person's shift: late or on time, full shift
+ *  or finished early, any overtime. `graceMin` is the same grace period
+ *  the app uses everywhere (10 minutes), inside which nothing is flagged. */
+function statusLines(s: SessionShiftRow, graceMin: number): string[] {
+  const lines: string[] = [];
+
+  if (s.lateMinutes && s.lateMinutes > graceMin) {
+    lines.push(
+      `Late: signed in ${s.lateMinutes} min after the rostered start${s.lateReason ? `, reason: ${s.lateReason}` : ", no reason given"}`,
+    );
+  } else {
+    lines.push("On time");
+  }
+
+  if (!s.endedAt) {
+    lines.push("Still signed in");
+    return lines;
+  }
+
+  const endsAt = sessionInstant(s.date, s.sessionEnds).getTime();
+  const extended = (s.extendedMinutes ?? 0) * 60000;
+  const out = new Date(s.endedAt).getTime();
+
+  if (s.extendedMinutes) {
+    lines.push(
+      `Stayed ${s.extendedMinutes} min past the rostered end${s.extendedReason ? `, reason: ${s.extendedReason}` : ""}`,
+    );
+  }
+  if (s.autoClosed) {
+    lines.push("Shift closed automatically at the rostered end, no manual sign-out");
+  } else {
+    const earlyMin = Math.round((endsAt + extended - out) / 60000);
+    if (earlyMin > graceMin) {
+      lines.push(`Finished ${earlyMin} min early${s.endedEarlyReason ? `, reason: ${s.endedEarlyReason}` : ", no reason given"}`);
+    } else if (!s.extendedMinutes) {
+      const overMin = Math.round((out - endsAt) / 60000);
+      lines.push(
+        overMin > graceMin ? `Full shift, then stayed ${overMin} min past the rostered end (not logged as overtime)` : "Full shift",
+      );
+    } else {
+      lines.push("Full shift");
+    }
+  }
+  return lines;
+}
+
+function buildBlocks(
+  shifts: SessionShiftRow[],
+  tasks: SessionTasksRow[],
+  handover: SessionHandoverRow[],
+  health: SessionHealthConcern[],
+  radiusM: number,
+  graceMin: number,
+): Built {
   const people = new Map<string, PersonBlock>();
   for (const s of shifts) {
     const flags: string[] = [];
-    if (s.lateMinutes) flags.push(`Signed in ${s.lateMinutes} min after the rostered start${s.lateReason ? `: ${s.lateReason}` : ", no reason given"}`);
+    if (!s.rostered) flags.push("Covering, not on the roster");
     if (s.distanceM != null && s.distanceM > radiusM) flags.push(`Signed in ${(s.distanceM / 1000).toFixed(1)}km from the shelter`);
-    if (s.autoClosed) flags.push("Shift closed automatically, no manual sign-out");
+    const existing = people.get(s.personName);
+    if (existing) {
+      // The same person signed in twice in one session: one block, both
+      // sets of lines, rather than the second wiping out the first.
+      existing.status.push(...statusLines(s, graceMin));
+      existing.flags.push(...flags);
+      existing.endedAt = s.endedAt;
+      continue;
+    }
     people.set(s.personName, {
       name: s.personName,
       startedAt: s.startedAt,
       endedAt: s.endedAt,
+      status: statusLines(s, graceMin),
       flags,
       done: [],
       notNeeded: [],
-      claimedNotDone: [],
       extraDone: [],
     });
   }
 
-  const unclaimed: string[] = [];
+  const blockFor = (name: string): PersonBlock => {
+    let p = people.get(name);
+    if (!p) {
+      p = { name, startedAt: null, endedAt: null, status: [], flags: [], done: [], notNeeded: [], extraDone: [] };
+      people.set(name, p);
+    }
+    return p;
+  };
+
+  const outstanding: string[] = [];
   for (const t of tasks) {
-    const label = t.category ? `${t.title} (${CATEGORY_LABEL[t.category]})` : t.title;
+    const label = t.carriedOver ? `${taskLabel(t)} (from ${dayShort(t.date)})` : taskLabel(t);
     if (t.status === "done" && t.actionedByName) {
-      const p = people.get(t.actionedByName);
-      if (p) (t.isExtra ? p.extraDone : p.done).push(label);
+      (t.isExtra ? blockFor(t.actionedByName).extraDone : blockFor(t.actionedByName).done).push(label);
     } else if (t.status === "not_required" && t.actionedByName) {
-      const p = people.get(t.actionedByName);
-      if (p) p.notNeeded.push(`${label}${t.note ? `: ${t.note}` : ""}`);
-    } else if (t.status === "open" && t.claimedByName) {
-      const p = people.get(t.claimedByName);
-      if (p) p.claimedNotDone.push(label);
+      blockFor(t.actionedByName).notNeeded.push(`${label}${t.note ? `: ${t.note}` : ""}`);
     } else if (t.status === "open") {
-      unclaimed.push(t.isExtra ? `${label} (extra)` : label);
+      outstanding.push(t.claimedByName ? `${label} (claimed by ${t.claimedByName})` : label);
     }
   }
 
-  return { people: [...people.values()], unclaimed };
+  return { people: [...people.values()], outstanding, handover, health };
 }
 
-function textBody(date: string, part: Part, blocks: ReturnType<typeof buildBlocks>): string {
+function textBody(date: string, part: Part, b: Built): string {
   const day = parseYmd(date).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" });
   const lines = [`${PART_LABEL[part]} shift, ${day}`, ""];
 
-  for (const p of blocks.people) {
-    lines.push(`${p.name} (signed in ${timeLabel(p.startedAt)}${p.endedAt ? `, out ${timeLabel(p.endedAt)}` : ", still signed in"})`);
+  if (b.health.length) {
+    lines.push("HEALTH CONCERNS");
+    for (const h of b.health) {
+      lines.push(`  ${h.urgent ? "URGENT: " : ""}${h.dogName ? `${h.dogName}: ` : ""}${h.body} (${h.personName}, ${timeLabel(h.createdAt)})`);
+    }
+    lines.push("");
+  }
+
+  for (const p of b.people) {
+    lines.push(
+      p.startedAt
+        ? `${p.name} (signed in ${timeLabel(p.startedAt)}${p.endedAt ? `, out ${timeLabel(p.endedAt)}` : ", still signed in"})`
+        : `${p.name} (not signed in to this shift)`,
+    );
+    for (const s of p.status) lines.push(`  ${s}`);
     for (const f of p.flags) lines.push(`  ! ${f}`);
     if (p.done.length) lines.push(`  Done (${p.done.length}): ${p.done.join(", ")}`);
     if (p.notNeeded.length) lines.push(`  Not needed (${p.notNeeded.length}): ${p.notNeeded.join(", ")}`);
-    if (p.claimedNotDone.length) lines.push(`  Claimed, not done (${p.claimedNotDone.length}): ${p.claimedNotDone.join(", ")}`);
     if (p.extraDone.length) lines.push(`  Extra, off the checklist (${p.extraDone.length}): ${p.extraDone.join(", ")}`);
     lines.push("");
   }
 
-  if (blocks.unclaimed.length) {
-    lines.push(`Not done, nobody claimed it (${blocks.unclaimed.length}):`);
-    lines.push(`  ${blocks.unclaimed.join(", ")}`);
+  lines.push(`OUTSTANDING (${b.outstanding.length})`);
+  lines.push(b.outstanding.length ? `  ${b.outstanding.join(", ")}` : "  Nothing outstanding.");
+  lines.push("");
+
+  lines.push("HANDOVER LOG");
+  if (b.handover.length) {
+    for (const h of b.handover) lines.push(`  ${h.personName}, ${timeLabel(h.createdAt)}: ${h.body}`);
+  } else {
+    lines.push("  No handover notes this shift.");
   }
 
   return lines.join("\n");
 }
 
-function htmlBody(date: string, part: Part, blocks: ReturnType<typeof buildBlocks>): string {
+function htmlBody(date: string, part: Part, b: Built): string {
   const day = parseYmd(date).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" });
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const h3 = (s: string) => `<h3 style="font-family:sans-serif;font-size:14px;color:#2C2C2A;margin:18px 0 8px;">${s}</h3>`;
+
+  const health = b.health.length
+    ? `<div style="border:1px solid #E2725B;background:#FCEDE8;border-radius:10px;padding:14px;margin-bottom:12px;">
+        <p style="margin:0 0 6px;font-weight:800;color:#9A3A26;">Health concerns</p>
+        ${b.health
+          .map(
+            (h) =>
+              `<p style="margin:4px 0;font-size:14px;">${h.urgent ? "<b>URGENT</b> " : ""}${h.dogName ? `<b>${esc(h.dogName)}:</b> ` : ""}${esc(h.body)} <span style="color:#6B6B68;font-size:12px;">(${esc(h.personName)}, ${timeLabel(h.createdAt)})</span></p>`,
+          )
+          .join("")}
+      </div>`
+    : "";
 
   const person = (p: PersonBlock) => `
     <div style="border:1px solid #E0DDD6;border-radius:10px;padding:14px;margin-bottom:12px;">
       <p style="margin:0 0 6px;font-weight:800;color:#2C2C2A;">
         ${esc(p.name)} <span style="font-weight:600;color:#6B6B68;font-size:13px;">
-          signed in ${timeLabel(p.startedAt)}${p.endedAt ? `, out ${timeLabel(p.endedAt)}` : ", still signed in"}
+          ${p.startedAt ? `signed in ${timeLabel(p.startedAt)}${p.endedAt ? `, out ${timeLabel(p.endedAt)}` : ", still signed in"}` : "not signed in to this shift"}
         </span>
       </p>
+      ${p.status.map((s) => `<p style="margin:4px 0;font-size:13px;color:#2C2C2A;">${esc(s)}</p>`).join("")}
       ${p.flags.map((f) => `<p style="margin:4px 0;color:#C1800F;font-size:13px;">${esc(f)}</p>`).join("")}
       ${p.done.length ? `<p style="margin:6px 0 0;font-size:14px;"><b>Done (${p.done.length}):</b> ${esc(p.done.join(", "))}</p>` : ""}
       ${p.notNeeded.length ? `<p style="margin:6px 0 0;font-size:14px;"><b>Not needed (${p.notNeeded.length}):</b> ${esc(p.notNeeded.join(", "))}</p>` : ""}
-      ${p.claimedNotDone.length ? `<p style="margin:6px 0 0;font-size:14px;"><b>Claimed, not done (${p.claimedNotDone.length}):</b> ${esc(p.claimedNotDone.join(", "))}</p>` : ""}
       ${p.extraDone.length ? `<p style="margin:6px 0 0;font-size:14px;"><b>Extra, off the checklist (${p.extraDone.length}):</b> ${esc(p.extraDone.join(", "))}</p>` : ""}
     </div>`;
 
-  const unclaimed = blocks.unclaimed.length
+  const outstanding = b.outstanding.length
     ? `<div style="border:1px solid #F0D69A;background:#FEF3DC;border-radius:10px;padding:14px;">
-        <p style="margin:0;font-size:14px;"><b>Not done, nobody claimed it (${blocks.unclaimed.length}):</b> ${esc(blocks.unclaimed.join(", "))}</p>
+        <p style="margin:0;font-size:14px;">${esc(b.outstanding.join(", "))}</p>
       </div>`
-    : "";
+    : `<p style="margin:0;font-size:14px;color:#6B6B68;">Nothing outstanding.</p>`;
+
+  const handover = b.handover.length
+    ? b.handover
+        .map(
+          (h) =>
+            `<p style="margin:4px 0;font-size:14px;"><b>${esc(h.personName)}</b> <span style="color:#6B6B68;font-size:12px;">${timeLabel(h.createdAt)}</span><br>${esc(h.body)}</p>`,
+        )
+        .join("")
+    : `<p style="margin:0;font-size:14px;color:#6B6B68;">No handover notes this shift.</p>`;
 
   return `
     <div style="font-family:sans-serif;max-width:520px;">
       <h2 style="font-family:sans-serif;color:#0F5A8F;">${PART_LABEL[part]} shift, ${day}</h2>
-      ${blocks.people.map(person).join("")}
-      ${unclaimed}
+      ${health}
+      ${b.people.map(person).join("")}
+      ${h3(`Outstanding (${b.outstanding.length})`)}
+      ${outstanding}
+      ${h3("Handover log")}
+      ${handover}
     </div>`;
+}
+
+async function buildSession(date: string, part: Part): Promise<Built> {
+  const [shifts, tasks, handover, health, { radiusM, lateAfterMinutes }] = await Promise.all([
+    getSessionShifts(date, part),
+    getSessionTasks(date, part),
+    getSessionHandover(date, part),
+    getSessionHealthConcerns(date, part),
+    getShiftSettings(),
+  ]);
+  return buildBlocks(shifts, tasks, handover, health, radiusM, lateAfterMinutes);
 }
 
 /** Sends the summary for (date, part) if, and only if, every shift
@@ -149,21 +292,18 @@ export async function maybeSendShiftEmail(date: string, part: Part): Promise<voi
   if (session.emailSentAt) return;
   if (await hasOpenShiftsForSession(date, part)) return;
 
-  const shifts = await getSessionShifts(date, part);
-  if (shifts.length === 0) return;
+  const built = await buildSession(date, part);
+  if (built.people.every((p) => !p.startedAt)) return;
 
   const recipients = await getShiftEmailRecipients();
   if (recipients.length === 0) return;
-
-  const [tasks, { radiusM }] = await Promise.all([getSessionTasks(date, part), getShiftSettings()]);
-  const blocks = buildBlocks(shifts, tasks, radiusM);
 
   const day = parseYmd(date).toLocaleDateString("en-AU", { day: "numeric", month: "short" });
   const result = await sendEmail({
     to: recipients,
     subject: `CAPS ${PART_LABEL[part]} shift, ${day}`,
-    text: textBody(date, part, blocks),
-    html: htmlBody(date, part, blocks),
+    text: textBody(date, part, built),
+    html: htmlBody(date, part, built),
   });
 
   if (result.ok) {
@@ -178,14 +318,49 @@ export async function maybeSendShiftEmail(date: string, part: Part): Promise<voi
  *  same code as the real email, so the on-screen preview can never drift
  *  from what actually gets sent. Sends nothing and changes nothing. */
 export async function getShiftEmailPreview(date: string, part: Part): Promise<EmailPreview> {
-  const [shifts, tasks, { radiusM }, recipients] = await Promise.all([
-    getSessionShifts(date, part),
-    getSessionTasks(date, part),
-    getShiftSettings(),
-    getShiftEmailRecipients(),
-  ]);
-  const blocks = buildBlocks(shifts, tasks, radiusM);
-  return { date, part, people: blocks.people, unclaimed: blocks.unclaimed, hasRecipients: recipients.length > 0 };
+  const [built, recipients] = await Promise.all([buildSession(date, part), getShiftEmailRecipients()]);
+  return { date, part, ...built, hasRecipients: recipients.length > 0 };
+}
+
+/** The immediate email for one health concern. Returns whether it was
+ *  actually sent: false when nobody is set up to receive it, or the send
+ *  failed, so the screen can say so plainly instead of implying Shayna was
+ *  told. */
+export async function sendHealthConcernEmail(opts: {
+  concernId: string;
+  personName: string;
+  part: Part;
+  date: string;
+  dogName: string | null;
+  urgent: boolean;
+  body: string;
+}): Promise<boolean> {
+  const recipients = await getHealthConcernRecipients();
+  if (recipients.length === 0) return false;
+
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const day = parseYmd(opts.date).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" });
+  const who = opts.dogName ? ` (${opts.dogName})` : "";
+  const subject = `${opts.urgent ? "URGENT " : ""}CAPS health concern${who}`;
+  const intro = `${opts.personName} raised a health concern on the ${PART_LABEL[opts.part].toLowerCase()} shift, ${day}.`;
+
+  const result = await sendEmail({
+    to: recipients,
+    subject,
+    text: `${intro}\n\n${opts.urgent ? "Marked urgent.\n" : ""}${opts.dogName ? `Dog: ${opts.dogName}\n` : ""}${opts.body}`,
+    html: `<div style="font-family:sans-serif;max-width:520px;">
+      <h2 style="color:#9A3A26;">${opts.urgent ? "URGENT: " : ""}Health concern${esc(who)}</h2>
+      <p style="font-size:14px;">${esc(intro)}</p>
+      <div style="border:1px solid #E2725B;background:#FCEDE8;border-radius:10px;padding:14px;font-size:14px;">${esc(opts.body)}</div>
+    </div>`,
+  });
+  if (!result.ok) {
+    console.error("sendHealthConcernEmail: send failed", result.error);
+    return false;
+  }
+  const supabase = await createClient();
+  await supabase.from("health_concern").update({ emailed_at: new Date().toISOString() }).eq("id", opts.concernId);
+  return true;
 }
 
 /** Call this wherever the staff app loads (no scheduled job behind it

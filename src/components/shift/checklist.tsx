@@ -16,6 +16,7 @@ import {
 function shortDate(s: string) {
   const d = parseYmd(s);
   const ageDays = Math.round((parseYmd(shelterToday()).getTime() - d.getTime()) / 86400000);
+  if (ageDays <= 0) return "this morning";
   return ageDays < 7
     ? d.toLocaleDateString("en-AU", { weekday: "short" })
     : d.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" });

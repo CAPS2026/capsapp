@@ -95,20 +95,46 @@ function EmailModal({ preview, onClose }: { preview: EmailPreview; onClose: () =
 
         {preview.people.length === 0 && <p className="text-sm text-ink-muted">Nobody has signed in to this shift yet.</p>}
 
+        {preview.health.length > 0 && (
+          <div className="rounded-[var(--radius)] border border-[#E2725B] bg-[#FCEDE8] p-3 text-xs leading-relaxed">
+            <b className="font-extrabold text-[#9A3A26]">Health concerns</b>
+            {preview.health.map((h, i) => (
+              <p key={i} className="m-0 mt-1">
+                {h.urgent && <b>URGENT </b>}
+                {h.dogName && <b>{h.dogName}: </b>}
+                {h.body}{" "}
+                <span className="text-ink-muted">
+                  ({h.personName}, {clock12(h.createdAt)})
+                </span>
+              </p>
+            ))}
+          </div>
+        )}
+
         {preview.people.map((p) => (
           <PersonEmailBlock key={p.name} block={p} />
         ))}
 
-        {preview.unclaimed.length > 0 && (
-          <div className="rounded-[var(--radius)] border border-[#F0D69A] bg-warm-tint p-3 text-xs leading-relaxed">
-            <b className="font-extrabold">Not done, nobody claimed it ({preview.unclaimed.length}):</b>{" "}
-            {preview.unclaimed.join(", ")}
-          </div>
-        )}
+        <div className="rounded-[var(--radius)] border border-[#F0D69A] bg-warm-tint p-3 text-xs leading-relaxed">
+          <b className="font-extrabold">Outstanding ({preview.outstanding.length}):</b>{" "}
+          {preview.outstanding.length ? preview.outstanding.join(", ") : "Nothing outstanding."}
+        </div>
+
+        <div className="rounded-[var(--radius)] border border-line p-3 text-xs leading-relaxed">
+          <b className="font-extrabold">Handover log</b>
+          {preview.handover.length === 0 && <p className="m-0 mt-1 text-ink-muted">No handover notes this shift.</p>}
+          {preview.handover.map((h, i) => (
+            <p key={i} className="m-0 mt-1">
+              <b>{h.personName}</b> <span className="text-ink-muted">{clock12(h.createdAt)}</span>
+              <br />
+              {h.body}
+            </p>
+          ))}
+        </div>
 
         <p className="m-0 text-[11px] leading-relaxed text-ink-muted">
-          Sent automatically when the last person on this shift signs out. A task with no name against it (nobody
-          claimed it, nobody ticked it) is listed once under the shift as a whole, not attached to any one person.
+          Sent automatically when the last person on this shift signs out. Every task is listed as done or outstanding,
+          whoever did it.
         </p>
       </div>
     </div>
@@ -119,7 +145,6 @@ function PersonEmailBlock({ block }: { block: PersonBlock }) {
   const lines: Array<[string, string[]]> = [
     ["Done", block.done],
     ["Not needed", block.notNeeded],
-    ["Claimed, not done", block.claimedNotDone],
     ["Extra, off the checklist", block.extraDone],
   ];
   return (
@@ -128,9 +153,16 @@ function PersonEmailBlock({ block }: { block: PersonBlock }) {
         <PersonAvatar name={block.name} size={26} />
         <span className="text-[13.5px] font-extrabold text-foreground">{block.name}</span>
         <span className="text-[11px] text-ink-muted">
-          signed in {clock12(block.startedAt)} &middot; {block.endedAt ? `out ${clock12(block.endedAt)}` : "still signed in"}
+          {block.startedAt
+            ? `signed in ${clock12(block.startedAt)} · ${block.endedAt ? `out ${clock12(block.endedAt)}` : "still signed in"}`
+            : "not signed in to this shift"}
         </span>
       </div>
+      {block.status.map((s, i) => (
+        <p key={i} className="m-0 text-xs font-semibold text-foreground">
+          {s}
+        </p>
+      ))}
       {block.flags.map((f) => (
         <span key={f} className="w-fit rounded-md bg-warm-tint px-2 py-0.5 text-[11px] font-bold text-warm-ink">
           {f}

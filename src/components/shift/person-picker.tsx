@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { PART_LABEL, firstName, timeRange, type ShiftPerson } from "@/lib/shift";
+import { PART_LABEL, firstName, timeRange, type Part, type ShiftPerson } from "@/lib/shift";
 import { pickPerson } from "@/lib/actions/shift";
 import { PersonAvatar } from "@/components/shift/person-avatar";
 
@@ -29,12 +29,25 @@ export function PersonPicker({ people }: { people: ShiftPerson[] }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Someone not on today's roster (covering a colleague, or helping out)
+  // says which session they are covering; they are never marked late.
+  const [covering, setCovering] = useState<ShiftPerson | null>(null);
+
   function pick(person: ShiftPerson) {
+    if (!person.part) {
+      setCovering(person);
+      return;
+    }
+    signIn(person, person.part);
+  }
+
+  function signIn(person: ShiftPerson, part: Part) {
     setError(null);
+    setCovering(null);
     setBusyId(person.id);
     startTransition(async () => {
       const loc = await getLocation();
-      const r = await pickPerson(person.id, person.part, loc?.lat ?? null, loc?.lng ?? null);
+      const r = await pickPerson(person.id, part, loc?.lat ?? null, loc?.lng ?? null);
       setBusyId(null);
       if (r.error) setError(r.error);
       else router.refresh();
@@ -87,6 +100,35 @@ export function PersonPicker({ people }: { people: ShiftPerson[] }) {
                 </span>
               </button>
             ))}
+          </div>
+        )}
+
+        {covering && (
+          <div className="flex flex-col gap-2 rounded-[var(--radius)] border border-line-cool bg-brand-tint p-3.5">
+            <p className="m-0 text-sm font-extrabold text-foreground">
+              {firstName(covering.name)}, which shift are you covering?
+            </p>
+            <p className="m-0 text-xs text-ink-muted">You aren&rsquo;t on today&rsquo;s roster, so you won&rsquo;t be marked late.</p>
+            <div className="flex gap-2">
+              {(["morning", "afternoon"] as Part[]).map((part) => (
+                <button
+                  key={part}
+                  type="button"
+                  disabled={isPending}
+                  onClick={() => signIn(covering, part)}
+                  className="h-10 flex-1 rounded-[var(--radius)] bg-brand text-sm font-bold text-white disabled:opacity-50"
+                >
+                  {PART_LABEL[part]}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setCovering(null)}
+                className="h-10 rounded-[var(--radius)] border border-line px-3 text-sm font-bold text-ink-muted"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         )}
       </div>

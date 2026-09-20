@@ -15,8 +15,13 @@ import {
   resolvePart,
   touchShiftActivity,
 } from "@/lib/shift-data";
-import { getShiftEmailPreview, maybeSendShiftEmail, type EmailPreview } from "@/lib/shift-email";
-import { distanceMetres, minutesLate, shelterToday, type Part } from "@/lib/shift";
+import {
+  getShiftEmailPreview,
+  maybeSendShiftEmail,
+  sendHealthConcernEmail,
+  type EmailPreview,
+} from "@/lib/shift-email";
+import { distanceMetres, minutesLate, sessionInstant, shelterToday, type Part } from "@/lib/shift";
 
 type Result = { error: string } | { error?: undefined };
 
@@ -89,7 +94,16 @@ export async function pickPerson(
   const now = new Date();
 
   const [session, settings] = await Promise.all([ensureRosterSession(date, part), getShiftSettings()]);
-  const late = minutesLate(now, session.starts);
+  // Lateness only means something for someone actually rostered on this
+  // session. Covering for a colleague, or helping out unrostered, is never
+  // "late": their start is simply when they signed in.
+  const { data: assignment } = await supabase
+    .from("roster_assignment")
+    .select("id")
+    .eq("session_id", session.id)
+    .eq("person_id", personId)
+    .maybeSingle();
+  const late = assignment ? minutesLate(now, session.starts) : 0;
   const lateMinutes = late > 0 ? late : null;
 
   let distanceM: number | null = null;
@@ -149,15 +163,26 @@ export async function setLateReason(reason: string): Promise<Result> {
   return {};
 }
 
-export async function endShift(): Promise<Result> {
+/** Ending a shift more than the grace period before its rostered end (plus
+ *  any overtime logged) needs a reason, which goes in the shift email. */
+export async function endShift(earlyReason?: string): Promise<Result> {
   const me = await requireActingPerson();
   if (!me) return { error: "Pick who you are first." };
   const supabase = await createClient();
   const open = await getOpenShift(me.id);
   if (!open) return { error: "You don't have an open shift." };
+
+  const [session, settings] = await Promise.all([ensureRosterSession(open.date, open.part), getShiftSettings()]);
+  const endsAt = sessionInstant(open.date, session.ends).getTime() + (open.extendedMinutes ?? 0) * 60000;
+  const now = new Date();
+  const earlyMin = Math.round((endsAt - now.getTime()) / 60000);
+  const early = earlyMin > settings.lateAfterMinutes;
+  const reason = (earlyReason ?? "").trim();
+  if (early && !reason) return { error: "Please give a reason for finishing early." };
+
   const { error } = await supabase
     .from("shift_log")
-    .update({ signed_out_at: new Date().toISOString() })
+    .update({ signed_out_at: now.toISOString(), ended_early_reason: early ? reason : null })
     .eq("id", open.id);
   if (error) return { error: error.message };
   await clearActiveShiftPerson();
@@ -167,6 +192,78 @@ export async function endShift(): Promise<Result> {
   await maybeSendShiftEmail(open.date, open.part).catch((e) => console.error("endShift: email failed", e));
   bust();
   return {};
+}
+
+/** Logs overtime: how many minutes past the rostered end they worked, and
+ *  why. Replaces any earlier extension on the same shift. The shift then
+ *  isn't auto-closed until that extra time has passed too. */
+export async function extendShift(minutes: number, reason: string): Promise<Result> {
+  const me = await requireActingPerson();
+  if (!me) return { error: "Pick who you are first." };
+  const mins = Math.round(minutes);
+  if (!Number.isFinite(mins) || mins < 1 || mins > 600) return { error: "Enter how many minutes you stayed on." };
+  const clean = reason.trim();
+  if (!clean) return { error: "Please say why you needed to stay longer." };
+  const open = await getOpenShift(me.id);
+  if (!open) return { error: "You don't have an open shift." };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("shift_log")
+    .update({ extended_minutes: mins, extended_reason: clean })
+    .eq("id", open.id);
+  if (error) return { error: error.message };
+  bust();
+  return {};
+}
+
+/** A dog health concern. Saved first (so it is never lost), then emailed
+ *  straight away to whoever is set up to receive them. `emailed` says
+ *  whether that email actually went, so the screen never claims Shayna was
+ *  told when she wasn't. Not blocked by the late-reason prompt: this must
+ *  always be possible. */
+export async function flagHealthConcern(input: {
+  body: string;
+  dogName: string;
+  urgent: boolean;
+}): Promise<{ error?: string; emailed?: boolean }> {
+  const me = await requireActingPerson();
+  if (!me) return { error: "Pick who you are first." };
+  const body = input.body.trim();
+  if (!body) return { error: "Describe the concern first." };
+  const dogName = input.dogName.trim() || null;
+  const open = await getOpenShift(me.id);
+  const part = open?.part ?? resolvePart(null);
+  const date = open?.date ?? shelterToday();
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("health_concern")
+    .insert({
+      person_id: me.id,
+      shift_log_id: open?.id ?? null,
+      date,
+      part,
+      dog_name: dogName,
+      urgent: input.urgent,
+      body,
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { error: error?.message ?? "Could not save the concern." };
+
+  const emailed = await sendHealthConcernEmail({
+    concernId: data.id,
+    personName: me.name,
+    part,
+    date,
+    dogName,
+    urgent: input.urgent,
+    body,
+  }).catch((e) => {
+    console.error("flagHealthConcern: email failed", e);
+    return false;
+  });
+  return { emailed };
 }
 
 // ---------------------------------------------------------------------------

@@ -18,6 +18,7 @@ import { endShift, switchPerson } from "@/lib/actions/shift";
 import type { RosterDaySession } from "@/lib/shift-data";
 import { EmailPreviewLink } from "@/components/shift/email-preview";
 import { PersonAvatar } from "@/components/shift/person-avatar";
+import { EndEarlyDialog, ExtendShiftDialog, HealthConcernDialog } from "@/components/shift/shift-dialogs";
 
 const SITE_LABEL = "Evans Landing";
 
@@ -39,6 +40,7 @@ export function ShiftSidebar({
   session,
   alsoOn,
   autocloseGraceMinutes,
+  lateAfterMinutes,
   radiusM,
   latestHandover,
   todayRoster,
@@ -49,6 +51,9 @@ export function ShiftSidebar({
   /** First names of anyone else rostered on the same session. */
   alsoOn: string[];
   autocloseGraceMinutes: number;
+  /** Grace period in minutes: lateness and finishing early are only
+   *  flagged (and a reason required) beyond it. */
+  lateAfterMinutes: number;
   /** How close counts as "on site", metres. */
   radiusM: number;
   latestHandover: { personName: string; body: string; part: Part; date: string } | null;
@@ -57,6 +62,7 @@ export function ShiftSidebar({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [healthOpen, setHealthOpen] = useState(false);
 
   const run = (fn: () => Promise<{ error?: string }>) => {
     setError(null);
@@ -87,10 +93,24 @@ export function ShiftSidebar({
         session={session}
         alsoOn={alsoOn}
         autocloseGraceMinutes={autocloseGraceMinutes}
+        lateAfterMinutes={lateAfterMinutes}
         radiusM={radiusM}
         busy={isPending}
         run={run}
+        onEnded={() => router.refresh()}
       />
+
+      <button
+        type="button"
+        onClick={() => setHealthOpen(true)}
+        className="flex h-[42px] items-center justify-center gap-2 rounded-[var(--radius)] bg-danger text-[13px] font-extrabold text-white"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+        </svg>
+        Flag a health concern
+      </button>
+      {healthOpen && <HealthConcernDialog onClose={() => setHealthOpen(false)} />}
 
       <EmailPreviewLink part={shift.part} />
 
@@ -120,26 +140,34 @@ function ShiftStatus({
   session,
   alsoOn,
   autocloseGraceMinutes,
+  lateAfterMinutes,
   radiusM,
   busy,
   run,
+  onEnded,
 }: {
   person: { id: string; name: string };
   shift: OpenShift;
   session: { starts: string; ends: string };
   alsoOn: string[];
   autocloseGraceMinutes: number;
+  lateAfterMinutes: number;
   radiusM: number;
   busy: boolean;
   run: (fn: () => Promise<{ error?: string }>) => void;
+  onEnded: () => void;
 }) {
   const [now, setNow] = useState(() => new Date());
+  const [endEarlyOpen, setEndEarlyOpen] = useState(false);
+  const [extendOpen, setExtendOpen] = useState(false);
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(id);
   }, []);
 
-  const minutesToEnd = (sessionInstant(shift.date, session.ends).getTime() - now.getTime()) / 60000;
+  // The finish time counts any overtime already logged with "Extend shift".
+  const endsAtMs = sessionInstant(shift.date, session.ends).getTime() + (shift.extendedMinutes ?? 0) * 60000;
+  const minutesToEnd = (endsAtMs - now.getTime()) / 60000;
   const isOver = minutesToEnd <= 0;
   // Amber once over time, red once deep enough into overrun that
   // auto-close would apply to a genuinely quiet shift, so the colour
@@ -189,11 +217,44 @@ function ShiftStatus({
       <button
         type="button"
         disabled={busy}
-        onClick={() => run(endShift)}
+        onClick={() => {
+          // Finishing before the rostered end (beyond the grace period)
+          // asks for a reason first; the server enforces the same rule.
+          if (minutesToEnd > lateAfterMinutes) setEndEarlyOpen(true);
+          else run(() => endShift());
+        }}
         className="h-[38px] rounded-[var(--radius)] border-[1.5px] border-danger text-[12.5px] font-extrabold text-danger disabled:opacity-50"
       >
         End shift
       </button>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => setExtendOpen(true)}
+        className="text-left text-[12px] font-bold text-brand-ink disabled:opacity-50"
+      >
+        {shift.extendedMinutes ? `Extended by ${shift.extendedMinutes} min, change` : "Need to extend the shift time?"}
+      </button>
+
+      {endEarlyOpen && (
+        <EndEarlyDialog
+          minutesEarly={Math.round(minutesToEnd)}
+          onClose={() => setEndEarlyOpen(false)}
+          onEnded={() => {
+            setEndEarlyOpen(false);
+            onEnded();
+          }}
+        />
+      )}
+      {extendOpen && (
+        <ExtendShiftDialog
+          onClose={() => setExtendOpen(false)}
+          onSaved={() => {
+            setExtendOpen(false);
+            onEnded();
+          }}
+        />
+      )}
     </div>
   );
 }
