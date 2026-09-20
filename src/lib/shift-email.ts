@@ -64,11 +64,6 @@ function dayShort(date: string) {
   return parseYmd(date).toLocaleDateString("en-AU", { weekday: "short" });
 }
 
-function taskLabel(t: SessionTasksRow) {
-  const base = t.category ? `${t.title} (${CATEGORY_LABEL[t.category]})` : t.title;
-  return t.isExtra ? `${base} (extra)` : base;
-}
-
 /** The status lines for one person's shift: late or on time, full shift
  *  or finished early, any overtime. `graceMin` is the same grace period
  *  the app uses everywhere (10 minutes), inside which nothing is flagged. */
@@ -116,6 +111,7 @@ function statusLines(s: SessionShiftRow, graceMin: number): string[] {
 }
 
 function buildBlocks(
+  date: string,
   shifts: SessionShiftRow[],
   tasks: SessionTasksRow[],
   handover: SessionHandoverRow[],
@@ -158,15 +154,20 @@ function buildBlocks(
     return p;
   };
 
+  // Completed tasks are just the task, one per line under the person who
+  // did it. Outstanding ones carry their section, whether they came from an
+  // earlier shift, and who (if anyone) had claimed them.
   const outstanding: string[] = [];
   for (const t of tasks) {
-    const label = t.carriedOver ? `${taskLabel(t)} (from ${dayShort(t.date)})` : taskLabel(t);
     if (t.status === "done" && t.actionedByName) {
-      (t.isExtra ? blockFor(t.actionedByName).extraDone : blockFor(t.actionedByName).done).push(label);
+      (t.isExtra ? blockFor(t.actionedByName).extraDone : blockFor(t.actionedByName).done).push(t.title);
     } else if (t.status === "not_required" && t.actionedByName) {
-      blockFor(t.actionedByName).notNeeded.push(`${label}${t.note ? `: ${t.note}` : ""}`);
+      blockFor(t.actionedByName).notNeeded.push(`${t.title}${t.note ? `: ${t.note}` : ""}`);
     } else if (t.status === "open") {
-      outstanding.push(t.claimedByName ? `${label} (claimed by ${t.claimedByName})` : label);
+      const from = t.carriedOver ? `, from ${t.date === date ? "this morning" : dayShort(t.date)}` : "";
+      const claim = t.claimedByName ? `, claimed by ${t.claimedByName}` : "";
+      const label = t.category ? `${t.title} (${CATEGORY_LABEL[t.category]}${from}${claim})` : `${t.title} (extra${from}${claim})`;
+      outstanding.push(label);
     }
   }
 
@@ -193,14 +194,21 @@ function textBody(date: string, part: Part, b: Built): string {
     );
     for (const s of p.status) lines.push(`  ${s}`);
     for (const f of p.flags) lines.push(`  ! ${f}`);
-    if (p.done.length) lines.push(`  Done (${p.done.length}): ${p.done.join(", ")}`);
-    if (p.notNeeded.length) lines.push(`  Not needed (${p.notNeeded.length}): ${p.notNeeded.join(", ")}`);
-    if (p.extraDone.length) lines.push(`  Extra, off the checklist (${p.extraDone.length}): ${p.extraDone.join(", ")}`);
+    const list = (heading: string, items: string[]) => {
+      if (!items.length) return;
+      lines.push("", `  ${heading} (${items.length})`);
+      for (const i of items) lines.push(`    - ${i}`);
+    };
+    list("Tasks completed", p.done);
+    list("Not needed", p.notNeeded);
+    list("Extra tasks, off the checklist", p.extraDone);
+    if (!p.done.length && !p.notNeeded.length && !p.extraDone.length) lines.push("", "  No tasks completed.");
     lines.push("");
   }
 
-  lines.push(`OUTSTANDING (${b.outstanding.length})`);
-  lines.push(b.outstanding.length ? `  ${b.outstanding.join(", ")}` : "  Nothing outstanding.");
+  lines.push(`TASKS NOT COMPLETED (${b.outstanding.length})`);
+  if (b.outstanding.length) for (const o of b.outstanding) lines.push(`  - ${o}`);
+  else lines.push("  Every task was completed.");
   lines.push("");
 
   lines.push("HANDOVER LOG");
@@ -230,6 +238,12 @@ function htmlBody(date: string, part: Part, b: Built): string {
       </div>`
     : "";
 
+  const taskList = (heading: string, items: string[]) =>
+    items.length
+      ? `<p style="margin:12px 0 4px;font-size:13px;font-weight:800;color:#2C2C2A;">${heading} (${items.length})</p>
+         <ul style="margin:0;padding-left:20px;font-size:14px;line-height:1.6;">${items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`
+      : "";
+
   const person = (p: PersonBlock) => `
     <div style="border:1px solid #E0DDD6;border-radius:10px;padding:14px;margin-bottom:12px;">
       <p style="margin:0 0 6px;font-weight:800;color:#2C2C2A;">
@@ -239,16 +253,17 @@ function htmlBody(date: string, part: Part, b: Built): string {
       </p>
       ${p.status.map((s) => `<p style="margin:4px 0;font-size:13px;color:#2C2C2A;">${esc(s)}</p>`).join("")}
       ${p.flags.map((f) => `<p style="margin:4px 0;color:#C1800F;font-size:13px;">${esc(f)}</p>`).join("")}
-      ${p.done.length ? `<p style="margin:6px 0 0;font-size:14px;"><b>Done (${p.done.length}):</b> ${esc(p.done.join(", "))}</p>` : ""}
-      ${p.notNeeded.length ? `<p style="margin:6px 0 0;font-size:14px;"><b>Not needed (${p.notNeeded.length}):</b> ${esc(p.notNeeded.join(", "))}</p>` : ""}
-      ${p.extraDone.length ? `<p style="margin:6px 0 0;font-size:14px;"><b>Extra, off the checklist (${p.extraDone.length}):</b> ${esc(p.extraDone.join(", "))}</p>` : ""}
+      ${taskList("Tasks completed", p.done)}
+      ${taskList("Not needed", p.notNeeded)}
+      ${taskList("Extra tasks, off the checklist", p.extraDone)}
+      ${!p.done.length && !p.notNeeded.length && !p.extraDone.length ? `<p style="margin:10px 0 0;font-size:14px;color:#6B6B68;">No tasks completed.</p>` : ""}
     </div>`;
 
   const outstanding = b.outstanding.length
     ? `<div style="border:1px solid #F0D69A;background:#FEF3DC;border-radius:10px;padding:14px;">
-        <p style="margin:0;font-size:14px;">${esc(b.outstanding.join(", "))}</p>
+        <ul style="margin:0;padding-left:20px;font-size:14px;line-height:1.6;">${b.outstanding.map((o) => `<li>${esc(o)}</li>`).join("")}</ul>
       </div>`
-    : `<p style="margin:0;font-size:14px;color:#6B6B68;">Nothing outstanding.</p>`;
+    : `<p style="margin:0;font-size:14px;color:#6B6B68;">Every task was completed.</p>`;
 
   const handover = b.handover.length
     ? b.handover
@@ -264,7 +279,7 @@ function htmlBody(date: string, part: Part, b: Built): string {
       <h2 style="font-family:sans-serif;color:#0F5A8F;">${PART_LABEL[part]} shift, ${day}</h2>
       ${health}
       ${b.people.map(person).join("")}
-      ${h3(`Outstanding (${b.outstanding.length})`)}
+      ${h3(`Tasks not completed (${b.outstanding.length})`)}
       ${outstanding}
       ${h3("Handover log")}
       ${handover}
@@ -279,7 +294,7 @@ async function buildSession(date: string, part: Part): Promise<Built> {
     getSessionHealthConcerns(date, part),
     getShiftSettings(),
   ]);
-  return buildBlocks(shifts, tasks, handover, health, radiusM, lateAfterMinutes);
+  return buildBlocks(date, shifts, tasks, handover, health, radiusM, lateAfterMinutes);
 }
 
 /** Sends the summary for (date, part) if, and only if, every shift

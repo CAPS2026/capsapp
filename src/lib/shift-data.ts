@@ -405,6 +405,19 @@ function toRow(r: InstanceRow, carriedOver: boolean): ShiftTaskRow {
   };
 }
 
+/** PostgREST filter for tasks carried into `part` of `date`: earlier than
+ *  this session, and either still open or ticked since this session began
+ *  (midnight for the morning, noon for the afternoon, Brisbane time). */
+function carriedFilter(date: string, part: Part): string {
+  const since = sessionInstant(date, part === "morning" ? "00:00" : "12:00").toISOString();
+  const groups = [`and(status.eq.open,date.lt.${date})`, `and(actioned_at.gte.${since},date.lt.${date})`];
+  if (part === "afternoon") {
+    groups.push(`and(status.eq.open,date.eq.${date},part.eq.morning)`);
+    groups.push(`and(actioned_at.gte.${since},date.eq.${date},part.eq.morning)`);
+  }
+  return groups.join(",");
+}
+
 /** The checklist for one session (morning or afternoon) of today, grouped
  *  by category, plus anything still open from before it ("carried over":
  *  earlier days, and for the afternoon, the morning's leftovers) and that
@@ -441,14 +454,15 @@ export async function getShiftChecklist(part: Part): Promise<{
       .select("id, title, part, category, repeat, weekdays, day_of_month, sort_order, skippable")
       .eq("active", true),
     readToday(),
-    // Still open from before this session. The afternoon also picks up
-    // whatever the morning left undone today; the morning never sees the
-    // afternoon's tasks.
+    // From before this session: still open, or ticked during this session
+    // (so a carried-over task stays on screen, struck through, once ticked
+    // instead of vanishing and reshuffling the list). The afternoon also
+    // picks up whatever the morning left undone today; the morning never
+    // sees the afternoon's tasks.
     supabase
       .from("task_instance")
       .select(INSTANCE_SELECT)
-      .eq("status", "open")
-      .or(part === "afternoon" ? `date.lt.${date},and(date.eq.${date},part.eq.morning)` : `date.lt.${date}`)
+      .or(carriedFilter(date, part))
       .order("date")
       .order("category")
       .order("sort_order"),

@@ -116,8 +116,16 @@ function EmailModal({ preview, onClose }: { preview: EmailPreview; onClose: () =
         ))}
 
         <div className="rounded-[var(--radius)] border border-[#F0D69A] bg-warm-tint p-3 text-xs leading-relaxed">
-          <b className="font-extrabold">Outstanding ({preview.outstanding.length}):</b>{" "}
-          {preview.outstanding.length ? preview.outstanding.join(", ") : "Nothing outstanding."}
+          <b className="font-extrabold">Tasks not completed ({preview.outstanding.length})</b>
+          {preview.outstanding.length === 0 ? (
+            <p className="m-0 mt-1">Every task was completed.</p>
+          ) : (
+            <ul className="m-0 mt-1 list-disc pl-5">
+              {preview.outstanding.map((o, i) => (
+                <li key={i}>{o}</li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <div className="rounded-[var(--radius)] border border-line p-3 text-xs leading-relaxed">
@@ -133,8 +141,8 @@ function EmailModal({ preview, onClose }: { preview: EmailPreview; onClose: () =
         </div>
 
         <p className="m-0 text-[11px] leading-relaxed text-ink-muted">
-          Sent automatically when the last person on this shift signs out. Every task is listed as done or outstanding,
-          whoever did it.
+          Sent automatically when the last person on this shift signs out. Every task is listed as completed or not
+          completed, whoever did it.
         </p>
       </div>
     </div>
@@ -143,9 +151,9 @@ function EmailModal({ preview, onClose }: { preview: EmailPreview; onClose: () =
 
 function PersonEmailBlock({ block }: { block: PersonBlock }) {
   const lines: Array<[string, string[]]> = [
-    ["Done", block.done],
+    ["Tasks completed", block.done],
     ["Not needed", block.notNeeded],
-    ["Extra, off the checklist", block.extraDone],
+    ["Extra tasks, off the checklist", block.extraDone],
   ];
   return (
     <div className="flex flex-col gap-2 rounded-[var(--radius)] border border-line p-3">
@@ -170,16 +178,20 @@ function PersonEmailBlock({ block }: { block: PersonBlock }) {
       ))}
       {lines.map(([label, items]) =>
         items.length ? (
-          <p key={label} className="m-0 text-xs leading-relaxed">
-            <b className="font-extrabold">
-              {label} ({items.length}):
-            </b>{" "}
-            {items.join(", ")}
-          </p>
+          <div key={label}>
+            <p className="m-0 mt-1 text-xs font-extrabold text-foreground">
+              {label} ({items.length})
+            </p>
+            <ul className="m-0 list-disc pl-5 text-xs leading-relaxed">
+              {items.map((item, i) => (
+                <li key={i}>{item}</li>
+              ))}
+            </ul>
+          </div>
         ) : null,
       )}
       {lines.every(([, items]) => items.length === 0) && (
-        <p className="m-0 text-xs text-ink-muted">Nothing ticked yet.</p>
+        <p className="m-0 text-xs text-ink-muted">No tasks completed yet.</p>
       )}
     </div>
   );

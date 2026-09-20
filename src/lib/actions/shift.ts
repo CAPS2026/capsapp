@@ -230,7 +230,8 @@ export async function flagHealthConcern(input: {
   if (!me) return { error: "Pick who you are first." };
   const body = input.body.trim();
   if (!body) return { error: "Describe the concern first." };
-  const dogName = input.dogName.trim() || null;
+  const dogName = input.dogName.trim();
+  if (!dogName) return { error: "Enter the dog's name." };
   const open = await getOpenShift(me.id);
   const part = open?.part ?? resolvePart(null);
   const date = open?.date ?? shelterToday();
