@@ -510,13 +510,26 @@ export async function getShiftChecklist(part: Part): Promise<{
     else todayRows = again.data;
   }
 
+  // The old Staff tab (the dog app's own page, which shares this table) can
+  // create today's task rows WITHOUT a section. Those rows used to be
+  // invisible here and were never re-created, so the checklist showed empty
+  // ("Nothing in this section"). Fill the section and skippable flag in from
+  // the task template instead, so the checklist is right whichever screen
+  // created the rows.
+  const templateById = new Map(((templatesRes.data ?? []) as TemplateForGen[]).map((t) => [t.id, t]));
+  const heal = (r: InstanceRow): InstanceRow => {
+    const t = r.template_id ? templateById.get(r.template_id) : undefined;
+    return t && !r.category && !r.is_extra ? { ...r, category: t.category, skippable: t.skippable } : r;
+  };
+
   const byCategory = Object.fromEntries(CATEGORY_ORDER.map((c) => [c, [] as ShiftTaskRow[]])) as Record<
     TaskCategory,
     ShiftTaskRow[]
   >;
   const extras: ShiftTaskRow[] = [];
 
-  for (const r of (todayRows ?? []) as unknown as InstanceRow[]) {
+  for (const raw of (todayRows ?? []) as unknown as InstanceRow[]) {
+    const r = heal(raw);
     if (r.part !== part) continue;
     const row = toRow(r, false);
     if (row.isExtra) extras.push(row);
@@ -526,7 +539,7 @@ export async function getShiftChecklist(part: Part): Promise<{
   // Nothing from before go-live is ever carried over (see getGoLiveDate).
   const carriedOver = ((openRows ?? []) as unknown as InstanceRow[])
     .filter((r) => !goLive || r.date >= goLive)
-    .map((r) => toRow(r, true));
+    .map((r) => toRow(heal(r), true));
 
   return { byCategory, carriedOver, extras };
 }
