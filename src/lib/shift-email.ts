@@ -166,7 +166,14 @@ function buildBlocks(
     } else if (t.status === "open") {
       const from = t.carriedOver ? `, from ${t.date === date ? "this morning" : dayShort(t.date)}` : "";
       const claim = t.claimedByName ? `, claimed by ${t.claimedByName}` : "";
-      const label = t.category ? `${t.title} (${CATEGORY_LABEL[t.category]}${from}${claim})` : `${t.title} (extra${from}${claim})`;
+      const detail = `${from}${claim}`.replace(/^, /, "");
+      const label = t.category
+        ? `${t.title} (${CATEGORY_LABEL[t.category]}${from}${claim})`
+        : t.isExtra
+          ? `${t.title} (extra${from}${claim})`
+          : detail
+            ? `${t.title} (${detail})`
+            : t.title;
       outstanding.push(label);
     }
   }

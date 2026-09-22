@@ -1,8 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import {
-  distanceMetres,
   initials,
-  minutesLate,
   parseYmd,
   partForTime,
   sessionInstant,
@@ -307,23 +305,6 @@ export async function autocloseStaleShifts(): Promise<Array<{ date: string; part
   return closed;
 }
 
-/** Distance from the shelter, in metres. Null if either point is missing. */
-export async function distanceFromShelter(lat: number | null, lng: number | null): Promise<number | null> {
-  if (lat == null || lng == null) return null;
-  const { shelterLat, shelterLng } = await getShiftSettings();
-  if (shelterLat == null || shelterLng == null) return null;
-  return Math.round(distanceMetres(lat, lng, shelterLat, shelterLng));
-}
-
-/** How late (minutes, null if not late) a sign-in at `at` is against
- *  `date`/`part`'s rostered start (creating that session from the org's
- *  defaults first, if it doesn't exist yet). */
-export async function lateMinutesFor(date: string, part: Part, at: Date): Promise<number | null> {
-  const session = await ensureRosterSession(date, part);
-  const late = minutesLate(at, session.starts);
-  return late > 0 ? late : null;
-}
-
 /** Which part to sign someone into: their roster slot today if they have
  *  one, otherwise a guess from the time of day. */
 export function resolvePart(rostered: Part | null): Part {
@@ -510,13 +491,26 @@ export async function getShiftChecklist(part: Part): Promise<{
     else todayRows = again.data;
   }
 
+  // The old Staff tab (the dog app's own page, which shares this table) can
+  // create today's task rows WITHOUT a section. Those rows used to be
+  // invisible here and were never re-created, so the checklist showed empty
+  // ("Nothing in this section"). Fill the section and skippable flag in from
+  // the task template instead, so the checklist is right whichever screen
+  // created the rows.
+  const templateById = new Map(((templatesRes.data ?? []) as TemplateForGen[]).map((t) => [t.id, t]));
+  const heal = (r: InstanceRow): InstanceRow => {
+    const t = r.template_id ? templateById.get(r.template_id) : undefined;
+    return t && !r.category && !r.is_extra ? { ...r, category: t.category, skippable: t.skippable } : r;
+  };
+
   const byCategory = Object.fromEntries(CATEGORY_ORDER.map((c) => [c, [] as ShiftTaskRow[]])) as Record<
     TaskCategory,
     ShiftTaskRow[]
   >;
   const extras: ShiftTaskRow[] = [];
 
-  for (const r of (todayRows ?? []) as unknown as InstanceRow[]) {
+  for (const raw of (todayRows ?? []) as unknown as InstanceRow[]) {
+    const r = heal(raw);
     if (r.part !== part) continue;
     const row = toRow(r, false);
     if (row.isExtra) extras.push(row);
@@ -526,7 +520,7 @@ export async function getShiftChecklist(part: Part): Promise<{
   // Nothing from before go-live is ever carried over (see getGoLiveDate).
   const carriedOver = ((openRows ?? []) as unknown as InstanceRow[])
     .filter((r) => !goLive || r.date >= goLive)
-    .map((r) => toRow(r, true));
+    .map((r) => toRow(heal(r), true));
 
   return { byCategory, carriedOver, extras };
 }
@@ -572,8 +566,8 @@ export async function getHandoverNotes(limit = 30): Promise<HandoverNoteRow[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Roster (read-only view, editing still happens on the old dog-app Staff
-// tab for now; see docs/staff-app-plan.md)
+// Roster (the month view and day detail below are read-only; editing
+// lives in src/app/shift/roster/edit, admin only, see roster-edit-form.tsx)
 // ---------------------------------------------------------------------------
 
 export type RosterCell = { am: string[]; pm: string[] };
