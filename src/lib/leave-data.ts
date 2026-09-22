@@ -1,17 +1,20 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentPerson } from "@/lib/auth";
-import { getActiveShiftPerson } from "@/lib/shift-identity";
+import { getLeaveIdentity } from "@/lib/leave-identity";
 import { getRosterablePeople } from "@/lib/shift-data";
 import { PART_LABEL, parseYmd, type Part } from "@/lib/shift";
 import type { LeaveRequestRow, LeaveScope, RosterLeave } from "@/lib/leave";
 
-/** Who a leave request is for: whoever tapped their name on this tablet, or,
- *  on a phone, the caretaker who is logged in. `via` says which, so a shared
+/** Who a leave request is for: whoever tapped their name in the "Ask for
+ *  leave" pop-up (its own cookie, see leave-identity.ts), or, on a phone,
+ *  the caretaker who is logged in. Deliberately never reads who's on
+ *  shift: picking a name here must never change who the sidebar and
+ *  checklist think is currently signed in. `via` says which, so a shared
  *  tablet always asks who is using it while a phone login does not. */
 export async function resolveRequester(): Promise<{ id: string; name: string; via: "cookie" | "login" } | null> {
-  const active = await getActiveShiftPerson();
-  if (active) return { ...active, via: "cookie" };
+  const picked = await getLeaveIdentity();
+  if (picked) return { ...picked, via: "cookie" };
   const me = await getCurrentPerson();
   if (!me?.id) return null;
   const people = await getRosterablePeople();
@@ -128,7 +131,11 @@ export async function getLeaveNoticesForShift(
   const { data, error } = await supabase
     .from("leave_request")
     .select("id, status, start_date, end_date, decision_note")
-    .eq("shown_in_shift", shiftId);
+    .eq("shown_in_shift", shiftId)
+    // A request tied to this shift can later be cancelled by an admin (see
+    // cancelApprovedLeave); without this filter it would still show here,
+    // wrongly rendered as "declined" (the card only knows approved/declined).
+    .in("status", ["approved", "declined"]);
   if (error) console.error("getLeaveNoticesForShift failed", error);
   return ((data ?? []) as unknown as Array<{
     id: string;
@@ -150,6 +157,29 @@ export async function markLeaveNoticesForShift(personId: string, shiftId: string
     .in("status", ["approved", "declined"])
     .is("shown_in_shift", null);
   if (error) console.error("markLeaveNoticesForShift failed", error);
+}
+
+/** This person's own pending or approved requests that overlap
+ *  [startDate, endDate], so a new one can be refused with a clear reason
+ *  instead of silently sitting alongside a request that already covers
+ *  some of the same days. */
+export async function getOwnOverlappingLeave(
+  personId: string,
+  startDate: string,
+  endDate: string,
+): Promise<{ startDate: string; endDate: string; status: "pending" | "approved" }[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("leave_request")
+    .select("start_date, end_date, status")
+    .eq("person_id", personId)
+    .in("status", ["pending", "approved"])
+    .lte("start_date", endDate)
+    .gte("end_date", startDate);
+  if (error) console.error("getOwnOverlappingLeave failed", error);
+  return ((data ?? []) as unknown as Array<{ start_date: string; end_date: string; status: "pending" | "approved" }>).map(
+    (r) => ({ startDate: r.start_date, endDate: r.end_date, status: r.status }),
+  );
 }
 
 /** The request behind an email link. Uses the service-role client because

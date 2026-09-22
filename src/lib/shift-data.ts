@@ -1,8 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import {
-  distanceMetres,
   initials,
-  minutesLate,
   parseYmd,
   partForTime,
   sessionInstant,
@@ -307,23 +305,6 @@ export async function autocloseStaleShifts(): Promise<Array<{ date: string; part
   return closed;
 }
 
-/** Distance from the shelter, in metres. Null if either point is missing. */
-export async function distanceFromShelter(lat: number | null, lng: number | null): Promise<number | null> {
-  if (lat == null || lng == null) return null;
-  const { shelterLat, shelterLng } = await getShiftSettings();
-  if (shelterLat == null || shelterLng == null) return null;
-  return Math.round(distanceMetres(lat, lng, shelterLat, shelterLng));
-}
-
-/** How late (minutes, null if not late) a sign-in at `at` is against
- *  `date`/`part`'s rostered start (creating that session from the org's
- *  defaults first, if it doesn't exist yet). */
-export async function lateMinutesFor(date: string, part: Part, at: Date): Promise<number | null> {
-  const session = await ensureRosterSession(date, part);
-  const late = minutesLate(at, session.starts);
-  return late > 0 ? late : null;
-}
-
 /** Which part to sign someone into: their roster slot today if they have
  *  one, otherwise a guess from the time of day. */
 export function resolvePart(rostered: Part | null): Part {
@@ -585,8 +566,8 @@ export async function getHandoverNotes(limit = 30): Promise<HandoverNoteRow[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Roster (read-only view, editing still happens on the old dog-app Staff
-// tab for now; see docs/staff-app-plan.md)
+// Roster (the month view and day detail below are read-only; editing
+// lives in src/app/shift/roster/edit, admin only, see roster-edit-form.tsx)
 // ---------------------------------------------------------------------------
 
 export type RosterCell = { am: string[]; pm: string[] };

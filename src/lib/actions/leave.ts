@@ -5,11 +5,17 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentPerson } from "@/lib/auth";
-import { setActiveShiftPerson, clearActiveShiftPerson } from "@/lib/shift-identity";
+import { setLeaveIdentity, clearLeaveIdentity } from "@/lib/leave-identity";
 import { getRosterablePeople } from "@/lib/shift-data";
 import { shelterToday } from "@/lib/shift";
-import { LEAVE_SCOPES, type LeaveScope } from "@/lib/leave";
-import { getLeaveByToken, getLeaveRecipients, resolveRequester, toLeaveRow } from "@/lib/leave-data";
+import { LEAVE_SCOPES, formatLeaveDates, type LeaveScope } from "@/lib/leave";
+import {
+  getLeaveByToken,
+  getLeaveRecipients,
+  getOwnOverlappingLeave,
+  resolveRequester,
+  toLeaveRow,
+} from "@/lib/leave-data";
 import { sendLeaveDecisionEmails, sendLeaveRequestEmail } from "@/lib/leave-email";
 
 type Result = { error?: string };
@@ -23,21 +29,23 @@ function bust() {
   revalidatePath("/shift");
 }
 
-/** Say who you are on this tablet without starting a shift, so someone can
- *  ask for leave. Same trust as the sign-in screen: tap your name. */
+/** Say who you are for the leave form, on its own identity (never the
+ *  shift one, see leave-identity.ts): asking for someone else's leave, or
+ *  reopening this pop-up, must never change who the sidebar shows as on
+ *  shift. Same trust as the sign-in screen: tap your name. */
 export async function identifyPerson(personId: string): Promise<Result> {
   const device = await getCurrentPerson();
   if (!device?.isStaff) return { error: "Staff only." };
   const people = await getRosterablePeople();
   if (!people.some((p) => p.id === personId)) return { error: "That person wasn't found." };
-  await setActiveShiftPerson(personId);
+  await setLeaveIdentity(personId);
   revalidatePath("/shift/roster");
   return {};
 }
 
-/** Hand the tablet to someone else. */
+/** Forget who's answering the leave form. Does not touch anyone's shift. */
 export async function forgetPerson(): Promise<void> {
-  await clearActiveShiftPerson();
+  await clearLeaveIdentity();
   revalidatePath("/shift/roster");
 }
 
@@ -60,6 +68,19 @@ export async function submitLeaveRequest(input: {
   if (!dateOk(input.startDate) || !dateOk(input.endDate)) return { error: "Choose the dates." };
   if (input.endDate < input.startDate) return { error: "The last day can't be before the first day." };
   if (input.startDate < shelterToday()) return { error: "The first day can't be in the past. If you're away today, phone Shayna." };
+
+  // Refuse rather than silently sit a second request alongside one that
+  // already covers some of the same days, pending or already approved.
+  const overlap = await getOwnOverlappingLeave(me.id, input.startDate, input.endDate);
+  if (overlap.length) {
+    const approved = overlap.find((o) => o.status === "approved");
+    const dates = formatLeaveDates(approved?.startDate ?? overlap[0].startDate, approved?.endDate ?? overlap[0].endDate);
+    return {
+      error: approved
+        ? `You already have leave approved for ${dates}. Talk to Shayna if it needs to change.`
+        : `You already have a pending request for ${dates}. Withdraw it first if you want to change it.`,
+    };
+  }
 
   const supabase = await createClient();
   const { data, error } = await supabase
