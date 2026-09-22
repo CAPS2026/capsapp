@@ -40,7 +40,11 @@ async function requireDeviceStaff() {
  *  action below attributes to. Never trust a personId passed in from the
  *  client for this; it always comes from the server-read cookie. Every
  *  call also counts as activity on their open shift, so a genuinely busy
- *  shift never looks abandoned to the auto-close check. */
+ *  shift never looks abandoned to the auto-close check.
+ *
+ *  `hasOpenShift` comes free from that same activity-touch query (it only
+ *  matches a row when one exists with signed_out_at still null), worth
+ *  keeping distinct from "identified on this device", see requireOnShift. */
 async function requireActingPerson() {
   // Independent lookups, so run them together rather than one after the
   // other (each is a network round trip, and this runs on every tick).
@@ -53,7 +57,24 @@ async function requireActingPerson() {
   // (the screen also covers everything with a prompt for it).
   const lateBlocked =
     late !== null && late.lateMinutes !== null && late.lateMinutes > settings.lateAfterMinutes && !late.lateReason;
-  return { ...me, lateBlocked };
+  return { ...me, lateBlocked, hasOpenShift: late !== null };
+}
+
+const NO_OPEN_SHIFT = "You don't have an open shift. Tap your name to sign in again.";
+
+/** Same as requireActingPerson, but for anything that only makes sense
+ *  during an actual shift (ticking, claiming, notes, extras): being
+ *  "identified" on this device (the cookie) is not the same as having a
+ *  shift actually open. Without this, a page left open from an earlier
+ *  session, or one from before someone's shift was cleared or ended,
+ *  could still tick tasks under their name with no shift running behind
+ *  it: no timer, not shown as on shift, and the tick never touches the
+ *  auto-close activity clock. Every checklist action below requires this,
+ *  not just requireActingPerson. */
+async function requireOnShift() {
+  const me = await requireActingPerson();
+  if (!me || !me.hasOpenShift) return null;
+  return me;
 }
 
 const LATE_REASON_REQUIRED = "Please give your reason for being late first.";
@@ -280,8 +301,8 @@ export async function flagHealthConcern(input: {
 // ---------------------------------------------------------------------------
 
 export async function signOffTask(instanceId: string, note: string): Promise<Result> {
-  const me = await requireActingPerson();
-  if (!me) return { error: "Pick who you are first." };
+  const me = await requireOnShift();
+  if (!me) return { error: NO_OPEN_SHIFT };
   if (me.lateBlocked) return { error: LATE_REASON_REQUIRED };
   const supabase = await createClient();
   const { error } = await supabase
@@ -299,8 +320,8 @@ export async function signOffTask(instanceId: string, note: string): Promise<Res
 }
 
 export async function markTaskNotRequired(instanceId: string, note: string): Promise<Result> {
-  const me = await requireActingPerson();
-  if (!me) return { error: "Pick who you are first." };
+  const me = await requireOnShift();
+  if (!me) return { error: NO_OPEN_SHIFT };
   if (me.lateBlocked) return { error: LATE_REASON_REQUIRED };
   if (!note.trim()) return { error: "Add a short note saying why it wasn't needed." };
   const supabase = await createClient();
@@ -319,8 +340,8 @@ export async function markTaskNotRequired(instanceId: string, note: string): Pro
 }
 
 export async function reopenTask(instanceId: string): Promise<Result> {
-  const me = await requireActingPerson();
-  if (!me) return { error: "Pick who you are first." };
+  const me = await requireOnShift();
+  if (!me) return { error: NO_OPEN_SHIFT };
   if (me.lateBlocked) return { error: LATE_REASON_REQUIRED };
   const supabase = await createClient();
   const { error } = await supabase
@@ -333,8 +354,8 @@ export async function reopenTask(instanceId: string): Promise<Result> {
 }
 
 export async function updateTaskNote(instanceId: string, note: string): Promise<Result> {
-  const me = await requireActingPerson();
-  if (!me) return { error: "Pick who you are first." };
+  const me = await requireOnShift();
+  if (!me) return { error: NO_OPEN_SHIFT };
   if (me.lateBlocked) return { error: LATE_REASON_REQUIRED };
   const supabase = await createClient();
   const { error } = await supabase
@@ -348,8 +369,8 @@ export async function updateTaskNote(instanceId: string, note: string): Promise<
 /** Soft "this one's mine," not a lock. Claiming again (by anyone)
  *  overwrites who it's claimed by. */
 export async function claimTask(instanceId: string): Promise<Result> {
-  const me = await requireActingPerson();
-  if (!me) return { error: "Pick who you are first." };
+  const me = await requireOnShift();
+  if (!me) return { error: NO_OPEN_SHIFT };
   if (me.lateBlocked) return { error: LATE_REASON_REQUIRED };
   const supabase = await createClient();
   const { error } = await supabase
@@ -362,8 +383,8 @@ export async function claimTask(instanceId: string): Promise<Result> {
 }
 
 export async function unclaimTask(instanceId: string): Promise<Result> {
-  const me = await requireActingPerson();
-  if (!me) return { error: "Pick who you are first." };
+  const me = await requireOnShift();
+  if (!me) return { error: NO_OPEN_SHIFT };
   if (me.lateBlocked) return { error: LATE_REASON_REQUIRED };
   const supabase = await createClient();
   const { error } = await supabase
@@ -380,8 +401,8 @@ export async function unclaimTask(instanceId: string): Promise<Result> {
  *  add one of these, `is_extra` keeps it visually and structurally
  *  separate from the standard categorised list. */
 export async function addExtraTask(title: string): Promise<Result> {
-  const me = await requireActingPerson();
-  if (!me) return { error: "Pick who you are first." };
+  const me = await requireOnShift();
+  if (!me) return { error: NO_OPEN_SHIFT };
   if (me.lateBlocked) return { error: LATE_REASON_REQUIRED };
   if (!title.trim()) return { error: "Say what you did." };
   const supabase = await createClient();
