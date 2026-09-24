@@ -159,6 +159,8 @@ export type OpenShift = {
   distanceM: number | null;
   /** Overtime logged with "Extend shift", minutes past the rostered end. */
   extendedMinutes: number | null;
+  /** When this shift was reopened after being closed automatically, if it was. */
+  reopenedAt: string | null;
 };
 
 /** "Jo B" -> "JB". Falls back to the first initial, then "?". */

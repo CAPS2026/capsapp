@@ -191,7 +191,7 @@ export async function getOpenShift(personId: string): Promise<OpenShift | null> 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("shift_log")
-    .select("id, person_id, date, part, signed_in_at, late_minutes, late_reason, roster_session_id, signed_in_distance_m, extended_minutes")
+    .select("id, person_id, date, part, signed_in_at, late_minutes, late_reason, roster_session_id, signed_in_distance_m, extended_minutes, reopened_at")
     .eq("person_id", personId)
     .is("signed_out_at", null)
     .maybeSingle();
@@ -223,6 +223,7 @@ export async function getOpenShift(personId: string): Promise<OpenShift | null> 
     rostered,
     distanceM: data.signed_in_distance_m != null ? Number(data.signed_in_distance_m) : null,
     extendedMinutes: data.extended_minutes,
+    reopenedAt: data.reopened_at,
   };
 }
 
@@ -259,7 +260,7 @@ export async function autocloseStaleShifts(): Promise<Array<{ date: string; part
 
   const { data: open, error } = await supabase
     .from("shift_log")
-    .select("id, date, part, last_activity_at, signed_in_at, extended_minutes")
+    .select("id, date, part, last_activity_at, signed_in_at, extended_minutes, reopened_at")
     .is("signed_out_at", null);
   if (error) {
     console.error("autocloseStaleShifts: read failed", error);
@@ -277,6 +278,7 @@ export async function autocloseStaleShifts(): Promise<Array<{ date: string; part
     last_activity_at: string;
     signed_in_at: string;
     extended_minutes: number | null;
+    reopened_at: string | null;
   }>) {
     const session = await ensureRosterSession(s.date, s.part);
     // Compare real instants, not clock times: a shift from yesterday is
@@ -293,8 +295,14 @@ export async function autocloseStaleShifts(): Promise<Array<{ date: string; part
 
     // The recorded sign-out is the shift's end (never the moment the app
     // happened to notice, which could be the next day), and never before
-    // they signed in.
-    const signedOut = new Date(Math.max(endAt.getTime(), new Date(s.signed_in_at).getTime()));
+    // they signed in. A shift that was reopened after an earlier automatic
+    // close is different: we know they carried on working past the end, so
+    // recording the rostered end would understate it. Use their last
+    // activity (their last tick or action) if that is later.
+    const floor = Math.max(endAt.getTime(), new Date(s.signed_in_at).getTime());
+    const signedOut = new Date(
+      s.reopened_at ? Math.max(floor, new Date(s.last_activity_at).getTime()) : floor,
+    );
     const { error: closeErr } = await supabase
       .from("shift_log")
       .update({ signed_out_at: signedOut.toISOString(), auto_closed: true })
@@ -742,6 +750,8 @@ export type SessionShiftRow = {
   endedEarlyReason: string | null;
   extendedMinutes: number | null;
   extendedReason: string | null;
+  /** When a shift closed automatically was reopened (they carried on working). */
+  reopenedAt: string | null;
   date: string;
 };
 
@@ -754,7 +764,7 @@ export async function getSessionShifts(date: string, part: Part): Promise<Sessio
     .from("shift_log")
     .select(
       "person_id, signed_in_at, signed_out_at, late_minutes, late_reason, signed_in_distance_m, auto_closed, " +
-        "ended_early_reason, extended_minutes, extended_reason, person:people(first_name, surname)",
+        "ended_early_reason, extended_minutes, extended_reason, reopened_at, person:people(first_name, surname)",
     )
     .eq("date", date)
     .eq("part", part)
@@ -775,6 +785,7 @@ export async function getSessionShifts(date: string, part: Part): Promise<Sessio
     ended_early_reason: string | null;
     extended_minutes: number | null;
     extended_reason: string | null;
+    reopened_at: string | null;
     person: { first_name: string; surname: string } | null;
   }>).map((r) => ({
     personName: r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown",
@@ -790,6 +801,7 @@ export async function getSessionShifts(date: string, part: Part): Promise<Sessio
     endedEarlyReason: r.ended_early_reason,
     extendedMinutes: r.extended_minutes,
     extendedReason: r.extended_reason,
+    reopenedAt: r.reopened_at,
     date,
   }));
 }

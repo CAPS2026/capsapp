@@ -79,6 +79,11 @@ async function requireOnShift() {
 
 const LATE_REASON_REQUIRED = "Please give your reason for being late first.";
 
+/** How long after a session's end (plus any overtime logged) tapping your
+ *  name reopens a shift that was closed automatically, rather than
+ *  starting a new one. */
+const REOPEN_WINDOW_MINUTES = 180;
+
 function bust() {
   revalidatePath("/shift");
 }
@@ -90,8 +95,10 @@ function bust() {
 /** Tap a name on the picker. If that person already has an open shift
  *  today (they stepped away and are coming back), just resume it, no
  *  new sign-in, no duplicate row (shift_log's unique index would refuse
- *  it anyway). Otherwise this is a fresh sign-in: capture the time,
- *  location (if given) and lateness against today's rostered start. */
+ *  it anyway). If their shift for this session was closed automatically a
+ *  little while ago, reopen it rather than starting a second one. Otherwise
+ *  this is a fresh sign-in: capture the time, location (if given) and
+ *  lateness against today's rostered start. */
 export async function pickPerson(
   personId: string,
   rosteredPart: Part | null,
@@ -116,6 +123,42 @@ export async function pickPerson(
   const now = new Date();
 
   const [session, settings] = await Promise.all([ensureRosterSession(date, part), getShiftSettings()]);
+
+  // If this person's shift for this same session was closed AUTOMATICALLY
+  // earlier (they were still working but hadn't ticked anything for a
+  // while), tapping their name again reopens that shift instead of starting
+  // a second one. A second one would show them hours "late" and would then
+  // be closed as zero length. Only within a few hours of the session's end:
+  // after that, tapping a name is a genuinely new sign-in.
+  const { data: autoClosed } = await supabase
+    .from("shift_log")
+    .select("id, extended_minutes")
+    .eq("person_id", personId)
+    .eq("date", date)
+    .eq("part", part)
+    .eq("auto_closed", true)
+    .order("signed_in_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (autoClosed) {
+    const endAt = sessionInstant(date, session.ends).getTime() + (autoClosed.extended_minutes ?? 0) * 60000;
+    if (now.getTime() <= endAt + REOPEN_WINDOW_MINUTES * 60000) {
+      const { error: reopenErr } = await supabase
+        .from("shift_log")
+        .update({
+          signed_out_at: null,
+          auto_closed: false,
+          reopened_at: now.toISOString(),
+          last_activity_at: now.toISOString(),
+        })
+        .eq("id", autoClosed.id);
+      if (reopenErr) return { error: reopenErr.message };
+      await setActiveShiftPerson(personId);
+      bust();
+      return {};
+    }
+  }
+
   // Lateness only means something for someone actually rostered on this
   // session. Covering for a colleague, or helping out unrostered, is never
   // "late": their start is simply when they signed in.

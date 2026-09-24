@@ -10,6 +10,7 @@ import {
   firstName,
   parseYmd,
   sessionInstant,
+  time12,
   timeRange,
   type OpenShift,
   type Part,
@@ -29,6 +30,15 @@ function formatDuration(totalMinutes: number): string {
   const h = Math.floor(m / 60);
   const rem = m % 60;
   return h > 0 ? `${h}h ${rem}m` : `${rem}m`;
+}
+
+/** 240 -> "4 hours", 90 -> "1 hour 30 minutes", 45 -> "45 minutes". */
+function formatGrace(totalMinutes: number): string {
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  const hours = h > 0 ? `${h} hour${h === 1 ? "" : "s"}` : "";
+  const mins = m > 0 ? `${m} minute${m === 1 ? "" : "s"}` : "";
+  return [hours, mins].filter(Boolean).join(" ");
 }
 
 /** Only ever mounted once someone's actually signed in, see the "active
@@ -181,6 +191,10 @@ function ShiftStatus({
   // auto-close would apply to a genuinely quiet shift, so the colour
   // means something rather than just escalating for its own sake.
   const overColor = -minutesToEnd >= autocloseGraceMinutes ? "text-danger" : "text-warm-ink";
+  // From 15 minutes before the finish, and after it, until they extend: say
+  // plainly what happens next and point at the extend button, so nobody
+  // finds out by having their shift close while they are still working.
+  const nudgeToExtend = !shift.extendedMinutes && minutesToEnd <= 15;
 
   return (
     <div
@@ -222,6 +236,14 @@ function ShiftStatus({
 
       <GeoLine distanceM={shift.distanceM} radiusM={radiusM} />
 
+      {nudgeToExtend && (
+        <div className="rounded-md border border-[#F0D69A] bg-warm-tint px-2.5 py-2 text-[11.5px] font-semibold leading-snug text-warm-ink">
+          {isOver ? `Your shift time was up at ${time12(session.ends)}.` : `Your shift finishes at ${time12(session.ends)}.`}{" "}
+          Still working? Tap &ldquo;Need to extend the shift time?&rdquo; below. If nothing is ticked for{" "}
+          {formatGrace(autocloseGraceMinutes)} after the finish time, the shift closes by itself.
+        </div>
+      )}
+
       <button
         type="button"
         disabled={busy}
@@ -239,7 +261,11 @@ function ShiftStatus({
         type="button"
         disabled={busy}
         onClick={() => setExtendOpen(true)}
-        className="text-left text-[12px] font-bold text-brand-ink disabled:opacity-50"
+        className={
+          nudgeToExtend
+            ? "h-[38px] rounded-[var(--radius)] border-[1.5px] border-[#C1800F] text-[12.5px] font-extrabold text-warm-ink disabled:opacity-50"
+            : "text-left text-[12px] font-bold text-brand-ink disabled:opacity-50"
+        }
       >
         {shift.extendedMinutes ? `Extended by ${shift.extendedMinutes} min, change` : "Need to extend the shift time?"}
       </button>
