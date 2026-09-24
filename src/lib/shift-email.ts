@@ -78,6 +78,10 @@ function statusLines(s: SessionShiftRow, graceMin: number): string[] {
     lines.push("On time");
   }
 
+  if (s.reopenedAt) {
+    lines.push(`Shift closed automatically, then reopened at ${timeLabel(s.reopenedAt)} because they were still working`);
+  }
+
   if (!s.endedAt) {
     lines.push("Still signed in");
     return lines;
@@ -181,9 +185,9 @@ function buildBlocks(
   return { people: [...people.values()], outstanding, handover, health };
 }
 
-function textBody(date: string, part: Part, b: Built): string {
+function textBody(date: string, part: Part, b: Built, updateNote?: string): string {
   const day = parseYmd(date).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" });
-  const lines = [`${PART_LABEL[part]} shift, ${day}`, ""];
+  const lines = [...(updateNote ? [updateNote, ""] : []), `${PART_LABEL[part]} shift, ${day}`, ""];
 
   if (b.health.length) {
     lines.push("HEALTH CONCERNS");
@@ -228,7 +232,7 @@ function textBody(date: string, part: Part, b: Built): string {
   return lines.join("\n");
 }
 
-function htmlBody(date: string, part: Part, b: Built): string {
+function htmlBody(date: string, part: Part, b: Built, updateNote?: string): string {
   const day = parseYmd(date).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" });
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const h3 = (s: string) => `<h3 style="font-family:sans-serif;font-size:14px;color:#2C2C2A;margin:18px 0 8px;">${s}</h3>`;
@@ -283,6 +287,7 @@ function htmlBody(date: string, part: Part, b: Built): string {
 
   return `
     <div style="font-family:sans-serif;max-width:520px;">
+      ${updateNote ? `<p style="margin:0 0 12px;padding:10px 12px;background:#FEF3DC;border:1px solid #F0D69A;border-radius:8px;font-size:14px;">${esc(updateNote)}</p>` : ""}
       <h2 style="font-family:sans-serif;color:#0F5A8F;">${PART_LABEL[part]} shift, ${day}</h2>
       ${health}
       ${b.people.map(person).join("")}
@@ -311,8 +316,17 @@ async function buildSession(date: string, part: Part): Promise<Built> {
  *  it's a no-op otherwise. */
 export async function maybeSendShiftEmail(date: string, part: Part): Promise<void> {
   const session = await ensureRosterSession(date, part);
-  if (session.emailSentAt) return;
   if (await hasOpenShiftsForSession(date, part)) return;
+
+  // The first email for a session goes once. But if someone's shift was
+  // closed automatically, the email went, and THEN they carried on (their
+  // shift was reopened after that email), the picture in it is out of date.
+  // Once that reopened shift ends, send one updated email that replaces it.
+  const shifts = await getSessionShifts(date, part);
+  const sentAt = session.emailSentAt ? new Date(session.emailSentAt).getTime() : null;
+  const reopenedAfterSend =
+    sentAt !== null && shifts.some((s) => s.reopenedAt && new Date(s.reopenedAt).getTime() > sentAt);
+  if (sentAt !== null && !reopenedAfterSend) return;
 
   const built = await buildSession(date, part);
   if (built.people.every((p) => !p.startedAt)) return;
@@ -321,11 +335,14 @@ export async function maybeSendShiftEmail(date: string, part: Part): Promise<voi
   if (recipients.length === 0) return;
 
   const day = parseYmd(date).toLocaleDateString("en-AU", { day: "numeric", month: "short" });
+  const updateNote = reopenedAfterSend
+    ? `UPDATED. This replaces the email sent at ${timeLabel(session.emailSentAt as string)}. The shift was closed automatically, then reopened because the person was still working, so this shows everything that was done.`
+    : undefined;
   const result = await sendEmail({
     to: recipients,
-    subject: `CAPS ${PART_LABEL[part]} shift, ${day}`,
-    text: textBody(date, part, built),
-    html: htmlBody(date, part, built),
+    subject: `${reopenedAfterSend ? "UPDATED: " : ""}CAPS ${PART_LABEL[part]} shift, ${day}`,
+    text: textBody(date, part, built, updateNote),
+    html: htmlBody(date, part, built, updateNote),
   });
 
   if (result.ok) {

@@ -742,6 +742,8 @@ export type SessionShiftRow = {
   endedEarlyReason: string | null;
   extendedMinutes: number | null;
   extendedReason: string | null;
+  /** When a shift closed automatically was reopened (they carried on working). */
+  reopenedAt: string | null;
   date: string;
 };
 
@@ -754,7 +756,7 @@ export async function getSessionShifts(date: string, part: Part): Promise<Sessio
     .from("shift_log")
     .select(
       "person_id, signed_in_at, signed_out_at, late_minutes, late_reason, signed_in_distance_m, auto_closed, " +
-        "ended_early_reason, extended_minutes, extended_reason, person:people(first_name, surname)",
+        "ended_early_reason, extended_minutes, extended_reason, reopened_at, person:people(first_name, surname)",
     )
     .eq("date", date)
     .eq("part", part)
@@ -775,6 +777,7 @@ export async function getSessionShifts(date: string, part: Part): Promise<Sessio
     ended_early_reason: string | null;
     extended_minutes: number | null;
     extended_reason: string | null;
+    reopened_at: string | null;
     person: { first_name: string; surname: string } | null;
   }>).map((r) => ({
     personName: r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown",
@@ -790,6 +793,7 @@ export async function getSessionShifts(date: string, part: Part): Promise<Sessio
     endedEarlyReason: r.ended_early_reason,
     extendedMinutes: r.extended_minutes,
     extendedReason: r.extended_reason,
+    reopenedAt: r.reopened_at,
     date,
   }));
 }
