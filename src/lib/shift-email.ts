@@ -97,7 +97,11 @@ function statusLines(s: SessionShiftRow, graceMin: number): string[] {
     );
   }
   if (s.autoClosed) {
-    lines.push("Shift closed automatically at the rostered end, no manual sign-out");
+    lines.push(
+      s.reopenedAt
+        ? "Shift closed automatically at their last activity, no manual sign-out"
+        : "Shift closed automatically at the rostered end, no manual sign-out",
+    );
   } else {
     const earlyMin = Math.round((endsAt + extended - out) / 60000);
     if (earlyMin > graceMin) {

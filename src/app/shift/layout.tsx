@@ -5,8 +5,9 @@ import { getCurrentPerson } from "@/lib/auth";
 import { getActiveShiftPerson } from "@/lib/shift-identity";
 import { getLeaveNoticesForShift } from "@/lib/leave-data";
 import { ensureRosterSession, getHandoverNotes, getOpenShift, getRosterDayDetail, getShiftSettings } from "@/lib/shift-data";
-import { shelterToday } from "@/lib/shift";
+import { sessionInstant, shelterToday } from "@/lib/shift";
 import { LateReasonGate } from "@/components/shift/late-reason-gate";
+import { ReopenedGate } from "@/components/shift/reopened-gate";
 import { ShiftSidebar } from "@/components/shift/shift-sidebar";
 import { ShiftTabs } from "@/components/shift/shift-tabs";
 
@@ -67,6 +68,15 @@ export default async function ShiftLayout({ children }: { children: React.ReactN
     openShift.lateMinutes > settings.lateAfterMinutes &&
     !openShift.lateReason;
 
+  // Reopened after being closed automatically, and no extra time on record
+  // yet: they are working past the finish, so say how much longer and why.
+  const reopenedOwed =
+    openShift !== null &&
+    session !== null &&
+    openShift.reopenedAt !== null &&
+    openShift.extendedMinutes === null &&
+    Date.now() > sessionInstant(openShift.date, session.ends).getTime();
+
   return (
     <div className="flex min-h-screen bg-background">
       {active && openShift && session && lateReasonOwed && (
@@ -75,6 +85,14 @@ export default async function ShiftLayout({ children }: { children: React.ReactN
           part={openShift.part}
           lateMinutes={openShift.lateMinutes as number}
           starts={session.starts}
+        />
+      )}
+      {active && openShift && session && reopenedOwed && (
+        <ReopenedGate
+          personName={active.name}
+          part={openShift.part}
+          ends={session.ends}
+          endsAtIso={sessionInstant(openShift.date, session.ends).toISOString()}
         />
       )}
       {active && openShift && session && (
