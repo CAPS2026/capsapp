@@ -79,8 +79,11 @@ export default async function RosterPage({
           >
             Edit roster
           </Link>
-          <Link href="/people/new" className="text-[13px] font-bold text-brand-ink">
-            + Add staff member
+          <Link
+            href="/shift/staff"
+            className="inline-flex h-11 items-center rounded-[var(--radius)] border-[1.5px] border-brand px-5 text-sm font-bold text-brand-ink"
+          >
+            Staff: add, edit, remove
           </Link>
         </div>
       )}
