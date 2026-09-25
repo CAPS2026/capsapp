@@ -1,7 +1,7 @@
 // The end-of-shift email: one per session (date + part), covering
-// everyone who worked it, sent once the last open shift on that session
-// closes (see maybeSendShiftEmail, called from endShift and from the
-// auto-close check). Recipients come from
+// everyone who worked it, sent once the session's finish time has passed
+// and the last open shift on it has closed (see maybeSendShiftEmail, called
+// from endShift, the auto-close check and the scheduled checks). Recipients come from
 // org_settings.staff_shift_email_recipients, never from this file.
 //
 // It lists: what each person did, whether they were late, finished early
@@ -10,8 +10,19 @@
 // moment they are raised, see sendHealthConcernEmail.)
 
 import { sendEmail } from "@/lib/email";
-import { createClient } from "@/lib/supabase/server";
-import { PART_LABEL, CATEGORY_LABEL, clock12, parseYmd, sessionInstant, type Part } from "@/lib/shift";
+import { shiftDb } from "@/lib/shift-db";
+import {
+  PART_LABEL,
+  CATEGORY_LABEL,
+  SHELTER_TZ,
+  clock12,
+  parseYmd,
+  sessionInstant,
+  shelterToday,
+  shiftDay,
+  time12,
+  type Part,
+} from "@/lib/shift";
 import {
   autocloseStaleShifts,
   ensureRosterSession,
@@ -22,6 +33,7 @@ import {
   getSessionTasks,
   getShiftEmailRecipients,
   getShiftSettings,
+  getUnattendedSessions,
   hasOpenShiftsForSession,
   type SessionHandoverRow,
   type SessionHealthConcern,
@@ -64,11 +76,40 @@ function dayShort(date: string) {
   return parseYmd(date).toLocaleDateString("en-AU", { weekday: "short" });
 }
 
+/** "Fri 26 Sept, 7:10am", shelter time, for a moment that may not be on
+ *  the shift's own day. */
+function whenLabel(iso: string) {
+  const day = new Date(iso).toLocaleDateString("en-AU", {
+    timeZone: SHELTER_TZ,
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+  return `${day}, ${clock12(iso)}`;
+}
+
 /** The status lines for one person's shift: late or on time, full shift
  *  or finished early, any overtime. `graceMin` is the same grace period
  *  the app uses everywhere (10 minutes), inside which nothing is flagged. */
 function statusLines(s: SessionShiftRow, graceMin: number): string[] {
   const lines: string[] = [];
+
+  // Nobody signed in at the time; the shift was typed in afterwards. Say so
+  // plainly, with the times they gave, rather than judging it like a live
+  // sign-in (there was no sign-in to be late for, or early out of).
+  if (s.enteredAfterwardsReason) {
+    lines.push(
+      `Did not sign in at the time. Shift entered afterwards (${whenLabel(s.createdAt)}), reason: ${s.enteredAfterwardsReason}`,
+    );
+    if (s.lateMinutes && s.lateMinutes > graceMin) lines.push(`Started ${s.lateMinutes} min after the rostered start`);
+    if (s.endedAt) {
+      const endsAt = sessionInstant(s.date, s.sessionEnds).getTime();
+      const diff = Math.round((new Date(s.endedAt).getTime() - endsAt) / 60000);
+      if (diff < -graceMin) lines.push(`Finished ${-diff} min before the rostered end`);
+      else if (diff > graceMin) lines.push(`Finished ${diff} min after the rostered end`);
+    }
+    return lines;
+  }
 
   if (s.lateMinutes && s.lateMinutes > graceMin) {
     lines.push(
@@ -118,6 +159,26 @@ function statusLines(s: SessionShiftRow, graceMin: number): string[] {
   return lines;
 }
 
+/** A completed task's line in the email. A task from an earlier shift, or
+ *  one ticked well after this shift finished, says so and when it was
+ *  ticked, so a morning task ticked at 3:49pm never reads as if it was done
+ *  on time by the afternoon shift. */
+function doneLabel(t: SessionTasksRow, date: string, endsAtMs: number, graceMin: number): string {
+  const note = t.status === "not_required" && t.note ? `: ${t.note}` : "";
+  if (!t.actionedAt) return `${t.title}${note}`;
+  const sameDay =
+    new Intl.DateTimeFormat("en-CA", { timeZone: SHELTER_TZ }).format(new Date(t.actionedAt)) === date;
+  const when = sameDay ? clock12(t.actionedAt) : whenLabel(t.actionedAt);
+  if (t.carriedOver) {
+    const origin = t.date === date ? `${t.part} task` : `${dayShort(t.date)} ${t.part} task`;
+    return `${t.title} (${origin}, ticked at ${when})${note}`;
+  }
+  if (new Date(t.actionedAt).getTime() > endsAtMs + graceMin * 60000) {
+    return `${t.title} (ticked at ${when}, after the shift)${note}`;
+  }
+  return `${t.title}${note}`;
+}
+
 function buildBlocks(
   date: string,
   shifts: SessionShiftRow[],
@@ -126,6 +187,7 @@ function buildBlocks(
   health: SessionHealthConcern[],
   radiusM: number,
   graceMin: number,
+  endsAtMs: number,
 ): Built {
   const people = new Map<string, PersonBlock>();
   for (const s of shifts) {
@@ -168,9 +230,11 @@ function buildBlocks(
   const outstanding: string[] = [];
   for (const t of tasks) {
     if (t.status === "done" && t.actionedByName) {
-      (t.isExtra ? blockFor(t.actionedByName).extraDone : blockFor(t.actionedByName).done).push(t.title);
+      (t.isExtra ? blockFor(t.actionedByName).extraDone : blockFor(t.actionedByName).done).push(
+        doneLabel(t, date, endsAtMs, graceMin),
+      );
     } else if (t.status === "not_required" && t.actionedByName) {
-      blockFor(t.actionedByName).notNeeded.push(`${t.title}${t.note ? `: ${t.note}` : ""}`);
+      blockFor(t.actionedByName).notNeeded.push(doneLabel(t, date, endsAtMs, graceMin));
     } else if (t.status === "open") {
       const from = t.carriedOver ? `, from ${t.date === date ? "this morning" : dayShort(t.date)}` : "";
       const claim = t.claimedByName ? `, claimed by ${t.claimedByName}` : "";
@@ -302,35 +366,54 @@ function htmlBody(date: string, part: Part, b: Built, updateNote?: string): stri
     </div>`;
 }
 
+/** When the session is over: its rostered end, pushed back by the longest
+ *  overtime anyone on it has logged. */
+function sessionEndMs(date: string, sessionEnds: string, shifts: SessionShiftRow[]): number {
+  const extra = Math.max(0, ...shifts.map((s) => s.extendedMinutes ?? 0));
+  return sessionInstant(date, sessionEnds).getTime() + extra * 60000;
+}
+
 async function buildSession(date: string, part: Part): Promise<Built> {
-  const [shifts, tasks, handover, health, { radiusM, lateAfterMinutes }] = await Promise.all([
+  const [session, shifts, tasks, handover, health, { radiusM, lateAfterMinutes }] = await Promise.all([
+    ensureRosterSession(date, part),
     getSessionShifts(date, part),
     getSessionTasks(date, part),
     getSessionHandover(date, part),
     getSessionHealthConcerns(date, part),
     getShiftSettings(),
   ]);
-  return buildBlocks(date, shifts, tasks, handover, health, radiusM, lateAfterMinutes);
+  const endsAtMs = sessionEndMs(date, session.ends, shifts);
+  return buildBlocks(date, shifts, tasks, handover, health, radiusM, lateAfterMinutes, endsAtMs);
 }
 
-/** Sends the summary for (date, part) if, and only if, every shift
- *  against that session is closed, at least one person signed in, there
- *  are recipients configured, and it hasn't already gone out. Safe to
- *  call speculatively (e.g. after every sign-out and every auto-close);
- *  it's a no-op otherwise. */
+/** Sends the summary for (date, part) if, and only if, the session's
+ *  finish time has passed, every shift against it is closed, at least one
+ *  person signed in, there are recipients configured, and it hasn't
+ *  already gone out. Safe to call speculatively (after every sign-out,
+ *  every auto-close, and from the scheduled checks); a no-op otherwise.
+ *
+ *  Waiting for the finish time means someone who ends their shift a little
+ *  early doesn't send an email that leaves out a colleague still to sign
+ *  in. The scheduled checks then send it shortly after the finish time. */
 export async function maybeSendShiftEmail(date: string, part: Part): Promise<void> {
   const session = await ensureRosterSession(date, part);
+  const shifts = await getSessionShifts(date, part);
+  if (shifts.length === 0) return;
+  if (Date.now() < sessionEndMs(date, session.ends, shifts)) return;
   if (await hasOpenShiftsForSession(date, part)) return;
 
-  // The first email for a session goes once. But if someone's shift was
-  // closed automatically, the email went, and THEN they carried on (their
-  // shift was reopened after that email), the picture in it is out of date.
-  // Once that reopened shift ends, send one updated email that replaces it.
-  const shifts = await getSessionShifts(date, part);
+  // The first email for a session goes once. But if the picture changed
+  // after it went (a shift closed automatically was then reopened, someone
+  // signed in after it, or a forgotten shift was entered afterwards), send
+  // one updated email that replaces it.
   const sentAt = session.emailSentAt ? new Date(session.emailSentAt).getTime() : null;
-  const reopenedAfterSend =
-    sentAt !== null && shifts.some((s) => s.reopenedAt && new Date(s.reopenedAt).getTime() > sentAt);
-  if (sentAt !== null && !reopenedAfterSend) return;
+  const changedAfterSend =
+    sentAt !== null &&
+    shifts.some(
+      (s) =>
+        (s.reopenedAt && new Date(s.reopenedAt).getTime() > sentAt) || new Date(s.createdAt).getTime() > sentAt,
+    );
+  if (sentAt !== null && !changedAfterSend) return;
 
   const built = await buildSession(date, part);
   if (built.people.every((p) => !p.startedAt)) return;
@@ -338,22 +421,32 @@ export async function maybeSendShiftEmail(date: string, part: Part): Promise<voi
   const recipients = await getShiftEmailRecipients();
   if (recipients.length === 0) return;
 
+  // Claim the send first, so two checks running at the same moment (an End
+  // shift and the scheduled check) can't both send it. Only the one whose
+  // update matches the old value goes ahead.
+  const supabase = await shiftDb();
+  const claim = supabase.from("roster_session").update({ email_sent_at: new Date().toISOString() }).eq("id", session.id);
+  const { data: claimed } = await (session.emailSentAt
+    ? claim.eq("email_sent_at", session.emailSentAt)
+    : claim.is("email_sent_at", null)
+  ).select("id");
+  if (!claimed || claimed.length === 0) return;
+
   const day = parseYmd(date).toLocaleDateString("en-AU", { day: "numeric", month: "short" });
-  const updateNote = reopenedAfterSend
-    ? `UPDATED. This replaces the email sent at ${timeLabel(session.emailSentAt as string)}. The shift was closed automatically, then reopened because the person was still working, so this shows everything that was done.`
+  const updateNote = changedAfterSend
+    ? `UPDATED. This replaces the email sent at ${timeLabel(session.emailSentAt as string)}. Something changed after it went (a shift was reopened, someone signed in later, or a forgotten shift was entered afterwards), so this shows everything.`
     : undefined;
   const result = await sendEmail({
     to: recipients,
-    subject: `${reopenedAfterSend ? "UPDATED: " : ""}CAPS ${PART_LABEL[part]} shift, ${day}`,
+    subject: `${changedAfterSend ? "UPDATED: " : ""}CAPS ${PART_LABEL[part]} shift, ${day}`,
     text: textBody(date, part, built, updateNote),
     html: htmlBody(date, part, built, updateNote),
   });
 
-  if (result.ok) {
-    const supabase = await createClient();
-    await supabase.from("roster_session").update({ email_sent_at: new Date().toISOString() }).eq("id", session.id);
-  } else {
+  if (!result.ok) {
     console.error("maybeSendShiftEmail: send failed", result.error);
+    // Give the claim back, so the next check tries again.
+    await supabase.from("roster_session").update({ email_sent_at: session.emailSentAt }).eq("id", session.id);
   }
 }
 
@@ -401,7 +494,7 @@ export async function sendHealthConcernEmail(opts: {
     console.error("sendHealthConcernEmail: send failed", result.error);
     return false;
   }
-  const supabase = await createClient();
+  const supabase = await shiftDb();
   await supabase.from("health_concern").update({ emailed_at: new Date().toISOString() }).eq("id", opts.concernId);
   return true;
 }
@@ -419,4 +512,69 @@ export async function checkAutoCloseAndSendEmails(): Promise<void> {
   } catch (e) {
     console.error("checkAutoCloseAndSendEmails failed", e);
   }
+}
+
+/** How long after a rostered session starts, with nobody signed in at all,
+ *  before Renee and Shayna are told. */
+const NOBODY_SIGNED_IN_AFTER_MINUTES = 30;
+
+/** Emails the shift recipients about any rostered session today that
+ *  nobody has signed in to, 30 minutes after it started. Once per session.
+ *  Someone may well be working and just not using the app (as happened with
+ *  a stand-in who didn't know it), so the wording asks them to check rather
+ *  than saying nobody turned up. */
+export async function sendNobodySignedInAlerts(): Promise<void> {
+  const recipients = await getShiftEmailRecipients();
+  if (recipients.length === 0) return;
+  const sessions = await getUnattendedSessions(NOBODY_SIGNED_IN_AFTER_MINUTES);
+  if (sessions.length === 0) return;
+
+  const supabase = await shiftDb();
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  for (const s of sessions) {
+    // Claim it first so two checks at once can't both send it.
+    const { data: claimed } = await supabase
+      .from("roster_session")
+      .update({ no_show_alert_sent_at: new Date().toISOString() })
+      .eq("id", s.sessionId)
+      .is("no_show_alert_sent_at", null)
+      .select("id");
+    if (!claimed || claimed.length === 0) continue;
+
+    const day = parseYmd(s.date).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" });
+    const who = s.rostered.join(" and ");
+    const intro = `Nobody has signed in to the ${PART_LABEL[s.part].toLowerCase()} shift (${time12(s.starts)} to ${time12(s.ends)}), ${day}.`;
+    const detail = `Rostered: ${who}. It is now ${NOBODY_SIGNED_IN_AFTER_MINUTES} minutes past the start. Someone may be working without using the app, so please check.`;
+    const result = await sendEmail({
+      to: recipients,
+      subject: `CAPS: nobody signed in for the ${PART_LABEL[s.part].toLowerCase()} shift, ${parseYmd(s.date).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}`,
+      text: `${intro}\n\n${detail}`,
+      html: `<div style="font-family:sans-serif;max-width:520px;">
+        <h2 style="color:#8A5A00;">Nobody signed in</h2>
+        <p style="font-size:14px;">${esc(intro)}</p>
+        <p style="font-size:14px;">${esc(detail)}</p>
+      </div>`,
+    });
+    if (!result.ok) {
+      console.error("sendNobodySignedInAlerts: send failed", result.error);
+      await supabase.from("roster_session").update({ no_show_alert_sent_at: null }).eq("id", s.sessionId);
+    }
+  }
+}
+
+/** Everything the scheduled checks do, every 15 minutes, whether or not
+ *  anyone has the app open: close abandoned shifts, send any shift email
+ *  that is now due (today's and yesterday's sessions), and warn about a
+ *  rostered session nobody has signed in to. Must run inside runAsService
+ *  (no one is logged in). Each step is best-effort so one failure never
+ *  stops the others. */
+export async function runScheduledShiftChecks(): Promise<void> {
+  await checkAutoCloseAndSendEmails();
+  const today = shelterToday();
+  for (const date of [shiftDay(today, -1), today]) {
+    for (const part of ["morning", "afternoon"] as Part[]) {
+      await maybeSendShiftEmail(date, part).catch((e) => console.error("scheduled: shift email failed", date, part, e));
+    }
+  }
+  await sendNobodySignedInAlerts().catch((e) => console.error("scheduled: nobody-signed-in alert failed", e));
 }

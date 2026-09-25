@@ -1,6 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
+import { shiftDb } from "@/lib/shift-db";
 import {
   initials,
+  nameInitials,
   parseYmd,
   partForTime,
   sessionInstant,
@@ -21,7 +22,7 @@ import {
  *  don't belong on either screen (Julie flagged herself and Paul showing
  *  up here despite neither of them being rostered caretakers). */
 export async function getRosterablePeople(): Promise<{ id: string; name: string }[]> {
-  const supabase = await createClient();
+  const supabase = await shiftDb();
   const { data, error } = await supabase
     .from("person_roles")
     .select("person:people!person_roles_person_id_fkey(id, first_name, surname)")
@@ -45,7 +46,7 @@ export async function getRosterablePeople(): Promise<{ id: string; name: string 
  *  part for `date` (or null if not rostered at all). Rostered people
  *  first, then everyone else, the picker shows both, dimming the rest. */
 export async function getTodayShiftPeople(date: string): Promise<ShiftPerson[]> {
-  const supabase = await createClient();
+  const supabase = await shiftDb();
   const people = await getRosterablePeople();
 
   const { data: sessions, error } = await supabase
@@ -82,6 +83,7 @@ export async function getTodayShiftPeople(date: string): Promise<ShiftPerson[]> 
         part: pick?.part ?? null,
         starts: pick?.starts ?? null,
         ends: pick?.ends ?? null,
+        sessions: mine,
       };
     })
     .sort((a, b) => {
@@ -99,7 +101,7 @@ type GeofenceSettings = {
 };
 
 export async function getShiftSettings(): Promise<GeofenceSettings> {
-  const supabase = await createClient();
+  const supabase = await shiftDb();
   const { data } = await supabase
     .from("org_settings")
     .select(
@@ -133,7 +135,7 @@ const DEFAULT_TIMES: Record<Part, { starts: string; ends: string }> = {
  *  against, even for a day nobody's got around to rostering. Mirrors the
  *  old Staff tab's `ensureSession` (src/lib/actions/staff.ts). */
 export async function ensureRosterSession(date: string, part: Part): Promise<RosterSessionRow> {
-  const supabase = await createClient();
+  const supabase = await shiftDb();
 
   const { data: found } = await supabase
     .from("roster_session")
@@ -188,7 +190,7 @@ export async function ensureRosterSession(date: string, part: Part): Promise<Ros
 
 /** The person's currently open (not signed out) shift, if any, today. */
 export async function getOpenShift(personId: string): Promise<OpenShift | null> {
-  const supabase = await createClient();
+  const supabase = await shiftDb();
   const { data, error } = await supabase
     .from("shift_log")
     .select("id, person_id, date, part, signed_in_at, late_minutes, late_reason, roster_session_id, signed_in_distance_m, extended_minutes, reopened_at")
@@ -236,7 +238,7 @@ export async function getOpenShift(personId: string): Promise<OpenShift | null> 
 export async function touchShiftActivity(
   personId: string,
 ): Promise<{ lateMinutes: number | null; lateReason: string | null } | null> {
-  const supabase = await createClient();
+  const supabase = await shiftDb();
   const { data } = await supabase
     .from("shift_log")
     .update({ last_activity_at: new Date().toISOString() })
@@ -255,7 +257,7 @@ export async function touchShiftActivity(
  *  after it's gone stale. Returns the (date, part) pairs it closed, so
  *  the caller can check whether that completes a session's email. */
 export async function autocloseStaleShifts(): Promise<Array<{ date: string; part: Part }>> {
-  const supabase = await createClient();
+  const supabase = await shiftDb();
   const { autocloseGraceMinutes } = await getShiftSettings();
 
   const { data: open, error } = await supabase
@@ -398,7 +400,7 @@ function toRow(r: InstanceRow, carriedOver: boolean): ShiftTaskRow {
  *  or null if none is set. Tasks dated before it are never carried over, so
  *  the first real morning shift starts with nothing left over from testing. */
 export async function getGoLiveDate(): Promise<string | null> {
-  const supabase = await createClient();
+  const supabase = await shiftDb();
   const { data } = await supabase.from("org_settings").select("staff_go_live_date").maybeSingle();
   return data?.staff_go_live_date ?? null;
 }
@@ -427,7 +429,7 @@ export async function getShiftChecklist(part: Part): Promise<{
   carriedOver: ShiftTaskRow[];
   extras: ShiftTaskRow[];
 }> {
-  const supabase = await createClient();
+  const supabase = await shiftDb();
   const date = shelterToday();
 
   // Today's rows for BOTH parts are still created together on the first
@@ -548,7 +550,7 @@ export type HandoverNoteRow = {
 
 /** Most recent handover notes, newest first. */
 export async function getHandoverNotes(limit = 30): Promise<HandoverNoteRow[]> {
-  const supabase = await createClient();
+  const supabase = await shiftDb();
   const { data, error } = await supabase
     .from("handover_note")
     .select("id, date, part, body, created_at, person:people(first_name, surname)")
@@ -580,17 +582,12 @@ export async function getHandoverNotes(limit = 30): Promise<HandoverNoteRow[]> {
 
 export type RosterCell = { am: string[]; pm: string[] };
 
-/** One day per calendar cell, each person's name reduced to initials
- *  (e.g. "Taylor" -> "T", "Ash" -> "A") so a month grid stays legible. */
-function shortInitial(name: string): string {
-  const first = name.trim().split(/\s+/)[0] ?? "";
-  return (first.charAt(0) || "?").toUpperCase();
-}
 
 /** Every rostered day in `year`-`month` (1-12), keyed by "YYYY-MM-DD". A
- *  day with nothing rostered simply won't have a key. */
+ *  day with nothing rostered simply won't have a key. Each person is shown
+ *  by first and last initial ("AB", "TF") so a month grid stays legible. */
 export async function getMonthRoster(year: number, month: number): Promise<Record<string, RosterCell>> {
-  const supabase = await createClient();
+  const supabase = await shiftDb();
   const from = `${year}-${String(month).padStart(2, "0")}-01`;
   const lastDay = new Date(year, month, 0).getDate();
   const to = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
@@ -609,7 +606,7 @@ export async function getMonthRoster(year: number, month: number): Promise<Recor
     roster_assignment: { person: { first_name: string; surname: string } | null }[] | null;
   }>) {
     const names = (s.roster_assignment ?? [])
-      .map((a) => (a.person ? shortInitial(`${a.person.first_name} ${a.person.surname}`) : null))
+      .map((a) => (a.person ? nameInitials(`${a.person.first_name} ${a.person.surname}`) : null))
       .filter((n): n is string => n !== null);
     if (names.length === 0) continue;
     const cell = (grid[s.date] ??= { am: [], pm: [] });
@@ -633,7 +630,7 @@ export type RosterDaySession = {
 /** One day's roster in full (both sessions) for the day-detail card
  *  under the month grid and the sidebar's "Today's roster". */
 export async function getRosterDayDetail(date: string): Promise<RosterDaySession[]> {
-  const supabase = await createClient();
+  const supabase = await shiftDb();
   const { data, error } = await supabase
     .from("roster_session")
     .select("part, starts, ends, roster_assignment(person:people(id, first_name, surname))")
@@ -681,7 +678,7 @@ export type RosterEditRow = { date: string; morningPersonIds: string[]; afternoo
  *  happens a lot when all three are around and nobody's on leave).
  *  Empty array where nobody is. */
 export async function getRosterEditRange(startDate: string, days: number): Promise<RosterEditRow[]> {
-  const supabase = await createClient();
+  const supabase = await shiftDb();
   const from = startDate;
   const to = shiftDay(startDate, days - 1);
 
@@ -720,7 +717,7 @@ export async function getRosterEditRange(startDate: string, days: number): Promi
 
 /** Renee, Shayna, whoever, set from the settings screen, never in code. */
 export async function getShiftEmailRecipients(): Promise<string[]> {
-  const supabase = await createClient();
+  const supabase = await shiftDb();
   const { data } = await supabase.from("org_settings").select("staff_shift_email_recipients").maybeSingle();
   return data?.staff_shift_email_recipients ?? [];
 }
@@ -729,7 +726,7 @@ export async function getShiftEmailRecipients(): Promise<string[]> {
 /** Who gets a health concern the moment it is raised. Empty means switched
  *  off (nothing is emailed, but the concern is still saved). */
 export async function getHealthConcernRecipients(): Promise<string[]> {
-  const supabase = await createClient();
+  const supabase = await shiftDb();
   const { data } = await supabase.from("org_settings").select("health_concern_email_recipients").maybeSingle();
   return data?.health_concern_email_recipients ?? [];
 }
@@ -752,19 +749,26 @@ export type SessionShiftRow = {
   extendedReason: string | null;
   /** When a shift closed automatically was reopened (they carried on working). */
   reopenedAt: string | null;
+  /** When this row was saved. For a normal sign-in that is the sign-in; for
+   *  a shift entered afterwards it is when it was entered. */
+  createdAt: string;
+  /** Set when someone forgot to sign in and entered the shift afterwards:
+   *  why the app wasn't used at the time. */
+  enteredAfterwardsReason: string | null;
   date: string;
 };
 
 /** Every sign-in against (date, part), closed or not. The per-person
  *  blocks in the summary email are built from this. */
 export async function getSessionShifts(date: string, part: Part): Promise<SessionShiftRow[]> {
-  const supabase = await createClient();
+  const supabase = await shiftDb();
   const session = await ensureRosterSession(date, part);
   const { data, error } = await supabase
     .from("shift_log")
     .select(
       "person_id, signed_in_at, signed_out_at, late_minutes, late_reason, signed_in_distance_m, auto_closed, " +
-        "ended_early_reason, extended_minutes, extended_reason, reopened_at, person:people(first_name, surname)",
+        "ended_early_reason, extended_minutes, extended_reason, reopened_at, created_at, entered_afterwards_reason, " +
+        "person:people(first_name, surname)",
     )
     .eq("date", date)
     .eq("part", part)
@@ -786,6 +790,8 @@ export async function getSessionShifts(date: string, part: Part): Promise<Sessio
     extended_minutes: number | null;
     extended_reason: string | null;
     reopened_at: string | null;
+    created_at: string;
+    entered_afterwards_reason: string | null;
     person: { first_name: string; surname: string } | null;
   }>).map((r) => ({
     personName: r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown",
@@ -802,6 +808,8 @@ export async function getSessionShifts(date: string, part: Part): Promise<Sessio
     extendedMinutes: r.extended_minutes,
     extendedReason: r.extended_reason,
     reopenedAt: r.reopened_at,
+    createdAt: r.created_at,
+    enteredAfterwardsReason: r.entered_afterwards_reason,
     date,
   }));
 }
@@ -809,7 +817,7 @@ export async function getSessionShifts(date: string, part: Part): Promise<Sessio
 /** Are there any shifts still open against (date, part)? While there are,
  *  the summary email waits, it covers the whole session, not one person. */
 export async function hasOpenShiftsForSession(date: string, part: Part): Promise<boolean> {
-  const supabase = await createClient();
+  const supabase = await shiftDb();
   const { count, error } = await supabase
     .from("shift_log")
     .select("id", { count: "exact", head: true })
@@ -830,7 +838,7 @@ export type SessionTasksRow = ShiftTaskRow;
  *    truth, not just this session's own list.
  *  Nothing is dropped because of who did it. */
 export async function getSessionTasks(date: string, part: Part): Promise<SessionTasksRow[]> {
-  const supabase = await createClient();
+  const supabase = await shiftDb();
   const [goLive, own, older, shifts] = await Promise.all([
     getGoLiveDate(),
     supabase.from("task_instance").select(INSTANCE_SELECT).eq("date", date).eq("part", part),
@@ -879,7 +887,7 @@ export type SessionHandoverRow = { personName: string; body: string; createdAt: 
 
 /** Handover log entries written during (date, part). */
 export async function getSessionHandover(date: string, part: Part): Promise<SessionHandoverRow[]> {
-  const supabase = await createClient();
+  const supabase = await shiftDb();
   const { data, error } = await supabase
     .from("handover_note")
     .select("body, created_at, person:people(first_name, surname)")
@@ -908,10 +916,10 @@ export type SessionHealthConcern = {
 
 /** Health concerns raised during (date, part). */
 export async function getSessionHealthConcerns(date: string, part: Part): Promise<SessionHealthConcern[]> {
-  const supabase = await createClient();
+  const supabase = await shiftDb();
   const { data, error } = await supabase
     .from("health_concern")
-    .select("dog_name, urgent, body, created_at, person:people(first_name, surname)")
+    .select("dog_name, urgent, body, created_at, person:people!health_concern_person_id_fkey(first_name, surname)")
     .eq("date", date)
     .eq("part", part)
     .order("created_at");
@@ -929,4 +937,155 @@ export async function getSessionHealthConcerns(date: string, part: Part): Promis
     body: r.body,
     createdAt: r.created_at,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Health concerns list (Handover log tab) and dog name suggestions
+// ---------------------------------------------------------------------------
+
+export type HealthConcernRow = {
+  id: string;
+  personName: string;
+  dogName: string | null;
+  urgent: boolean;
+  body: string;
+  date: string;
+  part: Part;
+  createdAt: string;
+  resolvedAt: string | null;
+  resolvedByName: string | null;
+  resolvedNote: string | null;
+};
+
+/** Recent health concerns: not yet dealt with first (newest first), then
+ *  the ones already dealt with. */
+export async function getHealthConcerns(limit = 40): Promise<HealthConcernRow[]> {
+  const supabase = await shiftDb();
+  const { data, error } = await supabase
+    .from("health_concern")
+    .select(
+      "id, dog_name, urgent, body, date, part, created_at, resolved_at, resolved_by_name, resolved_note, " +
+        "person:people!health_concern_person_id_fkey(first_name, surname)",
+    )
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) console.error("getHealthConcerns failed", error);
+  const rows = ((data ?? []) as unknown as Array<{
+    id: string;
+    dog_name: string | null;
+    urgent: boolean;
+    body: string;
+    date: string;
+    part: Part;
+    created_at: string;
+    resolved_at: string | null;
+    resolved_by_name: string | null;
+    resolved_note: string | null;
+    person: { first_name: string; surname: string } | null;
+  }>).map((r) => ({
+    id: r.id,
+    personName: r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown",
+    dogName: r.dog_name,
+    urgent: r.urgent,
+    body: r.body,
+    date: r.date,
+    part: r.part,
+    createdAt: r.created_at,
+    resolvedAt: r.resolved_at,
+    resolvedByName: r.resolved_by_name,
+    resolvedNote: r.resolved_note,
+  }));
+  return [...rows.filter((r) => !r.resolvedAt), ...rows.filter((r) => r.resolvedAt)];
+}
+
+/** Dog names typed in the staff app before (health concerns, last year),
+ *  offered as suggestions while typing. Nothing to maintain: a new dog is
+ *  simply typed in full and is suggested from then on. Never read from the
+ *  dog app. */
+export async function getDogNameSuggestions(): Promise<string[]> {
+  const supabase = await shiftDb();
+  const since = shiftDay(shelterToday(), -365);
+  const { data, error } = await supabase
+    .from("health_concern")
+    .select("dog_name")
+    .gte("date", since)
+    .not("dog_name", "is", null)
+    .limit(1000);
+  if (error) console.error("getDogNameSuggestions failed", error);
+  const byKey = new Map<string, string>();
+  for (const r of (data ?? []) as Array<{ dog_name: string | null }>) {
+    const name = (r.dog_name ?? "").trim();
+    if (name && !byKey.has(name.toLowerCase())) byKey.set(name.toLowerCase(), name);
+  }
+  return [...byKey.values()].sort((a, b) => a.localeCompare(b));
+}
+
+// ---------------------------------------------------------------------------
+// "Nobody signed in" check (run by the scheduled checks)
+// ---------------------------------------------------------------------------
+
+export type UnattendedSession = {
+  sessionId: string;
+  date: string;
+  part: Part;
+  starts: string;
+  ends: string;
+  /** Full names of everyone rostered on it. */
+  rostered: string[];
+};
+
+/** Today's rostered sessions that started at least `afterMinutes` ago, have
+ *  not finished yet, have nobody signed in at all, and have not had this
+ *  alert sent already. A session nobody is rostered on is never included
+ *  (nobody was expected). */
+export async function getUnattendedSessions(afterMinutes: number): Promise<UnattendedSession[]> {
+  const supabase = await shiftDb();
+  const date = shelterToday();
+  const now = Date.now();
+
+  const { data, error } = await supabase
+    .from("roster_session")
+    .select("id, date, part, starts, ends, no_show_alert_sent_at, roster_assignment(person:people(first_name, surname))")
+    .eq("date", date)
+    .is("no_show_alert_sent_at", null);
+  if (error) {
+    console.error("getUnattendedSessions failed", error);
+    return [];
+  }
+
+  const out: UnattendedSession[] = [];
+  for (const s of (data ?? []) as unknown as Array<{
+    id: string;
+    date: string;
+    part: Part;
+    starts: string;
+    ends: string;
+    roster_assignment: { person: { first_name: string; surname: string } | null }[] | null;
+  }>) {
+    const rostered = (s.roster_assignment ?? [])
+      .map((a) => (a.person ? `${a.person.first_name} ${a.person.surname}`.trim() : null))
+      .filter((n): n is string => n !== null);
+    if (rostered.length === 0) continue;
+
+    const startsAt = sessionInstant(s.date, String(s.starts)).getTime();
+    const endsAt = sessionInstant(s.date, String(s.ends)).getTime();
+    if (now < startsAt + afterMinutes * 60000 || now > endsAt) continue;
+
+    const { count } = await supabase
+      .from("shift_log")
+      .select("id", { count: "exact", head: true })
+      .eq("date", s.date)
+      .eq("part", s.part);
+    if ((count ?? 0) > 0) continue;
+
+    out.push({
+      sessionId: s.id,
+      date: s.date,
+      part: s.part,
+      starts: String(s.starts).slice(0, 5),
+      ends: String(s.ends).slice(0, 5),
+      rostered,
+    });
+  }
+  return out;
 }

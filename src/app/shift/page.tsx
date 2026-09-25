@@ -1,7 +1,7 @@
 import { getActiveShiftPerson } from "@/lib/shift-identity";
-import { getOpenShift, getShiftChecklist, getTodayShiftPeople } from "@/lib/shift-data";
+import { getOpenShift, getRosterDayDetail, getShiftChecklist, getTodayShiftPeople } from "@/lib/shift-data";
 import { checkAutoCloseAndSendEmails } from "@/lib/shift-email";
-import { shelterToday } from "@/lib/shift";
+import { shelterToday, type Part } from "@/lib/shift";
 import { PersonPicker } from "@/components/shift/person-picker";
 import { ShiftChecklist } from "@/components/shift/shift-checklist";
 
@@ -17,8 +17,13 @@ export default async function ShiftPage() {
   // happen, endShift clears it, but don't get stuck if it does) falls
   // back to the picker rather than showing a broken checklist.
   if (!active || !openShift) {
-    const people = await getTodayShiftPeople(date);
-    return <PersonPicker people={people} />;
+    const [people, day] = await Promise.all([getTodayShiftPeople(date), getRosterDayDetail(date)]);
+    // Today's session times, the starting point for "Forgot to sign in?".
+    const times = Object.fromEntries(day.map((s) => [s.part, { starts: s.starts, ends: s.ends }])) as Record<
+      Part,
+      { starts: string; ends: string }
+    >;
+    return <PersonPicker people={people} today={date} times={times} />;
   }
 
   // Only this shift's own tasks: the morning and afternoon lists are separate.

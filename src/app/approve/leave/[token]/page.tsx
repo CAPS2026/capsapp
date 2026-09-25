@@ -2,7 +2,7 @@ import Image from "next/image";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getLeaveByToken, getLeaveContext } from "@/lib/leave-data";
-import { LEAVE_SCOPE_LABEL, formatLeaveDates } from "@/lib/leave";
+import { LEAVE_LINK_DAYS, LEAVE_SCOPE_LABEL, formatLeaveDates, leaveLinkExpired } from "@/lib/leave";
 import { DecisionButtons, StatusBadge } from "@/components/shift/leave-forms";
 
 // Public landing page for the link in the leave request email (the
@@ -54,7 +54,12 @@ export default async function LeaveDecisionPage({ params }: { params: Promise<{ 
                 </ul>
               </div>
             )}
-            {req.status === "pending" ? (
+            {req.status === "pending" && leaveLinkExpired(req.createdAt) ? (
+              <p className="m-0 rounded-md bg-warm-tint px-3 py-2 text-sm font-semibold text-warm-ink">
+                This link has expired (links work for {LEAVE_LINK_DAYS} days). Please decide on the Roster tab in the
+                staff app.
+              </p>
+            ) : req.status === "pending" ? (
               <DecisionButtons token={token} />
             ) : (
               <div className="flex items-center gap-2 text-sm">

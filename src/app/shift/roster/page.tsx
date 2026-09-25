@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Fragment } from "react";
 import { getMonthRoster, getRosterDayDetail, getRosterablePeople } from "@/lib/shift-data";
 import { checkAutoCloseAndSendEmails } from "@/lib/shift-email";
-import { PART_LABEL, parseYmd, shelterToday, shiftDay, timeRange } from "@/lib/shift";
+import { PART_LABEL, nameInitials, parseYmd, shelterToday, shiftDay, timeRange } from "@/lib/shift";
 import { getCurrentPerson } from "@/lib/auth";
 import { PersonAvatar } from "@/components/shift/person-avatar";
 import { getAllLeaveRequests, getApprovedLeave, getMyLeaveRequests, resolveRequester } from "@/lib/leave-data";
@@ -70,7 +70,15 @@ export default async function RosterPage({
   return (
     <div className="flex max-w-5xl flex-col gap-3">
       {person?.isAdmin && (
-        <div>
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Always in view at the top for admins (it used to sit on the day
+              card, which could fall off the right edge of a narrower window). */}
+          <Link
+            href={`/shift/roster/edit?start=${monthFrom < today ? today : monthFrom}&days=31`}
+            className="inline-flex h-11 items-center rounded-[var(--radius)] bg-brand px-5 text-sm font-bold text-white"
+          >
+            Edit roster
+          </Link>
           <Link href="/people/new" className="text-[13px] font-bold text-brand-ink">
             + Add staff member
           </Link>
@@ -78,7 +86,7 @@ export default async function RosterPage({
       )}
 
       <div className="grid grid-cols-[1.6fr_1fr] items-start gap-5">
-        <div>
+        <div className="min-w-0">
           <div className="flex items-center justify-between">
             <Link
               href={`/shift/roster?y=${prevMonth.y}&m=${prevMonth.m}`}
@@ -141,7 +149,7 @@ export default async function RosterPage({
                   ) : null}
                   {leaveOn(date).length > 0 && (
                     <span className="rounded-[5px] bg-[#FCEDE8] px-1 py-0.5 text-center text-[10.5px] font-extrabold leading-[1.4] text-[#9A3A26]">
-                      Leave {leaveOn(date).map((l) => l.name.charAt(0).toUpperCase()).join(",")}
+                      Leave {leaveOn(date).map((l) => nameInitials(l.name)).join(",")}
                     </span>
                   )}
                 </Link>
@@ -165,7 +173,7 @@ export default async function RosterPage({
           </div>
         </div>
 
-        <div className="flex flex-col gap-3">
+        <div className="flex min-w-0 flex-col gap-3">
           <div className="flex flex-col gap-2 rounded-[var(--radius)] border border-line bg-card p-3">
             <div className="flex items-baseline justify-between">
               <span className="text-[15.5px] font-extrabold" style={{ fontFamily: "var(--font-display)" }}>

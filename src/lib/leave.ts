@@ -71,3 +71,12 @@ export function leaveCoversSession(l: { startDate: string; endDate: string; scop
 export function scopeShort(scope: LeaveScope): string {
   return scope === "all" ? "all day" : scope === "morning" ? "mornings only" : "afternoons only";
 }
+
+/** How long the Approve / Decline link in a leave email works for. After
+ *  that it only shows the request; the decision is made in the app. */
+export const LEAVE_LINK_DAYS = 14;
+
+/** Whether a request's email link has run out (see LEAVE_LINK_DAYS). */
+export function leaveLinkExpired(createdAt: string, now: Date = new Date()): boolean {
+  return now.getTime() - new Date(createdAt).getTime() > LEAVE_LINK_DAYS * 24 * 60 * 60000;
+}

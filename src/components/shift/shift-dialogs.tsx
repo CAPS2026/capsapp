@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition, type ReactNode } from "react";
-import { endShift, extendShift, flagHealthConcern } from "@/lib/actions/shift";
+import { useEffect, useState, useTransition, type ReactNode } from "react";
+import { dogNameSuggestions, endShift, extendShift, flagHealthConcern } from "@/lib/actions/shift";
 
 /** Shared pop-up shell, same look as the late-reason prompt. Deliberately
  *  does NOT close on a click outside the box or on Escape: someone halfway
@@ -165,6 +165,21 @@ export function HealthConcernDialog({ onClose }: { onClose: () => void }) {
   const [result, setResult] = useState<{ emailed: boolean } | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  // Names typed before, suggested while typing. A new dog is just typed in
+  // full; nothing to keep up to date.
+  const [dogNames, setDogNames] = useState<string[]>([]);
+  useEffect(() => {
+    let live = true;
+    dogNameSuggestions()
+      .then((names) => {
+        if (live) setDogNames(names);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+
   function submit() {
     if (!dogName.trim()) {
       setError("Enter the dog's name.");
@@ -206,7 +221,20 @@ export function HealthConcernDialog({ onClose }: { onClose: () => void }) {
     <Modal title="Flag a health concern">
       <label className="flex flex-col gap-1 text-xs font-bold text-foreground">
         Dog&rsquo;s name (required)
-        <input autoFocus required value={dogName} onChange={(e) => setDogName(e.target.value)} className={`${FIELD} h-10`} />
+        <input
+          autoFocus
+          required
+          list="caps-dog-names"
+          autoComplete="off"
+          value={dogName}
+          onChange={(e) => setDogName(e.target.value)}
+          className={`${FIELD} h-10`}
+        />
+        <datalist id="caps-dog-names">
+          {dogNames.map((n) => (
+            <option key={n} value={n} />
+          ))}
+        </datalist>
       </label>
       <label className="flex flex-col gap-1 text-xs font-bold text-foreground">
         What is the concern?

@@ -1,25 +1,19 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentPerson } from "@/lib/auth";
 import { getLeaveIdentity } from "@/lib/leave-identity";
-import { getRosterablePeople } from "@/lib/shift-data";
 import { PART_LABEL, parseYmd, type Part } from "@/lib/shift";
 import type { LeaveRequestRow, LeaveScope, RosterLeave } from "@/lib/leave";
 
 /** Who a leave request is for: whoever tapped their name in the "Ask for
- *  leave" pop-up (its own cookie, see leave-identity.ts), or, on a phone,
- *  the caretaker who is logged in. Deliberately never reads who's on
- *  shift: picking a name here must never change who the sidebar and
- *  checklist think is currently signed in. `via` says which, so a shared
- *  tablet always asks who is using it while a phone login does not. */
+ *  leave" pop-up (its own cookie, see leave-identity.ts). Always a tap,
+ *  never the device's login: the shared tablet is logged in as one person,
+ *  so going by the login would show that person's requests to everyone and
+ *  send anyone's request in their name. Deliberately never reads who's on
+ *  shift either: picking a name here must never change who the sidebar and
+ *  checklist think is currently signed in. */
 export async function resolveRequester(): Promise<{ id: string; name: string; via: "cookie" | "login" } | null> {
   const picked = await getLeaveIdentity();
-  if (picked) return { ...picked, via: "cookie" };
-  const me = await getCurrentPerson();
-  if (!me?.id) return null;
-  const people = await getRosterablePeople();
-  const match = people.find((p) => p.id === me.id);
-  return match ? { ...match, via: "login" } : null;
+  return picked ? { ...picked, via: "cookie" } : null;
 }
 
 /** Who gets the leave email. Deciders get the Approve/Decline link

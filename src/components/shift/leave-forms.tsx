@@ -58,10 +58,10 @@ export function StatusBadge({ status }: { status: LeaveRequestRow["status"] }) {
   );
 }
 
-/** The Roster tab's "Ask for leave" button and its pop-up. On a shared
- *  tablet the pop-up always starts by asking who you are, so the last
- *  person's requests are never on show; on a phone, a logged-in caretaker
- *  is recognised already. */
+/** The Roster tab's "Ask for leave" button and its pop-up. It always starts
+ *  by asking who you are (a tap on your name, on any device), so the last
+ *  person's requests are never on show and nobody's request goes in under
+ *  the device's login. */
 export function AskForLeave({
   requester,
   people,
