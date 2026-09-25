@@ -26,12 +26,15 @@ function toEditRow(r: RosterEditRow): EditRow {
 export function RosterEditForm({
   start,
   days,
+  today,
   people,
   initialRows,
   leave,
 }: {
   start: string;
   days: number;
+  /** Shelter-local "YYYY-MM-DD". Days before it are shown but locked. */
+  today: string;
   people: { id: string; name: string }[];
   initialRows: RosterEditRow[];
   /** Approved leave in this range, so people away are labelled in the dropdown. */
@@ -72,7 +75,9 @@ export function RosterEditForm({
   function save() {
     setStatus(null);
     startTransition(async () => {
-      const entries = rows.map((r) => ({
+      // Past days are locked (the server refuses them too), so only today
+      // and later are sent.
+      const entries = rows.filter((r) => r.date >= today).map((r) => ({
         date: r.date,
         morningPersonIds: r.morning.filter(Boolean),
         afternoonPersonIds: r.afternoon.filter(Boolean),
@@ -115,10 +120,16 @@ export function RosterEditForm({
       </div>
 
       <div className="flex flex-col gap-2">
-        {rows.map((row) => (
-          <div key={row.date} className="rounded-[var(--radius)] border border-line bg-card p-3">
+        {rows.map((row) => {
+          const past = row.date < today;
+          return (
+          <div
+            key={row.date}
+            className={`rounded-[var(--radius)] border border-line p-3 ${past ? "bg-background opacity-70" : "bg-card"}`}
+          >
             <p className="mb-2 text-sm font-bold">
               {parseYmd(row.date).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}
+              {past && <span className="ml-2 text-xs font-semibold text-ink-muted">Past day, can&rsquo;t be changed</span>}
             </p>
             <div className="grid grid-cols-2 gap-2">
               {(["morning", "afternoon"] as const).map((key) => (
@@ -129,7 +140,8 @@ export function RosterEditForm({
                   {row[key].map((personId, i) => (
                     <select
                       key={i}
-                      className={selectClass}
+                      disabled={past}
+                      className={`${selectClass} disabled:cursor-not-allowed`}
                       value={personId}
                       onChange={(e) => setSlot(row.date, key, i, e.target.value)}
                     >
@@ -141,7 +153,7 @@ export function RosterEditForm({
                       ))}
                     </select>
                   ))}
-                  {row[key].length < 2 ? (
+                  {past ? null : row[key].length < 2 ? (
                     <button
                       type="button"
                       onClick={() => addSecond(row.date, key)}
@@ -162,7 +174,8 @@ export function RosterEditForm({
               ))}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="sticky bottom-0 flex items-center gap-3 border-t border-line bg-background py-3">

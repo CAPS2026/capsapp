@@ -74,7 +74,22 @@ export type ShiftPerson = {
   /** "HH:MM" of today's session for `part`, null if not rostered. */
   starts: string | null;
   ends: string | null;
+  /** Every session they are rostered on today (someone can be on both).
+   *  The sign-in screen checks the time against these when tapped, so a
+   *  screen left open since the morning can't sign someone in to the wrong
+   *  session. */
+  sessions: { part: Part; starts: string; ends: string }[];
 };
+
+/** "Ashleigh Bullen" -> "AB", "Wayne Wilshire-Cumming" -> "WW": first
+ *  letter of the first and last names, for the roster calendar. */
+export function nameInitials(full: string): string {
+  const words = full.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  const a = words[0].charAt(0);
+  const b = words.length > 1 ? words[words.length - 1].charAt(0) : "";
+  return (a + b).toUpperCase();
+}
 
 /** Stable avatar colour per person (from the mockup's blue / amber /
  *  green, plus a few more for a bigger team), so someone is the same

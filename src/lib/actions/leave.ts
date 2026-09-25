@@ -8,7 +8,7 @@ import { getCurrentPerson } from "@/lib/auth";
 import { setLeaveIdentity, clearLeaveIdentity } from "@/lib/leave-identity";
 import { getRosterablePeople } from "@/lib/shift-data";
 import { shelterToday } from "@/lib/shift";
-import { LEAVE_SCOPES, formatLeaveDates, type LeaveScope } from "@/lib/leave";
+import { LEAVE_LINK_DAYS, LEAVE_SCOPES, formatLeaveDates, leaveLinkExpired, type LeaveScope } from "@/lib/leave";
 import {
   getLeaveByToken,
   getLeaveRecipients,
@@ -185,6 +185,9 @@ export async function decideLeaveByToken(token: string, decision: "approved" | "
   const admin = createAdminClient() as unknown as SupabaseClient;
   const existing = await getLeaveByToken(admin, token);
   if (!existing) return { error: "This link isn't valid." };
+  if (leaveLinkExpired(existing.createdAt)) {
+    return { error: `This link has expired (links work for ${LEAVE_LINK_DAYS} days). Please decide on the Roster tab in the staff app.` };
+  }
   return decide(admin, { column: "token", value: token }, decision, note, { id: null, via: "email" });
 }
 

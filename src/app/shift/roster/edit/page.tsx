@@ -42,7 +42,15 @@ export default async function RosterEditPage({
 
       {/* key: a new date range must remount the form, otherwise it keeps
           showing the previous range's rows (useState ignores new props). */}
-      <RosterEditForm key={`${start}:${days}`} start={start} days={days} people={people} initialRows={rows} leave={leave} />
+      <RosterEditForm
+        key={`${start}:${days}`}
+        start={start}
+        days={days}
+        today={shelterToday()}
+        people={people}
+        initialRows={rows}
+        leave={leave}
+      />
     </div>
   );
 }

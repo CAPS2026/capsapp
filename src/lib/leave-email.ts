@@ -8,7 +8,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendEmail, siteUrl } from "@/lib/email";
 import { getLeaveContext } from "@/lib/leave-data";
-import { LEAVE_SCOPE_LABEL, formatLeaveDates, type LeaveRequestRow } from "@/lib/leave";
+import { LEAVE_LINK_DAYS, LEAVE_SCOPE_LABEL, formatLeaveDates, type LeaveRequestRow } from "@/lib/leave";
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
@@ -65,11 +65,17 @@ export async function sendLeaveRequestEmail(
   const result = await sendEmail({
     to: recipients.deciders,
     subject,
-    text: [...details, "", `Approve or decline: ${link}`].join("\n"),
+    text: [
+      ...details,
+      "",
+      `Approve or decline: ${link}`,
+      `(This link works for ${LEAVE_LINK_DAYS} days. After that, decide on the Roster tab in the staff app.)`,
+    ].join("\n"),
     html: `<div style="font-family:sans-serif;max-width:520px;">
       <h2 style="color:#0F5A8F;">Leave request: ${esc(req.personName)}</h2>
       ${body}
       <p style="margin:20px 0;"><a href="${link}" style="background:#1A7ABF;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:800;">Review and decide</a></p>
+      <p style="margin:0;font-size:12px;color:#6B6B68;">This link works for ${LEAVE_LINK_DAYS} days. After that, decide on the Roster tab in the staff app.</p>
     </div>`,
   });
   if (!result.ok) console.error("sendLeaveRequestEmail: send failed", result.error);

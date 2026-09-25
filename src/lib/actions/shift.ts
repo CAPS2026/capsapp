@@ -11,7 +11,9 @@ import {
 } from "@/lib/shift-identity";
 import {
   ensureRosterSession,
+  getDogNameSuggestions,
   getOpenShift,
+  getRosterablePeople,
   getShiftSettings,
   resolvePart,
   touchShiftActivity,
@@ -22,7 +24,7 @@ import {
   sendHealthConcernEmail,
   type EmailPreview,
 } from "@/lib/shift-email";
-import { distanceMetres, minutesLate, sessionInstant, shelterToday, type Part } from "@/lib/shift";
+import { distanceMetres, minutesLate, sessionInstant, shelterToday, shiftDay, type Part } from "@/lib/shift";
 
 type Result = { error: string } | { error?: undefined };
 
@@ -81,8 +83,10 @@ const LATE_REASON_REQUIRED = "Please give your reason for being late first.";
 
 /** How long after a session's end (plus any overtime logged) tapping your
  *  name reopens a shift that was closed automatically, rather than
- *  starting a new one. */
-const REOPEN_WINDOW_MINUTES = 180;
+ *  starting a new one: the auto-close wait plus this much. It has to be
+ *  longer than the auto-close wait, or the shift would never still be
+ *  reopenable by the time it had been closed. */
+const REOPEN_MINUTES_AFTER_AUTOCLOSE = 180;
 
 function bust() {
   revalidatePath("/shift");
@@ -142,7 +146,8 @@ export async function pickPerson(
     .maybeSingle();
   if (autoClosed) {
     const endAt = sessionInstant(date, session.ends).getTime() + (autoClosed.extended_minutes ?? 0) * 60000;
-    if (now.getTime() <= endAt + REOPEN_WINDOW_MINUTES * 60000) {
+    const windowMin = settings.autocloseGraceMinutes + REOPEN_MINUTES_AFTER_AUTOCLOSE;
+    if (now.getTime() <= endAt + windowMin * 60000) {
       const { error: reopenErr } = await supabase
         .from("shift_log")
         .update({
@@ -509,6 +514,11 @@ export async function saveRosterEntries(
   entries: { date: string; morningPersonIds: string[]; afternoonPersonIds: string[] }[],
 ): Promise<Result> {
   if (!(await requireAdmin())) return { error: "Admin only." };
+  // Past days are a record of who was rostered, which lateness and "covering"
+  // in the shift emails were judged against. They can't be changed after
+  // the fact; today and later can.
+  const today = shelterToday();
+  if (entries.some((e) => e.date < today)) return { error: "Past days can't be changed. Only today and later can." };
   const supabase = await createClient();
 
   for (const row of entries) {
@@ -530,4 +540,119 @@ export async function saveRosterEntries(
 
   revalidatePath("/shift/roster");
   return {};
+}
+
+// ---------------------------------------------------------------------------
+// Forgot to sign in
+// ---------------------------------------------------------------------------
+
+/** How many days back a forgotten shift can be entered (today counts as 0). */
+const FORGOTTEN_SHIFT_DAYS_BACK = 2;
+
+/** Someone worked a shift but didn't use the app at the time (forgot, or a
+ *  stand-in did it for them). Records it afterwards with the times they
+ *  give, marked "entered afterwards" with the reason, so their hours are on
+ *  record and the shift email for that session goes out (or an UPDATED one,
+ *  if it already went). Only for a session that has already finished. */
+export async function recordForgottenShift(input: {
+  personId: string;
+  date: string;
+  part: Part;
+  starts: string;
+  ends: string;
+  reason: string;
+}): Promise<Result> {
+  if (!(await requireDeviceStaff())) return { error: "Staff only." };
+
+  const people = await getRosterablePeople();
+  const person = people.find((p) => p.id === input.personId);
+  if (!person) return { error: "Choose who worked the shift." };
+
+  const today = shelterToday();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) return { error: "Choose the day." };
+  if (input.date > today || input.date < shiftDay(today, -FORGOTTEN_SHIFT_DAYS_BACK)) {
+    return { error: `Only today or the last ${FORGOTTEN_SHIFT_DAYS_BACK} days can be entered.` };
+  }
+  if (input.part !== "morning" && input.part !== "afternoon") return { error: "Choose morning or afternoon." };
+  const timeOk = (t: string) => /^\d{2}:\d{2}$/.test(t);
+  if (!timeOk(input.starts) || !timeOk(input.ends)) return { error: "Enter the start and finish times." };
+  const reason = input.reason.trim();
+  if (!reason) return { error: "Please say why the app wasn't used at the time." };
+
+  const startAt = sessionInstant(input.date, input.starts);
+  const endAt = sessionInstant(input.date, input.ends);
+  const now = new Date();
+  if (endAt.getTime() <= startAt.getTime()) return { error: "The finish time must be after the start time." };
+  if (endAt.getTime() > now.getTime()) return { error: "The finish time can't be in the future. Sign in normally instead." };
+  if (endAt.getTime() - startAt.getTime() > 12 * 60 * 60000) return { error: "That's longer than 12 hours. Check the times." };
+
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("shift_log")
+    .select("id")
+    .eq("person_id", person.id)
+    .eq("date", input.date)
+    .eq("part", input.part)
+    .limit(1);
+  if (existing && existing.length > 0) {
+    return { error: `${person.name} already has a ${input.part} shift recorded for that day.` };
+  }
+
+  const session = await ensureRosterSession(input.date, input.part);
+  const { data: assignment } = await supabase
+    .from("roster_assignment")
+    .select("id")
+    .eq("session_id", session.id)
+    .eq("person_id", person.id)
+    .maybeSingle();
+  const late = assignment ? minutesLate(startAt, session.starts) : 0;
+
+  const { error } = await supabase.from("shift_log").insert({
+    person_id: person.id,
+    roster_session_id: session.id,
+    date: input.date,
+    part: input.part,
+    signed_in_at: startAt.toISOString(),
+    signed_out_at: endAt.toISOString(),
+    last_activity_at: endAt.toISOString(),
+    late_minutes: late > 0 ? late : null,
+    entered_afterwards_reason: reason,
+  });
+  if (error) return { error: error.message };
+
+  await maybeSendShiftEmail(input.date, input.part).catch((e) => console.error("recordForgottenShift: email failed", e));
+  bust();
+  return {};
+}
+
+// ---------------------------------------------------------------------------
+// Health concerns: dealt with (admin), dog name suggestions
+// ---------------------------------------------------------------------------
+
+/** An admin marks a health concern as dealt with, with an optional note of
+ *  what was done. */
+export async function resolveHealthConcern(id: string, note: string): Promise<Result> {
+  const me = await requireAdmin();
+  if (!me) return { error: "Admin only." };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("health_concern")
+    .update({
+      resolved_at: new Date().toISOString(),
+      resolved_by_name: `${me.firstName} ${me.surname}`.trim() || null,
+      resolved_note: note.trim() || null,
+    })
+    .eq("id", id)
+    .is("resolved_at", null)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data || data.length === 0) return { error: "That concern has already been marked as dealt with." };
+  revalidatePath("/shift/handover");
+  return {};
+}
+
+/** Dog names typed before, for the health concern pop-up's suggestions. */
+export async function dogNameSuggestions(): Promise<string[]> {
+  if (!(await requireDeviceStaff())) return [];
+  return getDogNameSuggestions();
 }

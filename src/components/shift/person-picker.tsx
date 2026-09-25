@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { PART_LABEL, firstName, timeRange, type Part, type ShiftPerson } from "@/lib/shift";
+import { PART_LABEL, firstName, partForTime, timeRange, type Part, type ShiftPerson } from "@/lib/shift";
 import { pickPerson } from "@/lib/actions/shift";
 import { PersonAvatar } from "@/components/shift/person-avatar";
+import { ForgottenShiftForm } from "@/components/shift/forgotten-shift-form";
 
 /** Best-effort location: resolves to null (never rejects) if the browser
  *  has no geolocation, permission is denied, or it just times out, a
@@ -21,24 +22,52 @@ function getLocation(): Promise<{ lat: number; lng: number } | null> {
   });
 }
 
+/** How often the sign-in screen refreshes itself while it sits open, so a
+ *  screen left up since the morning never shows the morning's roster in the
+ *  afternoon. */
+const REFRESH_MS = 5 * 60000;
+
 /** "Who's working right now?", the mockup's sign-in moment: one card per
  *  caretaker, tap yours. */
-export function PersonPicker({ people }: { people: ShiftPerson[] }) {
+export function PersonPicker({
+  people,
+  today,
+  times,
+}: {
+  people: ShiftPerson[];
+  today: string;
+  times: Record<Part, { starts: string; ends: string }>;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [forgotOpen, setForgotOpen] = useState(false);
 
-  // Someone not on today's roster (covering a colleague, or helping out)
-  // says which session they are covering; they are never marked late.
+  // Someone whose roster doesn't match the time right now (covering a
+  // colleague, helping out, or rostered for the other session) says which
+  // session they are working. Unrostered for it means never marked late.
   const [covering, setCovering] = useState<ShiftPerson | null>(null);
 
+  // Keep the screen current while it's left open, but never while someone
+  // is part-way through choosing or filling something in.
+  const idle = !isPending && !covering && !forgotOpen;
+  useEffect(() => {
+    if (!idle) return;
+    const t = setInterval(() => router.refresh(), REFRESH_MS);
+    return () => clearInterval(t);
+  }, [idle, router]);
+
+  // Decided at the moment of the tap, from the clock now, not from when the
+  // screen was loaded: rostered for the session it is now, sign straight in
+  // to that; otherwise ask which one.
   function pick(person: ShiftPerson) {
-    if (!person.part) {
-      setCovering(person);
+    const nowPart = partForTime();
+    if (person.sessions.some((s) => s.part === nowPart)) {
+      signIn(person, nowPart);
       return;
     }
-    signIn(person, person.part);
+    setCovering(person);
   }
 
   function signIn(person: ShiftPerson, part: Part) {
@@ -103,9 +132,15 @@ export function PersonPicker({ people }: { people: ShiftPerson[] }) {
         {covering && (
           <div className="flex flex-col gap-2 rounded-[var(--radius)] border border-line-cool bg-brand-tint p-3.5">
             <p className="m-0 text-sm font-extrabold text-foreground">
-              {firstName(covering.name)}, which shift are you covering?
+              {firstName(covering.name)}, which shift are you working now?
             </p>
-            <p className="m-0 text-xs text-ink-muted">You aren&rsquo;t on today&rsquo;s roster, so you won&rsquo;t be marked late.</p>
+            <p className="m-0 text-xs text-ink-muted">
+              {covering.sessions.length
+                ? `You're rostered for the ${covering.sessions
+                    .map((s) => `${PART_LABEL[s.part].toLowerCase()} (${timeRange(s.starts, s.ends)})`)
+                    .join(" and ")} today. Covering the other shift, you won't be marked late.`
+                : "You aren’t on today’s roster, so you won’t be marked late."}
+            </p>
             <div className="flex gap-2">
               {(["morning", "afternoon"] as Part[]).map((part) => (
                 <button
@@ -116,6 +151,7 @@ export function PersonPicker({ people }: { people: ShiftPerson[] }) {
                   className="h-10 flex-1 rounded-[var(--radius)] bg-brand text-sm font-bold text-white disabled:opacity-50"
                 >
                   {PART_LABEL[part]}
+                  {covering.sessions.some((s) => s.part === part) ? " (rostered)" : ""}
                 </button>
               ))}
               <button
@@ -128,6 +164,22 @@ export function PersonPicker({ people }: { people: ShiftPerson[] }) {
             </div>
           </div>
         )}
+
+        {people.length > 0 &&
+          (forgotOpen ? (
+            <ForgottenShiftForm people={people} today={today} times={times} onClose={() => setForgotOpen(false)} />
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setCovering(null);
+                setForgotOpen(true);
+              }}
+              className="self-center text-xs font-bold text-brand-ink"
+            >
+              Forgot to sign in for an earlier shift?
+            </button>
+          ))}
       </div>
     </div>
   );
