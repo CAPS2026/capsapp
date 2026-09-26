@@ -19,10 +19,13 @@ export function ShiftChecklist({
   byCategory,
   carriedOver,
   extras,
+  readOnly = false,
 }: {
   byCategory: Record<TaskCategory, ShiftTaskRow[]>;
   carriedOver: ShiftTaskRow[];
   extras: ShiftTaskRow[];
+  /** Admin view: shows the live checklist without being able to change it. */
+  readOnly?: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +64,7 @@ export function ShiftChecklist({
           <p className="px-3 pt-2.5 text-[11px] font-extrabold uppercase tracking-wide text-warm-ink">
             Carried over, still open from earlier
           </p>
-          <Checklist tasks={carriedUncategorised} busy={isPending} run={run} />
+          <Checklist tasks={carriedUncategorised} busy={isPending} run={run} readOnly={readOnly} />
         </div>
       )}
 
@@ -110,7 +113,7 @@ export function ShiftChecklist({
                 {rows.length === 0 ? (
                   <p className="p-3 text-sm text-ink-muted">Nothing in this section.</p>
                 ) : (
-                  <Checklist tasks={rows} busy={isPending} run={run} />
+                  <Checklist tasks={rows} busy={isPending} run={run} readOnly={readOnly} />
                 )}
               </div>
             </details>
@@ -118,7 +121,7 @@ export function ShiftChecklist({
         })}
 
         <div className="mb-2.5 inline-block w-full break-inside-avoid align-top">
-          <ExtrasSection extras={extras} busy={isPending} run={run} />
+          <ExtrasSection extras={extras} busy={isPending} run={run} readOnly={readOnly} />
         </div>
       </div>
     </div>
@@ -129,10 +132,12 @@ function ExtrasSection({
   extras,
   busy,
   run,
+  readOnly,
 }: {
   extras: ShiftTaskRow[];
   busy: boolean;
   run: (fn: () => Promise<{ error?: string }>) => void;
+  readOnly: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -143,7 +148,7 @@ function ExtrasSection({
         <h2 className="m-0 text-[10.5px] font-extrabold uppercase tracking-[0.06em] text-ink-muted">
           Extra, off the checklist
         </h2>
-        {!open && (
+        {!open && !readOnly && (
           <button type="button" onClick={() => setOpen(true)} className="text-[13px] font-bold text-brand-ink">
             + Add
           </button>
@@ -185,10 +190,10 @@ function ExtrasSection({
 
       {extras.length > 0 && (
         <div className="overflow-hidden rounded-[var(--radius)] border border-line bg-card">
-          <Checklist tasks={extras} busy={busy} run={run} />
+          <Checklist tasks={extras} busy={busy} run={run} readOnly={readOnly} />
         </div>
       )}
-      <p className="m-0 mx-0.5 text-[11px] leading-relaxed text-ink-muted">
+      <p className={`m-0 mx-0.5 text-[11px] leading-relaxed text-ink-muted ${readOnly && extras.length > 0 ? "hidden" : ""}`}>
         {extras.length === 0 ? "Nothing extra logged yet. " : ""}For anything a caretaker does that isn&rsquo;t on the
         standard list. It still lands in this shift&rsquo;s email, tagged EXTRA.
       </p>

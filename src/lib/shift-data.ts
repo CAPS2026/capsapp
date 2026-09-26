@@ -1089,3 +1089,55 @@ export async function getUnattendedSessions(afterMinutes: number): Promise<Unatt
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// Admin view (read only)
+// ---------------------------------------------------------------------------
+
+export type TodayShiftRow = {
+  personName: string;
+  part: Part;
+  startedAt: string;
+  endedAt: string | null;
+  lateMinutes: number | null;
+  lateReason: string | null;
+  distanceM: number | null;
+  autoClosed: boolean;
+  enteredAfterwards: boolean;
+};
+
+/** Every shift signed in today, open ones first, for the admin view. */
+export async function getTodayShifts(): Promise<TodayShiftRow[]> {
+  const supabase = await shiftDb();
+  const { data, error } = await supabase
+    .from("shift_log")
+    .select(
+      "part, signed_in_at, signed_out_at, late_minutes, late_reason, signed_in_distance_m, auto_closed, " +
+        "entered_afterwards_reason, person:people!shift_log_person_id_fkey(first_name, surname)",
+    )
+    .eq("date", shelterToday())
+    .order("signed_in_at");
+  if (error) console.error("getTodayShifts failed", error);
+  const rows = ((data ?? []) as unknown as Array<{
+    part: Part;
+    signed_in_at: string;
+    signed_out_at: string | null;
+    late_minutes: number | null;
+    late_reason: string | null;
+    signed_in_distance_m: number | null;
+    auto_closed: boolean;
+    entered_afterwards_reason: string | null;
+    person: { first_name: string; surname: string } | null;
+  }>).map((r) => ({
+    personName: r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown",
+    part: r.part,
+    startedAt: r.signed_in_at,
+    endedAt: r.signed_out_at,
+    lateMinutes: r.late_minutes,
+    lateReason: r.late_reason,
+    distanceM: r.signed_in_distance_m != null ? Number(r.signed_in_distance_m) : null,
+    autoClosed: r.auto_closed,
+    enteredAfterwards: r.entered_afterwards_reason !== null,
+  }));
+  return [...rows.filter((r) => !r.endedAt), ...rows.filter((r) => r.endedAt)];
+}

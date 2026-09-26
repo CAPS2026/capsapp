@@ -98,7 +98,7 @@ export function AskForLeave({
               <p className="m-0 text-sm text-ink-muted">One moment&hellip;</p>
             ) : (
               <>
-                <div className="flex flex-wrap gap-2.5">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-2.5">
                   {people.map((p) => (
                     <button
                       key={p.id}
@@ -113,7 +113,7 @@ export function AskForLeave({
                           }
                         })
                       }
-                      className="flex min-w-[120px] flex-1 flex-col items-center gap-1.5 rounded-[var(--radius)] border-[1.5px] border-line bg-card px-1.5 pb-3 pt-3.5 disabled:opacity-50"
+                      className="flex flex-col items-center gap-1.5 rounded-[var(--radius)] border-[1.5px] border-line bg-card px-1.5 pb-3 pt-3.5 disabled:opacity-50"
                     >
                       <PersonAvatar name={p.name} size={34} />
                       <span className="text-xs font-extrabold text-foreground">{firstName(p.name)}</span>
