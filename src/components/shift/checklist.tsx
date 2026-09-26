@@ -26,15 +26,18 @@ export function Checklist({
   tasks,
   busy,
   run,
+  readOnly = false,
 }: {
   tasks: ShiftTaskRow[];
   busy: boolean;
   run: (fn: () => Promise<{ error?: string }>) => void;
+  /** Admin view: shows everything, changes nothing (no tick, claim, note). */
+  readOnly?: boolean;
 }) {
   return (
     <div className="divide-y divide-line">
       {tasks.map((t) => (
-        <TaskRow key={t.id} task={t} busy={busy} run={run} />
+        <TaskRow key={t.id} task={t} busy={busy} run={run} readOnly={readOnly} />
       ))}
     </div>
   );
@@ -46,10 +49,12 @@ function TaskRow({
   task,
   busy,
   run,
+  readOnly,
 }: {
   task: ShiftTaskRow;
   busy: boolean;
   run: (fn: () => Promise<{ error?: string }>) => void;
+  readOnly: boolean;
 }) {
   // Show a tick the instant it's tapped, and let the server catch up:
   // waiting for the save and the page rebuild before anything changed on
@@ -94,8 +99,9 @@ function TaskRow({
       <button
         type="button"
         onClick={toggle}
-        aria-label={open ? "Mark done" : "Reopen"}
-        className={`mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] border-2 text-xs font-extrabold ${
+        disabled={readOnly}
+        aria-label={readOnly ? (open ? "Not done" : "Done") : open ? "Mark done" : "Reopen"}
+        className={`mt-px flex disabled:cursor-default h-5 w-5 shrink-0 items-center justify-center rounded-[5px] border-2 text-xs font-extrabold ${
           done
             ? "border-ok bg-ok text-white"
             : notReq
@@ -134,7 +140,7 @@ function TaskRow({
           </div>
         )}
 
-        {open && noteOpen && (
+        {!readOnly && open && noteOpen && (
           <input
             ref={noteRef}
             value={note}
@@ -153,7 +159,7 @@ function TaskRow({
           />
         )}
 
-        {open && (
+        {!readOnly && open && (
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
             {!task.claimedByName ? (
               <button

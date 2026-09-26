@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import { PART_LABEL, firstName, partForTime, timeRange, type Part, type ShiftPerson } from "@/lib/shift";
 import { pickPerson } from "@/lib/actions/shift";
 import { PersonAvatar } from "@/components/shift/person-avatar";
@@ -33,10 +34,14 @@ export function PersonPicker({
   people,
   today,
   times,
+  isAdmin = false,
 }: {
   people: ShiftPerson[];
   today: string;
   times: Record<Part, { starts: string; ends: string }>;
+  /** Signed in with an admin login (Julie, Shayna, Renee): shows "View as
+   *  admin". Never true on a caretaker login such as the tablet's. */
+  isAdmin?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -104,14 +109,14 @@ export function PersonPicker({
             No caretakers are set up yet. An admin can add them from the Roster tab.
           </p>
         ) : (
-          <div className="flex flex-wrap gap-2.5">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-2.5">
             {people.map((p) => (
               <button
                 key={p.id}
                 type="button"
                 disabled={isPending}
                 onClick={() => pick(p)}
-                className={`flex min-w-[120px] flex-1 flex-col items-center gap-1.5 rounded-[var(--radius)] border-[1.5px] bg-card px-1.5 pb-3 pt-3.5 disabled:cursor-wait ${
+                className={`flex flex-col items-center gap-1.5 rounded-[var(--radius)] border-[1.5px] bg-card px-1.5 pb-3 pt-3.5 disabled:cursor-wait ${
                   busyId === p.id ? "border-brand bg-brand-tint" : "border-line"
                 } ${p.part ? "" : "opacity-[0.55]"}`}
               >
@@ -180,6 +185,15 @@ export function PersonPicker({
               Forgot to sign in for an earlier shift?
             </button>
           ))}
+
+        {isAdmin && (
+          <Link
+            href="/shift/admin"
+            className="inline-flex h-10 items-center justify-center self-center rounded-[var(--radius)] border-[1.5px] border-brand px-5 text-sm font-bold text-brand-ink"
+          >
+            View as admin
+          </Link>
+        )}
       </div>
     </div>
   );
