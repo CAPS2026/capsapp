@@ -51,7 +51,7 @@ export const CATEGORY_LABEL: Record<TaskCategory, string> = {
   kennel_housing_hygiene: "Kennel & Housing Hygiene",
   exercise_enrichment: "Exercise & Enrichment",
   public_committee_areas: "Public & Committee Areas",
-  end_of_day: "End of Day",
+  end_of_day: "End of Shift",
 };
 
 /** Each category gets its own accent so the checklist reads at a glance:
