@@ -18,11 +18,22 @@ export default async function MedicationsPage({ searchParams }: { searchParams: 
 
   return (
     <div className="flex max-w-5xl flex-col gap-4">
-      <header className="flex items-center gap-3">
-        <Link href="/shift/roster" className="text-sm font-semibold text-brand-ink">
-          &larr; Roster
-        </Link>
-        <h1 className="m-0 text-xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
+      <Link href="/shift/roster" className="text-sm font-semibold text-brand-ink">
+        &larr; Roster
+      </Link>
+      <header
+        className="flex flex-wrap items-center gap-3 rounded-[14px] px-[18px] py-3.5 text-white"
+        style={{ background: "linear-gradient(90deg, #B0306A, #D2508A)" }}
+      >
+        {/* A capsule, for medications. */}
+        <svg width="34" height="34" viewBox="0 0 24 24" aria-hidden="true" className="shrink-0">
+          <g transform="rotate(-40 12 12)">
+            <rect x="3" y="8.5" width="18" height="7" rx="3.5" fill="#fff" />
+            <rect x="12" y="8.5" width="9" height="7" rx="3.5" fill="#F7C6DA" />
+            <rect x="11" y="8.5" width="2" height="7" fill="#F7C6DA" />
+          </g>
+        </svg>
+        <h1 className="m-0 text-2xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
           Medications
         </h1>
         <Link
