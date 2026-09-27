@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { getCurrentPerson } from "@/lib/auth";
 import { getActiveShiftPerson } from "@/lib/shift-identity";
 import { getLeaveNoticesForShift } from "@/lib/leave-data";
-import { ensureRosterSession, getHandoverNotes, getOpenShift, getRosterDayDetail, getShiftSettings } from "@/lib/shift-data";
+import { ensureRosterSession, getOpenShift, getRosterDayDetail, getShiftSettings } from "@/lib/shift-data";
+import { getOpenHandoverCount, getVetAppointments, getVolunteerCount } from "@/lib/care-data";
 import { sessionInstant, shelterToday } from "@/lib/shift";
 import { LateReasonGate } from "@/components/shift/late-reason-gate";
 import { ReopenedGate } from "@/components/shift/reopened-gate";
@@ -39,15 +40,17 @@ export default async function ShiftLayout({ children }: { children: React.ReactN
   }
 
   const today = shelterToday();
-  const [openShift, settings, notes, todayRoster] = await Promise.all([
+  const [openShift, settings, openHandoverCount, todayRoster, vetToday] = await Promise.all([
     active ? getOpenShift(active.id) : Promise.resolve(null),
     getShiftSettings(),
-    getHandoverNotes(1),
+    getOpenHandoverCount(),
     getRosterDayDetail(today),
+    getVetAppointments(today, today),
   ]);
-  const [session, leaveNotices] = await Promise.all([
+  const [session, leaveNotices, volunteerCount] = await Promise.all([
     openShift ? ensureRosterSession(openShift.date, openShift.part) : Promise.resolve(null),
     openShift ? getLeaveNoticesForShift(openShift.id) : Promise.resolve([]),
+    openShift ? getVolunteerCount(openShift.date, openShift.part) : Promise.resolve(null),
   ]);
 
   // Anyone else rostered on the same session as the person signed in.
@@ -58,7 +61,6 @@ export default async function ShiftLayout({ children }: { children: React.ReactN
     alsoOn = (sess?.attendees ?? []).filter((a) => a.id !== active.id).map((a) => a.first);
   }
 
-  const latest = notes[0];
 
   // Late by more than the grace period and no reason given yet: the reason
   // is required, so a prompt covers the screen until it's given.
@@ -103,10 +105,9 @@ export default async function ShiftLayout({ children }: { children: React.ReactN
           alsoOn={alsoOn}
           autocloseGraceMinutes={settings.autocloseGraceMinutes}
           lateAfterMinutes={settings.lateAfterMinutes}
-          radiusM={settings.radiusM}
-          latestHandover={
-            latest ? { personName: latest.personName, body: latest.body, part: latest.part, date: latest.date } : null
-          }
+          volunteerCount={volunteerCount}
+          vetToday={vetToday}
+          openHandoverCount={openHandoverCount}
           todayRoster={todayRoster}
           leaveNotices={leaveNotices}
         />

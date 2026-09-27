@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { resolveHealthConcern } from "@/lib/actions/shift";
-import { PART_LABEL, clock12, parseYmd } from "@/lib/shift";
+import { PART_LABEL, clockTime, parseYmd } from "@/lib/shift";
 import type { HealthConcernRow } from "@/lib/shift-data";
 
 /** Health concerns, on the Handover log tab: the ones not yet dealt with
@@ -58,7 +58,7 @@ function Concern({ c, isAdmin }: { c: HealthConcernRow; isAdmin: boolean }) {
           {c.dogName ?? "Dog not named"}
         </p>
         <span className="text-xs font-semibold text-ink-muted">
-          {c.personName}, {day} {PART_LABEL[c.part].toLowerCase()}, {clock12(c.createdAt)}
+          {c.personName}, {day} {PART_LABEL[c.part].toLowerCase()}, {clockTime(c.createdAt)}
         </span>
       </div>
       <p className="m-0 whitespace-pre-wrap text-sm">{c.body}</p>

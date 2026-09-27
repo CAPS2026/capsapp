@@ -1,5 +1,6 @@
 import { shiftDb } from "@/lib/shift-db";
 import {
+  hhmm,
   initials,
   nameInitials,
   parseYmd,
@@ -349,6 +350,8 @@ type TemplateForGen = {
   day_of_month: number | null;
   sort_order: number;
   skippable: boolean;
+  /** First day this task appears (a new checklist switches over on a date). */
+  active_from: string | null;
 };
 
 /** `date` is the shelter-local calendar day ("YYYY-MM-DD"). It is read as
@@ -356,6 +359,7 @@ type TemplateForGen = {
  *  still "yesterday" for the first ten hours of every Brisbane day, so
  *  weekly and monthly tasks used to land on the wrong day. */
 function templateMatchesDate(t: TemplateForGen, ymdDate: string): boolean {
+  if (t.active_from && ymdDate < t.active_from) return false;
   const date = parseYmd(ymdDate);
   if (t.repeat === "daily") return true;
   if (t.repeat === "weekly") return (t.weekdays ?? []).includes(date.getDay());
@@ -382,10 +386,12 @@ type InstanceRow = {
   actioned_at: string | null;
   actioned_by: { first_name: string; surname: string } | null;
   claimed_by: { id: string; first_name: string; surname: string } | null;
+  vet_appointment_id: string | null;
+  vet_task_kind: string | null;
 };
 
 const INSTANCE_SELECT =
-  "id, template_id, date, part, category, title, status, note, is_extra, skippable, actioned_at, " +
+  "id, template_id, date, part, category, title, status, note, is_extra, skippable, actioned_at, vet_appointment_id, vet_task_kind, " +
   "actioned_by:people!task_instance_actioned_by_fkey(first_name, surname), " +
   "claimed_by:people!task_instance_claimed_by_fkey(id, first_name, surname)";
 
@@ -407,7 +413,72 @@ function toRow(r: InstanceRow, carriedOver: boolean): ShiftTaskRow {
     actionedByInitials: r.actioned_by ? initials(r.actioned_by.first_name, r.actioned_by.surname) : null,
     actionedAt: r.actioned_at,
     carriedOver,
+    isVet: r.vet_appointment_id !== null,
   };
+}
+
+const VET_KIND_LABEL: Record<string, string> = { admit: "admit", discharge: "discharge", consult: "consult", other: "appointment" };
+
+/** The checklist tasks one vet appointment makes: its special instructions
+ *  (if any), and the trip itself. Both in the Opening section, must be done. */
+function vetTasksFor(a: {
+  dog_name: string;
+  time: string | null;
+  part: Part;
+  kind: string;
+  instructions: string | null;
+}): { kind: string; title: string; sort: number }[] {
+  const when = a.time ? hhmm(a.time) : a.part;
+  const out: { kind: string; title: string; sort: number }[] = [];
+  if (a.instructions?.trim()) out.push({ kind: "instructions", title: `${a.dog_name}: ${a.instructions.trim()}`, sort: 90 });
+  out.push({
+    kind: "trip",
+    title:
+      a.kind === "discharge"
+        ? `Collect ${a.dog_name} from the vet (${when})`
+        : `Take ${a.dog_name} to the vet (${when} ${VET_KIND_LABEL[a.kind] ?? "appointment"})`,
+    sort: 91,
+  });
+  return out;
+}
+
+/** Makes today's vet tasks match today's appointments. True if anything
+ *  changed (so the caller reads today's tasks again). */
+async function ensureVetTasks(date: string, today: InstanceRow[]): Promise<boolean> {
+  const supabase = await shiftDb();
+  const { data: appts, error } = await supabase
+    .from("vet_appointment")
+    .select("id, dog_name, time, part, kind, instructions")
+    .eq("date", date);
+  if (error || !appts || appts.length === 0) return false;
+
+  const existing = new Map(
+    today.filter((r) => r.vet_appointment_id).map((r) => [`${r.vet_appointment_id}:${r.vet_task_kind}`, r]),
+  );
+  let changed = false;
+  for (const a of appts as Array<{ id: string; dog_name: string; time: string | null; part: Part; kind: string; instructions: string | null }>) {
+    for (const t of vetTasksFor(a)) {
+      const have = existing.get(`${a.id}:${t.kind}`);
+      if (!have) {
+        const { error: insErr } = await supabase.from("task_instance").insert({
+          date,
+          part: a.part,
+          category: "opening",
+          title: t.title,
+          sort_order: t.sort,
+          skippable: false,
+          vet_appointment_id: a.id,
+          vet_task_kind: t.kind,
+        });
+        if (insErr && insErr.code !== "23505") console.error("ensureVetTasks: insert failed", insErr);
+        changed = true;
+      } else if (have.status === "open" && (have.title !== t.title || have.part !== a.part)) {
+        await supabase.from("task_instance").update({ title: t.title, part: a.part }).eq("id", have.id);
+        changed = true;
+      }
+    }
+  }
+  return changed;
 }
 
 /** The first day the staff app is really in use (org_settings.staff_go_live_date),
@@ -466,7 +537,7 @@ export async function getShiftChecklist(part: Part): Promise<{
     getGoLiveDate(),
     supabase
       .from("task_template")
-      .select("id, title, part, category, repeat, weekdays, day_of_month, sort_order, skippable")
+      .select("id, title, part, category, repeat, weekdays, day_of_month, sort_order, skippable, active_from")
       .eq("active", true),
     readToday(),
     // From before this session: still open, or ticked during this session
@@ -515,6 +586,14 @@ export async function getShiftChecklist(part: Part): Promise<{
     else todayRows = again.data;
   }
 
+  // Tasks made from today's vet appointments ("Zeke: NO BREAKFAST", "Take
+  // Zeke to the vet (8:00 admit)"). Created on the day, kept in step if the
+  // appointment is edited, removed with it if it is deleted.
+  if (await ensureVetTasks(date, (todayRows ?? []) as unknown as InstanceRow[])) {
+    const again = await readToday();
+    if (!again.error) todayRows = again.data;
+  }
+
   // The old Staff tab (the dog app's own page, which shares this table) can
   // create today's task rows WITHOUT a section. Those rows used to be
   // invisible here and were never re-created, so the checklist showed empty
@@ -541,9 +620,12 @@ export async function getShiftChecklist(part: Part): Promise<{
     else if (row.category) byCategory[row.category].push(row);
   }
 
-  // Nothing from before go-live is ever carried over (see getGoLiveDate).
+  // Nothing from before go-live is ever carried over (see getGoLiveDate),
+  // and nothing from a task that has since been taken off the checklist
+  // (so the day a new checklist starts isn't full of the old one's tasks).
   const carriedOver = ((openRows ?? []) as unknown as InstanceRow[])
     .filter((r) => !goLive || r.date >= goLive)
+    .filter((r) => !r.template_id || templateById.has(r.template_id))
     .map((r) => toRow(heal(r), true));
 
   return { byCategory, carriedOver, extras };
@@ -560,24 +642,33 @@ export type HandoverNoteRow = {
   part: Part;
   body: string;
   createdAt: string;
+  /** Written by the app (a medication not given), not typed by a person. */
+  isAuto: boolean;
+  /** When it was ticked off, and by whom; null while still to do. */
+  doneAt: string | null;
+  doneByName: string | null;
 };
 
-/** Most recent handover notes, newest first. */
+/** Handover notes: every one still to do (newest first), then the most
+ *  recent ones already ticked off. */
 export async function getHandoverNotes(limit = 30): Promise<HandoverNoteRow[]> {
   const supabase = await shiftDb();
-  const { data, error } = await supabase
-    .from("handover_note")
-    .select("id, date, part, body, created_at, person:people(first_name, surname)")
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (error) console.error("getHandoverNotes failed", error);
+  const cols = "id, date, part, body, created_at, is_auto, done_at, done_by_name, person:people!handover_note_person_id_fkey(first_name, surname)";
+  const [open, done] = await Promise.all([
+    supabase.from("handover_note").select(cols).is("done_at", null).order("created_at", { ascending: false }),
+    supabase.from("handover_note").select(cols).not("done_at", "is", null).order("created_at", { ascending: false }).limit(limit),
+  ]);
+  if (open.error) console.error("getHandoverNotes failed", open.error);
 
-  return ((data ?? []) as unknown as Array<{
+  return ([...(open.data ?? []), ...(done.data ?? [])] as unknown as Array<{
     id: string;
     date: string;
     part: Part;
     body: string;
     created_at: string;
+    is_auto: boolean;
+    done_at: string | null;
+    done_by_name: string | null;
     person: { first_name: string; surname: string } | null;
   }>).map((r) => ({
     id: r.id,
@@ -586,6 +677,9 @@ export async function getHandoverNotes(limit = 30): Promise<HandoverNoteRow[]> {
     part: r.part,
     body: r.body,
     createdAt: r.created_at,
+    isAuto: r.is_auto,
+    doneAt: r.done_at,
+    doneByName: r.done_by_name,
   }));
 }
 
@@ -848,7 +942,7 @@ export type SessionTasksRow = ShiftTaskRow;
  *  Nothing is dropped because of who did it. */
 export async function getSessionTasks(date: string, part: Part): Promise<SessionTasksRow[]> {
   const supabase = await shiftDb();
-  const [goLive, own, older, shifts] = await Promise.all([
+  const [goLive, own, older, shifts, activeTemplates] = await Promise.all([
     getGoLiveDate(),
     supabase.from("task_instance").select(INSTANCE_SELECT).eq("date", date).eq("part", part),
     supabase
@@ -857,6 +951,7 @@ export async function getSessionTasks(date: string, part: Part): Promise<Session
       .eq("status", "open")
       .or(part === "afternoon" ? `date.lt.${date},and(date.eq.${date},part.eq.morning)` : `date.lt.${date}`),
     supabase.from("shift_log").select("signed_in_at, signed_out_at").eq("date", date).eq("part", part),
+    supabase.from("task_template").select("id").eq("active", true),
   ]);
   if (own.error) console.error("getSessionTasks failed", own.error);
   if (older.error) console.error("getSessionTasks: carried read failed", older.error);
@@ -884,10 +979,15 @@ export async function getSessionTasks(date: string, part: Part): Promise<Session
     );
   }
 
+  // Outstanding tasks from a task since taken off the checklist are not
+  // reported (the day a new checklist starts is not about the old one).
+  const current = new Set(((activeTemplates.data ?? []) as Array<{ id: string }>).map((t) => t.id));
+  const isCurrent = (r: InstanceRow) => !r.template_id || current.has(r.template_id);
+
   const rows = new Map<string, ShiftTaskRow>();
   for (const r of (own.data ?? []) as unknown as InstanceRow[]) rows.set(r.id, toRow(r, false));
   for (const r of (older.data ?? []) as unknown as InstanceRow[])
-    if (!rows.has(r.id) && (!goLive || r.date >= goLive)) rows.set(r.id, toRow(r, true));
+    if (!rows.has(r.id) && (!goLive || r.date >= goLive) && isCurrent(r)) rows.set(r.id, toRow(r, true));
   for (const r of doneCarried) if (!rows.has(r.id)) rows.set(r.id, toRow(r, true));
   return [...rows.values()];
 }

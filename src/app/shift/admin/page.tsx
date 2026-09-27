@@ -2,8 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentPerson } from "@/lib/auth";
 import { getShiftChecklist, getShiftSettings, getTodayShifts } from "@/lib/shift-data";
-import { PART_LABEL, PARTS, clock12, parseYmd, partForTime, shelterToday, type Part } from "@/lib/shift";
+import { PART_LABEL, PARTS, clockTime, parseYmd, partForTime, shelterToday, type Part } from "@/lib/shift";
 import { ShiftChecklist } from "@/components/shift/shift-checklist";
+import { getDueDoses, getVetAppointments } from "@/lib/care-data";
 
 /** "View as admin": today's live checklist and who is on shift, without
  *  starting a shift, for Julie, Shayna and Renee (admins only). View only:
@@ -15,7 +16,14 @@ export default async function AdminViewPage({ searchParams }: { searchParams: Pr
 
   const sp = await searchParams;
   const part: Part = sp.part === "morning" || sp.part === "afternoon" ? sp.part : partForTime();
-  const [checklist, shifts, settings] = await Promise.all([getShiftChecklist(part), getTodayShifts(), getShiftSettings()]);
+  const today = shelterToday();
+  const [checklist, shifts, settings, doses, vet] = await Promise.all([
+    getShiftChecklist(part),
+    getTodayShifts(),
+    getShiftSettings(),
+    getDueDoses(today, part),
+    getVetAppointments(today, today),
+  ]);
 
   const all = [...Object.values(checklist.byCategory).flat(), ...checklist.extras];
   const done = all.filter((t) => t.status !== "open").length;
@@ -53,12 +61,12 @@ export default async function AdminViewPage({ searchParams }: { searchParams: Pr
                 <span className="text-xs font-semibold">
                   {s.endedAt ? (
                     <>
-                      {clock12(s.startedAt)} to {clock12(s.endedAt)}
+                      {clockTime(s.startedAt)} to {clockTime(s.endedAt)}
                       {s.autoClosed ? ", closed automatically" : ""}
                       {s.enteredAfterwards ? ", entered afterwards" : ""}
                     </>
                   ) : (
-                    <span className="text-ok">On shift since {clock12(s.startedAt)}</span>
+                    <span className="text-ok">On shift since {clockTime(s.startedAt)}</span>
                   )}
                   {(s.lateMinutes ?? 0) > settings.lateAfterMinutes ? (
                     <span className="text-warm-ink">
@@ -102,6 +110,8 @@ export default async function AdminViewPage({ searchParams }: { searchParams: Pr
           byCategory={checklist.byCategory}
           carriedOver={checklist.carriedOver}
           extras={checklist.extras}
+          doses={doses}
+          vet={vet.filter((a) => a.part === part)}
           readOnly
         />
       </section>

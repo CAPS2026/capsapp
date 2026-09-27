@@ -8,6 +8,8 @@ import { PersonAvatar } from "@/components/shift/person-avatar";
 import { getAllLeaveRequests, getApprovedLeave, getMyLeaveRequests, resolveRequester } from "@/lib/leave-data";
 import { LEAVE_SCOPE_LABEL, formatLeaveDates, leaveCoversDate, leaveCoversSession, scopeShort } from "@/lib/leave";
 import { AskForLeave, CancelLeaveButton, DecisionButtons, StatusBadge } from "@/components/shift/leave-forms";
+import { getVetAppointments } from "@/lib/care-data";
+import { MEDS_STYLE, hhmm } from "@/lib/shift";
 
 const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MONTH_NAMES = [
@@ -52,16 +54,19 @@ export default async function RosterPage({
 
   const monthFrom = `${year}-${String(month).padStart(2, "0")}-01`;
   const monthTo = `${year}-${String(month).padStart(2, "0")}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
-  const [grid, dayDetail, leave, requester, people, allRequests] = await Promise.all([
+  const [grid, dayDetail, leave, requester, people, allRequests, vetMonth] = await Promise.all([
     getMonthRoster(year, month),
     getRosterDayDetail(selected),
     getApprovedLeave(monthFrom, monthTo),
     resolveRequester(),
     getRosterablePeople(),
     person?.isAdmin ? getAllLeaveRequests() : Promise.resolve([]),
+    // The month on show, plus the selected day if it is outside it.
+    getVetAppointments(selected < monthFrom ? selected : monthFrom, selected > monthTo ? selected : monthTo),
   ]);
   const mine = requester ? await getMyLeaveRequests(requester.id) : [];
   const leaveOn = (date: string) => leave.filter((l) => leaveCoversDate(l, date));
+  const vetOn = (date: string) => vetMonth.filter((a) => a.date === date);
   const weeks = monthGrid(year, month);
 
   const prevMonth = month === 1 ? { y: year - 1, m: 12 } : { y: year, m: month - 1 };
@@ -84,6 +89,18 @@ export default async function RosterPage({
             className="inline-flex h-11 items-center rounded-[var(--radius)] border-[1.5px] border-brand px-5 text-sm font-bold text-brand-ink"
           >
             Staff: add, edit, remove
+          </Link>
+          <Link
+            href="/shift/medications"
+            className="inline-flex h-11 items-center rounded-[var(--radius)] border-[1.5px] border-brand px-5 text-sm font-bold text-brand-ink"
+          >
+            Medications
+          </Link>
+          <Link
+            href="/shift/vet"
+            className="inline-flex h-11 items-center rounded-[var(--radius)] border-[1.5px] border-brand px-5 text-sm font-bold text-brand-ink"
+          >
+            Vet appointments
           </Link>
         </div>
       )}
@@ -153,6 +170,14 @@ export default async function RosterPage({
                   {leaveOn(date).length > 0 && (
                     <span className="rounded-[5px] bg-[#FCEDE8] px-1 py-0.5 text-center text-[10.5px] font-extrabold leading-[1.4] text-[#9A3A26]">
                       Leave {leaveOn(date).map((l) => nameInitials(l.name)).join(",")}
+                    </span>
+                  )}
+                  {vetOn(date).length > 0 && (
+                    <span
+                      className="rounded-[5px] px-1 py-0.5 text-center text-[10.5px] font-extrabold leading-[1.4]"
+                      style={{ background: MEDS_STYLE.tint, color: MEDS_STYLE.ink }}
+                    >
+                      {vetOn(date).length === 1 ? `Vet: ${vetOn(date)[0].dogName}` : `Vet: ${vetOn(date).length} dogs`}
                     </span>
                   )}
                 </Link>
@@ -233,6 +258,24 @@ export default async function RosterPage({
                   <p key={l.id} className="m-0 text-[12.5px] font-semibold">
                     {l.name} ({scopeShort(l.scope)})
                   </p>
+                ))}
+              </div>
+            )}
+
+            {vetOn(selected).length > 0 && (
+              <div className="border-t border-line pt-2">
+                <div className="text-[13px] font-extrabold" style={{ color: MEDS_STYLE.ink }}>
+                  Vet appointments
+                </div>
+                {vetOn(selected).map((a) => (
+                  <div key={a.id} className="py-1 text-[12.5px]">
+                    <div className="font-extrabold">
+                      {a.dogName}, {a.time ? hhmm(a.time) : a.part === "morning" ? "Morning" : "Afternoon"},{" "}
+                      {a.kind === "other" ? "Appointment" : a.kind.charAt(0).toUpperCase() + a.kind.slice(1)}
+                    </div>
+                    {a.reason && <div>{a.reason}</div>}
+                    {a.instructions && <div className="font-bold" style={{ color: MEDS_STYLE.ink }}>{a.instructions}</div>}
+                  </div>
                 ))}
               </div>
             )}

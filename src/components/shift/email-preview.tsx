@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { PART_LABEL, clock12, parseYmd, type Part } from "@/lib/shift";
+import { PART_LABEL, clockTime, parseYmd, type Part } from "@/lib/shift";
 import { previewShiftEmail } from "@/lib/actions/shift";
 import type { EmailPreview, PersonBlock } from "@/lib/shift-email";
 import { PersonAvatar } from "@/components/shift/person-avatar";
@@ -95,6 +95,32 @@ function EmailModal({ preview, onClose }: { preview: EmailPreview; onClose: () =
 
         {preview.people.length === 0 && <p className="text-sm text-ink-muted">Nobody has signed in to this shift yet.</p>}
 
+        <p className="m-0 rounded-[var(--radius)] border border-line p-2.5 text-sm font-extrabold">
+          Volunteers this shift: {preview.volunteers ?? "not entered"}
+        </p>
+
+        {preview.meds.length > 0 && (
+          <div className="rounded-[var(--radius)] border border-[#E9B8CF] bg-[#FBE9F1] p-3 text-xs leading-relaxed">
+            <b className="font-extrabold text-[#7E1F4A]">Medications</b>
+            {preview.meds.map((m, i) => (
+              <p key={i} className={`m-0 mt-1 ${m.problem ? "font-bold text-danger" : ""}`}>
+                {m.text}
+              </p>
+            ))}
+          </div>
+        )}
+
+        {preview.vet.length > 0 && (
+          <div className="rounded-[var(--radius)] border border-[#E9B8CF] p-3 text-xs leading-relaxed">
+            <b className="font-extrabold text-[#7E1F4A]">Vet</b>
+            {preview.vet.map((v, i) => (
+              <p key={i} className="m-0 mt-1">
+                {v}
+              </p>
+            ))}
+          </div>
+        )}
+
         {preview.health.length > 0 && (
           <div className="rounded-[var(--radius)] border border-[#E2725B] bg-[#FCEDE8] p-3 text-xs leading-relaxed">
             <b className="font-extrabold text-[#9A3A26]">Health concerns</b>
@@ -104,7 +130,7 @@ function EmailModal({ preview, onClose }: { preview: EmailPreview; onClose: () =
                 {h.dogName && <b>{h.dogName}: </b>}
                 {h.body}{" "}
                 <span className="text-ink-muted">
-                  ({h.personName}, {clock12(h.createdAt)})
+                  ({h.personName}, {clockTime(h.createdAt)})
                 </span>
               </p>
             ))}
@@ -133,7 +159,7 @@ function EmailModal({ preview, onClose }: { preview: EmailPreview; onClose: () =
           {preview.handover.length === 0 && <p className="m-0 mt-1 text-ink-muted">No handover notes this shift.</p>}
           {preview.handover.map((h, i) => (
             <p key={i} className="m-0 mt-1">
-              <b>{h.personName}</b> <span className="text-ink-muted">{clock12(h.createdAt)}</span>
+              <b>{h.personName}</b> <span className="text-ink-muted">{clockTime(h.createdAt)}</span>
               <br />
               {h.body}
             </p>
@@ -162,7 +188,7 @@ function PersonEmailBlock({ block }: { block: PersonBlock }) {
         <span className="text-[13.5px] font-extrabold text-foreground">{block.name}</span>
         <span className="text-[11px] text-ink-muted">
           {block.startedAt
-            ? `signed in ${clock12(block.startedAt)} · ${block.endedAt ? `out ${clock12(block.endedAt)}` : "still signed in"}`
+            ? `signed in ${clockTime(block.startedAt)} · ${block.endedAt ? `out ${clockTime(block.endedAt)}` : "still signed in"}`
             : "not signed in to this shift"}
         </span>
       </div>

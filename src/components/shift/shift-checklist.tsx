@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
 import {
   CATEGORY_LABEL,
   CATEGORY_ORDER,
@@ -10,6 +10,8 @@ import {
 } from "@/lib/shift";
 import { addExtraTask } from "@/lib/actions/shift";
 import { Checklist } from "@/components/shift/checklist";
+import { MedicationAlert, MedicationSection } from "@/components/shift/medication-doses";
+import type { DueDose, VetAppointment } from "@/lib/care-data";
 
 /** The Checklist tab's content: today's tasks by category, each section
  *  colour-coded, anything carried over from an earlier day sitting inside
@@ -19,11 +21,17 @@ export function ShiftChecklist({
   byCategory,
   carriedOver,
   extras,
+  doses = [],
+  vet = [],
   readOnly = false,
 }: {
   byCategory: Record<TaskCategory, ShiftTaskRow[]>;
   carriedOver: ShiftTaskRow[];
   extras: ShiftTaskRow[];
+  /** Medication doses due this shift (Medication alert and Medications section). */
+  doses?: DueDose[];
+  /** This shift's vet appointments (their instructions go in the alert). */
+  vet?: VetAppointment[];
   /** Admin view: shows the live checklist without being able to change it. */
   readOnly?: boolean;
 }) {
@@ -68,15 +76,19 @@ export function ShiftChecklist({
         </div>
       )}
 
+      <DoFirst rows={[...(carriedByCategory.get("do_first") ?? []), ...byCategory.do_first]} busy={isPending} run={run} readOnly={readOnly} />
+
+      <MedicationAlert doses={doses} vet={vet} />
+
       <div className="columns-1 gap-3 lg:columns-2">
-        {CATEGORY_ORDER.map((cat) => {
+        {CATEGORY_ORDER.filter((c) => c !== "do_first").map((cat) => {
           const rows = [...(carriedByCategory.get(cat) ?? []), ...byCategory[cat]];
           const doneCount = rows.filter((t) => t.status !== "open").length;
           const complete = rows.length > 0 && doneCount === rows.length;
           const style = CATEGORY_STYLE[cat];
           return (
+            <Fragment key={cat}>
             <details
-              key={cat}
               className="group mb-2.5 inline-block w-full break-inside-avoid overflow-hidden rounded-[var(--radius)] border border-line bg-card align-top"
               style={{ borderLeft: `4px solid ${style.accent}` }}
               open
@@ -117,6 +129,9 @@ export function ShiftChecklist({
                 )}
               </div>
             </details>
+            {/* Medications come straight after the feed: feed first, then medicate. */}
+            {cat === "animal_health_welfare" && <MedicationSection doses={doses} readOnly={readOnly} />}
+            </Fragment>
           );
         })}
 
@@ -197,6 +212,40 @@ function ExtrasSection({
         {extras.length === 0 ? "Nothing extra logged yet. " : ""}For anything a caretaker does that isn&rsquo;t on the
         standard list. It still lands in this shift&rsquo;s email, tagged EXTRA.
       </p>
+    </div>
+  );
+}
+
+/** "Do this first!": full width at the top, red, with a warning sign; its
+ *  tasks side by side. Hidden when a checklist has none. */
+function DoFirst({
+  rows,
+  busy,
+  run,
+  readOnly,
+}: {
+  rows: ShiftTaskRow[];
+  busy: boolean;
+  run: (fn: () => Promise<{ error?: string }>) => void;
+  readOnly: boolean;
+}) {
+  if (rows.length === 0) return null;
+  const style = CATEGORY_STYLE.do_first;
+  return (
+    <div className="overflow-hidden rounded-[var(--radius)] border-2 bg-card" style={{ borderColor: style.accent }}>
+      <h2 className="m-0 flex items-center gap-2 px-3 py-2.5 text-[15px] font-extrabold" style={{ background: style.tint, color: style.ink }}>
+        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" className="shrink-0">
+          <path d="M12 2.5 1.5 21h21L12 2.5Z" fill={style.accent} />
+          <rect x="11" y="9" width="2" height="6.5" rx="1" fill="#fff" />
+          <circle cx="12" cy="18" r="1.25" fill="#fff" />
+        </svg>
+        {CATEGORY_LABEL.do_first}
+      </h2>
+      <div className="grid grid-cols-1 border-t border-line md:grid-cols-3">
+        {rows.map((t) => (
+          <Checklist key={t.id} tasks={[t]} busy={busy} run={run} readOnly={readOnly} />
+        ))}
+      </div>
     </div>
   );
 }

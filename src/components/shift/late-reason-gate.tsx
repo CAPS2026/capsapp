@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { PART_LABEL, firstName, time12, type Part } from "@/lib/shift";
+import { PART_LABEL, firstName, hhmm, type Part } from "@/lib/shift";
 import { setLateReason, switchPerson } from "@/lib/actions/shift";
 
 /** Signing in more than the grace period late means giving a reason, and
@@ -56,7 +56,7 @@ export function LateReasonGate({
           {firstName(personName)}, you signed in late
         </h2>
         <p className="m-0 text-sm leading-relaxed text-ink-muted">
-          You signed in {lateMinutes} minutes after your {PART_LABEL[part].toLowerCase()} shift started ({time12(starts)}).
+          You signed in {lateMinutes} minutes after your {PART_LABEL[part].toLowerCase()} shift started ({hhmm(starts)}).
           Please tell us why before you carry on. This is required.
         </p>
         <label className="flex flex-col gap-1 text-xs font-bold text-foreground">

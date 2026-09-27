@@ -26,6 +26,7 @@ export function partForTime(d: Date = new Date()): Part {
 }
 
 export type TaskCategory =
+  | "do_first"
   | "opening"
   | "animal_health_welfare"
   | "kennel_housing_hygiene"
@@ -34,6 +35,7 @@ export type TaskCategory =
   | "end_of_day";
 
 export const CATEGORY_ORDER: TaskCategory[] = [
+  "do_first",
   "opening",
   "animal_health_welfare",
   "kennel_housing_hygiene",
@@ -43,6 +45,7 @@ export const CATEGORY_ORDER: TaskCategory[] = [
 ];
 
 export const CATEGORY_LABEL: Record<TaskCategory, string> = {
+  do_first: "Do this first!",
   opening: "Opening",
   animal_health_welfare: "Animal Health & Welfare",
   kennel_housing_hygiene: "Kennel & Housing Hygiene",
@@ -57,6 +60,7 @@ export const CATEGORY_LABEL: Record<TaskCategory, string> = {
  *  come from the existing design tokens; coral, purple and slate are
  *  additions that sit comfortably alongside them. */
 export const CATEGORY_STYLE: Record<TaskCategory, { accent: string; tint: string; ink: string }> = {
+  do_first: { accent: "#D64545", tint: "#FDECEC", ink: "#9E2A2A" },
   opening: { accent: "#F4A324", tint: "#FEF3DC", ink: "#8A5A00" },
   animal_health_welfare: { accent: "#E2725B", tint: "#FCEDE8", ink: "#9A3A26" },
   kennel_housing_hygiene: { accent: "#1A7ABF", tint: "#E6F3FB", ink: "#0F5A8F" },
@@ -114,32 +118,29 @@ export function sessionInstant(date: string, hhmm: string): Date {
   return new Date(`${date}T${hhmm.slice(0, 5)}:00+10:00`);
 }
 
-/** A timestamp as shelter-local clock time, e.g. "6:34am". Always pass
- *  the timezone explicitly: the server runs in UTC, so a bare
- *  toLocaleTimeString() there is ten hours out (that's what the
- *  end-of-shift email used to do), and it also makes server and browser
- *  render different text and trips React's hydration check. */
-export function clock12(iso: string): string {
-  return new Date(iso)
-    .toLocaleTimeString("en-AU", { timeZone: SHELTER_TZ, hour: "numeric", minute: "2-digit", hour12: true })
-    .replace(/\s/g, "")
-    .toLowerCase();
+/** A timestamp as shelter-local 24-hour clock time, e.g. "6:34" or "15:05"
+ *  (Julie's choice: 24-hour is clearer). Always pass the timezone
+ *  explicitly: the server runs in UTC, so a bare toLocaleTimeString() there
+ *  is ten hours out, and server and browser would render different text. */
+export function clockTime(iso: string): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: SHELTER_TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(iso));
+  return parts.replace(/^0(\d)/, "$1");
 }
 
-/** "6:30am" / "3:30pm" from "HH:MM". */
-export function time12(hhmm: string): string {
-  const [h, m] = hhmm.slice(0, 5).split(":").map(Number);
-  const suffix = h >= 12 ? "pm" : "am";
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return m === 0 ? `${h12}${suffix}` : `${h12}:${String(m).padStart(2, "0")}${suffix}`;
+/** "6:30" / "15:00" from "HH:MM" (24-hour, no leading zero). */
+export function hhmm(time: string): string {
+  const [h, m] = time.slice(0, 5).split(":").map(Number);
+  return `${h}:${String(m).padStart(2, "0")}`;
 }
 
-/** "6:30–9:30am" (suffix once when both halves share it). */
+/** "6:00 - 9:00". */
 export function timeRange(starts: string, ends: string): string {
-  const a = time12(starts);
-  const b = time12(ends);
-  const sa = a.slice(-2);
-  return sa === b.slice(-2) ? `${a.slice(0, -2)}–${b}` : `${a}–${b}`;
+  return `${hhmm(starts)} - ${hhmm(ends)}`;
 }
 
 export type ShiftTaskRow = {
@@ -159,6 +160,8 @@ export type ShiftTaskRow = {
   actionedByInitials: string | null;
   actionedAt: string | null;
   carriedOver: boolean;
+  /** Made from a vet appointment ("Take Zeke to the vet"), shown with a VET tag. */
+  isVet: boolean;
 };
 
 export type OpenShift = {
@@ -238,3 +241,14 @@ export function minutesLate(at: Date, sessionStart: string): number {
   );
   return nowMinutes - hhmmToMinutes(sessionStart);
 }
+
+/** The Medications section and the Medication alert (and anything to do
+ *  with the vet): one colour family, used for nothing else. */
+export const MEDS_STYLE = { accent: "#B0306A", tint: "#FBE9F1", ink: "#7E1F4A" };
+
+/** The shift card's colour: teal for a morning, indigo for an afternoon
+ *  (chosen by Julie so neither matches a checklist section). */
+export const PART_STYLE: Record<Part, { accent: string; tint: string; ink: string }> = {
+  morning: { accent: "#0E8C8C", tint: "#E3F4F3", ink: "#0B6E6E" },
+  afternoon: { accent: "#4338CA", tint: "#ECEBFB", ink: "#3730A3" },
+};
