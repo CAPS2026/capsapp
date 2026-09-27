@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentPerson } from "@/lib/auth";
 import { markLeaveNoticesForShift } from "@/lib/leave-data";
+import { getAllDogNames, getMedication, medDueOn, type DoseReason } from "@/lib/care-data";
 import {
   getActiveShiftPerson,
   setActiveShiftPerson,
@@ -11,7 +12,7 @@ import {
 } from "@/lib/shift-identity";
 import {
   ensureRosterSession,
-  getDogNameSuggestions,
+
   getOpenShift,
   getRosterablePeople,
   getShiftSettings,
@@ -22,6 +23,7 @@ import {
   getShiftEmailPreview,
   maybeSendShiftEmail,
   sendHealthConcernEmail,
+  sendMissedDoseEmail,
   type EmailPreview,
 } from "@/lib/shift-email";
 import { distanceMetres, minutesLate, sessionInstant, shelterToday, shiftDay, type Part } from "@/lib/shift";
@@ -61,6 +63,8 @@ async function requireActingPerson() {
     late !== null && late.lateMinutes !== null && late.lateMinutes > settings.lateAfterMinutes && !late.lateReason;
   return { ...me, lateBlocked, hasOpenShift: late !== null };
 }
+
+const VOLUNTEERS_NEEDED = "How many volunteers came this shift? Enter the number first (0 is fine).";
 
 const NO_OPEN_SHIFT = "You don't have an open shift. Tap your name to sign in again.";
 
@@ -256,6 +260,10 @@ export async function endShift(earlyReason?: string): Promise<Result> {
   const early = earlyMin > settings.lateAfterMinutes;
   const reason = (earlyReason ?? "").trim();
   if (early && !reason) return { error: "Please give a reason for finishing early." };
+  // The volunteer count must be in before the shift can end (0 is fine).
+  // The screen asks for it first; this stops an end without it.
+  const { data: vc } = await supabase.from("roster_session").select("volunteer_count").eq("id", session.id).maybeSingle();
+  if (vc?.volunteer_count == null) return { error: VOLUNTEERS_NEEDED };
 
   const { error } = await supabase
     .from("shift_log")
@@ -654,5 +662,168 @@ export async function resolveHealthConcern(id: string, note: string): Promise<Re
 /** Dog names typed before, for the health concern pop-up's suggestions. */
 export async function dogNameSuggestions(): Promise<string[]> {
   if (!(await requireDeviceStaff())) return [];
-  return getDogNameSuggestions();
+  return getAllDogNames();
+}
+
+// ---------------------------------------------------------------------------
+// Medication doses
+// ---------------------------------------------------------------------------
+
+/** The dose of `medicationId` due on the caller's current shift, if it is due
+ *  (never trust a date or session from the screen). */
+async function dueDoseForShift(medicationId: string) {
+  const me = await requireOnShift();
+  if (!me) return { error: NO_OPEN_SHIFT } as const;
+  if (me.lateBlocked) return { error: LATE_REASON_REQUIRED } as const;
+  const open = await getOpenShift(me.id);
+  if (!open) return { error: NO_OPEN_SHIFT } as const;
+  const med = await getMedication(medicationId);
+  if (!med || !medDueOn(med, open.date, open.part)) return { error: "That dose isn't due on this shift." } as const;
+  return { me, open, med } as const;
+}
+
+/** Tick a dose as given. */
+export async function giveDose(medicationId: string): Promise<Result> {
+  const r = await dueDoseForShift(medicationId);
+  if ("error" in r) return { error: r.error as string };
+  const supabase = await createClient();
+  const { error } = await supabase.from("medication_dose").insert({
+    medication_id: medicationId,
+    date: r.open.date,
+    part: r.open.part,
+    status: "given",
+    actioned_by: r.me.id,
+  });
+  if (error) return { error: error.code === "23505" ? "That dose has already been recorded." : error.message };
+  bust();
+  return {};
+}
+
+/** Untick a dose ticked "given" by mistake. A "not given" is never undone
+ *  here: Shayna has already been told. */
+export async function undoDose(medicationId: string): Promise<Result> {
+  const r = await dueDoseForShift(medicationId);
+  if ("error" in r) return { error: r.error as string };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("medication_dose")
+    .delete()
+    .eq("medication_id", medicationId)
+    .eq("date", r.open.date)
+    .eq("part", r.open.part)
+    .eq("status", "given");
+  if (error) return { error: error.message };
+  bust();
+  return {};
+}
+
+/** A dose not given. The reason is required. Unless the dog is away, Shayna
+ *  is emailed straight away. Either way a note goes in the handover log, so
+ *  the next shift checks with Shayna before giving it. The dose is never put
+ *  back on a later shift's list (no double doses). */
+export async function doseNotGiven(
+  medicationId: string,
+  reason: DoseReason,
+  note: string,
+): Promise<{ error?: string; emailed?: boolean }> {
+  if (!["refused", "vomited", "away", "other"].includes(reason)) return { error: "Choose why it wasn't given." };
+  const clean = note.trim();
+  if (reason === "other" && !clean) return { error: "Say why it wasn't given." };
+  const r = await dueDoseForShift(medicationId);
+  if ("error" in r) return { error: r.error as string };
+  const supabase = await createClient();
+
+  const { data: dose, error } = await supabase
+    .from("medication_dose")
+    .insert({
+      medication_id: medicationId,
+      date: r.open.date,
+      part: r.open.part,
+      status: "not_given",
+      reason,
+      note: clean || null,
+      actioned_by: r.me.id,
+    })
+    .select("id")
+    .single();
+  if (error || !dose) return { error: error?.code === "23505" ? "That dose has already been recorded." : (error?.message ?? "Could not save.") };
+
+  const why = reason === "other" ? clean : `${DOSE_REASON_TEXT[reason]}${clean ? ` (${clean})` : ""}`;
+  const body =
+    reason === "away"
+      ? `${r.med.dogName} is away (vet, foster): ${r.med.medicine} not given${clean ? `. ${clean}` : ""}.`
+      : `Medication for ${r.med.dogName} (${r.med.medicine}) not given: ${why}. Check with Shayna before giving it.`;
+  await supabase.from("handover_note").insert({
+    person_id: r.me.id,
+    shift_log_id: r.open.id,
+    date: r.open.date,
+    part: r.open.part,
+    body,
+    is_auto: true,
+  });
+
+  let emailed = false;
+  if (reason !== "away") {
+    emailed = await sendMissedDoseEmail({
+      personName: r.me.name,
+      date: r.open.date,
+      part: r.open.part,
+      dogName: r.med.dogName,
+      medicine: r.med.medicine,
+      why,
+    }).catch((e) => {
+      console.error("doseNotGiven: email failed", e);
+      return false;
+    });
+    if (emailed) await supabase.from("medication_dose").update({ emailed_at: new Date().toISOString() }).eq("id", dose.id);
+  }
+  bust();
+  revalidatePath("/shift/handover");
+  return { emailed };
+}
+
+const DOSE_REASON_TEXT: Record<DoseReason, string> = {
+  refused: "refused",
+  vomited: "vomited it up",
+  away: "dog is away",
+  other: "other",
+};
+
+// ---------------------------------------------------------------------------
+// Volunteer count
+// ---------------------------------------------------------------------------
+
+/** How many volunteers came, one number for the whole shift (two
+ *  caretakers on together share it). 0 is fine. */
+export async function setVolunteerCount(count: number): Promise<Result> {
+  const n = Math.round(count);
+  if (!Number.isFinite(n) || n < 0 || n > 200) return { error: "Enter the number of volunteers." };
+  const me = await requireOnShift();
+  if (!me) return { error: NO_OPEN_SHIFT };
+  const open = await getOpenShift(me.id);
+  if (!open) return { error: NO_OPEN_SHIFT };
+  const session = await ensureRosterSession(open.date, open.part);
+  const supabase = await createClient();
+  const { error } = await supabase.from("roster_session").update({ volunteer_count: n }).eq("id", session.id);
+  if (error) return { error: error.message };
+  bust();
+  return {};
+}
+
+// ---------------------------------------------------------------------------
+// Handover notes: ticked off like checklist tasks
+// ---------------------------------------------------------------------------
+
+export async function tickHandoverNote(id: string, done: boolean): Promise<Result> {
+  const me = await requireActingPerson();
+  if (!me) return { error: "Pick who you are first." };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("handover_note")
+    .update(done ? { done_at: new Date().toISOString(), done_by_name: me.name } : { done_at: null, done_by_name: null })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/shift/handover");
+  bust();
+  return {};
 }

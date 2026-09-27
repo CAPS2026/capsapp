@@ -2,6 +2,7 @@ import { getCurrentPerson } from "@/lib/auth";
 import { getActiveShiftPerson } from "@/lib/shift-identity";
 import { getOpenShift, getRosterDayDetail, getShiftChecklist, getTodayShiftPeople } from "@/lib/shift-data";
 import { checkAutoCloseAndSendEmails } from "@/lib/shift-email";
+import { getDueDoses, getVetAppointments } from "@/lib/care-data";
 import { shelterToday, type Part } from "@/lib/shift";
 import { PersonPicker } from "@/components/shift/person-picker";
 import { ShiftChecklist } from "@/components/shift/shift-checklist";
@@ -32,9 +33,19 @@ export default async function ShiftPage() {
   }
 
   // Only this shift's own tasks: the morning and afternoon lists are separate.
-  const checklist = await getShiftChecklist(openShift.part);
+  const [checklist, doses, vet] = await Promise.all([
+    getShiftChecklist(openShift.part),
+    getDueDoses(openShift.date, openShift.part),
+    getVetAppointments(openShift.date, openShift.date),
+  ]);
 
   return (
-    <ShiftChecklist byCategory={checklist.byCategory} carriedOver={checklist.carriedOver} extras={checklist.extras} />
+    <ShiftChecklist
+      byCategory={checklist.byCategory}
+      carriedOver={checklist.carriedOver}
+      extras={checklist.extras}
+      doses={doses}
+      vet={vet.filter((a) => a.part === openShift.part)}
+    />
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { clock12, firstName, parseYmd, shelterToday, type ShiftTaskRow, type TaskStatus } from "@/lib/shift";
+import { clockTime, firstName, parseYmd, shelterToday, type ShiftTaskRow, type TaskStatus } from "@/lib/shift";
 import {
   claimTask,
   markTaskNotRequired,
@@ -116,6 +116,8 @@ function TaskRow({
         <div className={`text-[13.5px] font-semibold leading-[1.4] ${open ? "text-foreground" : "text-ink-muted line-through"}`}>
           {task.title}
           {task.isExtra && <span className={`${TAG} bg-brand-tint text-brand-ink`}>EXTRA</span>}
+          {task.isVet && <span className={`${TAG} bg-[#FBE9F1] text-[#7E1F4A]`}>VET</span>}
+          {task.skippable && !task.isExtra && <span className={`${TAG} bg-gray-tint text-ink-muted`}>OPTIONAL</span>}
           {task.claimedByName && open && (
             <span className={`${TAG} bg-sun-tint text-[#8a6a12]`}>{firstName(task.claimedByName)}&rsquo;s</span>
           )}
@@ -126,7 +128,7 @@ function TaskRow({
 
         {done && task.actionedByInitials && task.actionedAt && (
           <div className="mt-[3px] text-[10.5px] font-semibold text-ok">
-            {task.actionedByInitials} &middot; {clock12(task.actionedAt)}
+            {task.actionedByInitials} &middot; {clockTime(task.actionedAt)}
           </div>
         )}
         {notReq && (
