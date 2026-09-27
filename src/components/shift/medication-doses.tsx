@@ -40,13 +40,13 @@ export function MedicationAlert({ doses, vet }: { doses: DueDose[]; vet: VetAppo
   );
 }
 
-/** The Medications section: one row per dose due this shift. Given is a
+/** The Medications section: one row per dose due this shift (always shown,
+ *  saying so when none are due). Given is a
  *  tick; Not given needs a reason (see NotGivenDialog). */
 export function MedicationSection({ doses, readOnly = false }: { doses: DueDose[]; readOnly?: boolean }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [notGiven, setNotGiven] = useState<DueDose | null>(null);
-  if (doses.length === 0) return null;
   const done = doses.filter((d) => d.status !== null).length;
 
   const run = (fn: () => Promise<{ error?: string }>) => {
@@ -74,7 +74,10 @@ export function MedicationSection({ doses, readOnly = false }: { doses: DueDose[
         </span>
       </div>
       {error && <p className="m-0 px-3 pt-2 text-sm text-danger">{error}</p>}
-      <div className="divide-y divide-line border-t border-line">
+      {doses.length === 0 && (
+        <p className="m-0 border-t border-line px-3 py-3 text-sm text-ink-muted">No medications due this shift.</p>
+      )}
+      <div className="divide-y divide-line border-t border-line empty:hidden">
         {doses.map((d) => (
           <div key={d.medication.id} className="flex items-center gap-2.5 px-3 py-[9px]">
             <button
