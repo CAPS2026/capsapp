@@ -28,6 +28,12 @@ export default async function VetPage({ searchParams }: { searchParams: Promise<
         <h1 className="m-0 text-xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
           Vet appointments
         </h1>
+        <Link
+          href="/shift/vet#add"
+          className="ml-auto inline-flex h-12 items-center rounded-[var(--radius)] bg-[#F26B1D] px-6 text-base font-extrabold text-white"
+        >
+          Add appointment
+        </Link>
       </header>
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[1.4fr_1fr]">
         <VetList appts={appts} />
