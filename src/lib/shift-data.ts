@@ -129,6 +129,31 @@ const DEFAULT_TIMES: Record<Part, { starts: string; ends: string }> = {
   afternoon: { starts: "15:00", ends: "18:00" },
 };
 
+/** The usual times for a session on `date`, from org_settings. Morning
+ *  times depend on the day of the week (roster_morning_by_weekday, keyed by
+ *  getDay: Sunday = 0), e.g. 6 to 9 Mon to Wed, 7 to 10 Thu and Fri, 8 to 11
+ *  at weekends; afternoons are the same every day. */
+export async function defaultSessionTimes(date: string, part: Part): Promise<{ starts: string; ends: string }> {
+  const supabase = await shiftDb();
+  const { data: settings } = await supabase
+    .from("org_settings")
+    .select("roster_morning_start, roster_morning_end, roster_afternoon_start, roster_afternoon_end, roster_morning_by_weekday")
+    .maybeSingle();
+  if (part === "morning") {
+    const byDay = settings?.roster_morning_by_weekday as Record<string, [string, string]> | null | undefined;
+    const today = byDay?.[String(parseYmd(date).getDay())];
+    if (today && today[0] && today[1]) return { starts: today[0].slice(0, 5), ends: today[1].slice(0, 5) };
+    return {
+      starts: settings?.roster_morning_start?.slice(0, 5) ?? DEFAULT_TIMES.morning.starts,
+      ends: settings?.roster_morning_end?.slice(0, 5) ?? DEFAULT_TIMES.morning.ends,
+    };
+  }
+  return {
+    starts: settings?.roster_afternoon_start?.slice(0, 5) ?? DEFAULT_TIMES.afternoon.starts,
+    ends: settings?.roster_afternoon_end?.slice(0, 5) ?? DEFAULT_TIMES.afternoon.ends,
+  };
+}
+
 /** The roster session for (date, part), creating it from the org's
  *  default times if it doesn't exist yet, so there's always a stable
  *  row to read start/end times from and to mark the summary email sent
@@ -152,18 +177,7 @@ export async function ensureRosterSession(date: string, part: Part): Promise<Ros
     };
   }
 
-  const { data: settings } = await supabase
-    .from("org_settings")
-    .select("roster_morning_start, roster_morning_end, roster_afternoon_start, roster_afternoon_end")
-    .maybeSingle();
-  const starts =
-    part === "morning"
-      ? (settings?.roster_morning_start?.slice(0, 5) ?? DEFAULT_TIMES.morning.starts)
-      : (settings?.roster_afternoon_start?.slice(0, 5) ?? DEFAULT_TIMES.afternoon.starts);
-  const ends =
-    part === "morning"
-      ? (settings?.roster_morning_end?.slice(0, 5) ?? DEFAULT_TIMES.morning.ends)
-      : (settings?.roster_afternoon_end?.slice(0, 5) ?? DEFAULT_TIMES.afternoon.ends);
+  const { starts, ends } = await defaultSessionTimes(date, part);
 
   const { data: created, error } = await supabase
     .from("roster_session")
@@ -659,15 +673,10 @@ export async function getRosterDayDetail(date: string): Promise<RosterDaySession
       attendees,
     });
   }
-  return (["morning", "afternoon"] as Part[]).map(
-    (part) =>
-      byPart.get(part) ?? {
-        part,
-        starts: DEFAULT_TIMES[part].starts,
-        ends: DEFAULT_TIMES[part].ends,
-        people: [],
-        attendees: [],
-      },
+  return Promise.all(
+    (["morning", "afternoon"] as Part[]).map(
+      async (part) => byPart.get(part) ?? { part, ...(await defaultSessionTimes(date, part)), people: [], attendees: [] },
+    ),
   );
 }
 
