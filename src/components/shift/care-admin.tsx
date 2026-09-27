@@ -18,6 +18,12 @@ const FIELD = "h-11 w-full rounded-[var(--radius)] border border-line-cool bg-wh
 const AREA = "w-full rounded-[var(--radius)] border border-line-cool bg-white px-3 py-2 text-base font-normal";
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+// Julie's colours for these two admin pages: Edit bright purple, Stop and
+// Delete bright green, both filled with white bold writing; the Add button
+// a large orange.
+const EDIT_BTN = "inline-flex h-10 items-center rounded-[var(--radius)] bg-[#7C3AED] px-4 text-sm font-extrabold text-white";
+const STOP_BTN = "inline-flex h-10 items-center rounded-[var(--radius)] bg-[#16A34A] px-4 text-sm font-extrabold text-white";
+
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="flex flex-col gap-1 text-sm">
@@ -84,7 +90,7 @@ export function MedicationList({ meds }: { meds: Medication[] }) {
                   {m.notes && <div className="text-ink-muted">{m.notes}</div>}
                 </div>
                 <div className="flex gap-2">
-                  <Link href={`/shift/medications?edit=${m.id}`} className="inline-flex h-9 items-center rounded-[var(--radius)] border-[1.5px] border-brand px-3 text-sm font-bold text-brand-ink">
+                  <Link href={`/shift/medications?edit=${m.id}`} className={EDIT_BTN}>
                     Edit
                   </Link>
                   {confirm === m.id ? (
@@ -101,12 +107,12 @@ export function MedicationList({ meds }: { meds: Medication[] }) {
                           }
                         })
                       }
-                      className="h-9 rounded-[var(--radius)] bg-danger px-3 text-sm font-bold text-white disabled:opacity-50"
+                      className={`${STOP_BTN} disabled:opacity-50`}
                     >
                       Yes, stop it
                     </button>
                   ) : (
-                    <button type="button" onClick={() => setConfirm(m.id)} className="h-9 rounded-[var(--radius)] border-[1.5px] border-danger px-3 text-sm font-bold text-danger">
+                    <button type="button" onClick={() => setConfirm(m.id)} className={STOP_BTN}>
                       Stop
                     </button>
                   )}
@@ -157,7 +163,7 @@ export function MedicationForm({ med, dogNames }: { med?: Medication; dogNames: 
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-[var(--radius)] border border-line bg-card p-4">
+    <div id="add" className="flex scroll-mt-4 flex-col gap-3 rounded-[var(--radius)] border border-line bg-card p-4">
       <h3 className="m-0 text-base font-extrabold">{med ? `Edit: ${med.dogName}` : "Add medication"}</h3>
       <Field label="Dog's name">
         <input className={FIELD} list="caps-dog-names" autoComplete="off" value={f.dogName} onChange={(e) => set("dogName", e.target.value)} />
@@ -266,7 +272,7 @@ export function VetList({ appts }: { appts: VetAppointment[] }) {
             {a.instructions && <div className="font-bold text-[#7E1F4A]">{a.instructions}</div>}
           </div>
           <div className="flex gap-2">
-            <Link href={`/shift/vet?edit=${a.id}`} className="inline-flex h-9 items-center rounded-[var(--radius)] border-[1.5px] border-brand px-3 text-sm font-bold text-brand-ink">
+            <Link href={`/shift/vet?edit=${a.id}`} className={EDIT_BTN}>
               Edit
             </Link>
             {confirm === a.id ? (
@@ -283,12 +289,12 @@ export function VetList({ appts }: { appts: VetAppointment[] }) {
                     }
                   })
                 }
-                className="h-9 rounded-[var(--radius)] bg-danger px-3 text-sm font-bold text-white disabled:opacity-50"
+                className={`${STOP_BTN} disabled:opacity-50`}
               >
                 Yes, delete
               </button>
             ) : (
-              <button type="button" onClick={() => setConfirm(a.id)} className="h-9 rounded-[var(--radius)] border-[1.5px] border-danger px-3 text-sm font-bold text-danger">
+              <button type="button" onClick={() => setConfirm(a.id)} className={STOP_BTN}>
                 Delete
               </button>
             )}
@@ -344,7 +350,7 @@ export function VetForm({ appt, dogNames, today }: { appt?: VetAppointment; dogN
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-[var(--radius)] border border-line bg-card p-4">
+    <div id="add" className="flex scroll-mt-4 flex-col gap-3 rounded-[var(--radius)] border border-line bg-card p-4">
       <h3 className="m-0 text-base font-extrabold">{appt ? `Edit: ${appt.dogName}` : "Add appointment"}</h3>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Date">

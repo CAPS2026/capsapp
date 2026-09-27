@@ -25,6 +25,12 @@ export default async function MedicationsPage({ searchParams }: { searchParams: 
         <h1 className="m-0 text-xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
           Medications
         </h1>
+        <Link
+          href="/shift/medications#add"
+          className="ml-auto inline-flex h-12 items-center rounded-[var(--radius)] bg-[#F26B1D] px-6 text-base font-extrabold text-white"
+        >
+          Add medication
+        </Link>
       </header>
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[1.4fr_1fr]">
         <MedicationList meds={meds} />
