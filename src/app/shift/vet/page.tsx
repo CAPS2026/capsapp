@@ -21,11 +21,31 @@ export default async function VetPage({ searchParams }: { searchParams: Promise<
 
   return (
     <div className="flex max-w-5xl flex-col gap-4">
-      <header className="flex items-center gap-3">
-        <Link href="/shift/roster" className="text-sm font-semibold text-brand-ink">
-          &larr; Roster
-        </Link>
-        <h1 className="m-0 text-xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
+      <Link href="/shift/roster" className="text-sm font-semibold text-brand-ink">
+        &larr; Roster
+      </Link>
+      <header
+        className="flex flex-wrap items-center gap-3 rounded-[14px] px-[18px] py-3.5 text-white"
+        style={{ background: "linear-gradient(90deg, #B0306A, #D2508A)" }}
+      >
+        {/* A stethoscope, for the vet. */}
+        <svg
+          width="34"
+          height="34"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#fff"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          className="shrink-0"
+        >
+          <path d="M5 3v6a5 5 0 0 0 10 0V3" />
+          <path d="M10 14v2a5 5 0 0 0 10 0v-2" />
+          <circle cx="20" cy="11" r="2.2" />
+        </svg>
+        <h1 className="m-0 text-2xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
           Vet appointments
         </h1>
         <Link

@@ -24,6 +24,20 @@ const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const EDIT_BTN = "inline-flex h-10 items-center rounded-[var(--radius)] bg-[#7C3AED] px-4 text-sm font-extrabold text-white";
 const STOP_BTN = "inline-flex h-10 items-center rounded-[var(--radius)] bg-[#16A34A] px-4 text-sm font-extrabold text-white";
 
+// The pink of medications and the vet on the checklist, for these pages too.
+const PINK = "#B0306A";
+const PINK_TINT = "#FBE9F1";
+const PINK_INK = "#7E1F4A";
+const FORM_TINT = "#FDF1F6";
+const FORM_BORDER = "#E9B8CF";
+// Appointment type tags.
+const KIND_COLOUR: Record<"admit" | "discharge" | "consult" | "other", string> = {
+  admit: "#2563EB",
+  discharge: "#16A34A",
+  consult: "#D97706",
+  other: "#6B7280",
+};
+
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="flex flex-col gap-1 text-sm">
@@ -73,12 +87,14 @@ export function MedicationList({ meds }: { meds: Medication[] }) {
     <div className="flex flex-col gap-2.5">
       {error && <p className="m-0 text-sm font-semibold text-danger">{error}</p>}
       {dogs.map((dog) => (
-        <div key={dog} className="flex flex-col gap-2 rounded-[var(--radius)] border border-line bg-card p-3">
-          <h3 className="m-0 text-base font-extrabold">{dog}</h3>
+        <div key={dog} className="overflow-hidden rounded-[var(--radius)] border border-line bg-card" style={{ borderLeft: `6px solid ${PINK}` }}>
+          <h3 className="m-0 px-3.5 py-2.5 text-[17px] font-extrabold" style={{ background: PINK_TINT, color: PINK_INK }}>
+            {dog}
+          </h3>
           {meds
             .filter((m) => m.dogName === dog)
             .map((m) => (
-              <div key={m.id} className="flex flex-wrap items-start justify-between gap-2 border-t border-line pt-2 first-of-type:border-0 first-of-type:pt-0">
+              <div key={m.id} className="flex flex-wrap items-start justify-between gap-2 border-t border-line px-3.5 py-2.5">
                 <div className="min-w-0 text-sm">
                   <div className="font-extrabold">{m.medicine}</div>
                   {m.howGiven && <div className="text-ink-muted">{m.howGiven}</div>}
@@ -163,8 +179,8 @@ export function MedicationForm({ med, dogNames }: { med?: Medication; dogNames: 
   }
 
   return (
-    <div id="add" className="flex scroll-mt-4 flex-col gap-3 rounded-[var(--radius)] border border-line bg-card p-4">
-      <h3 className="m-0 text-base font-extrabold">{med ? `Edit: ${med.dogName}` : "Add medication"}</h3>
+    <div id="add" className="flex scroll-mt-4 flex-col gap-3 rounded-[var(--radius)] border-[1.5px] p-4" style={{ background: FORM_TINT, borderColor: FORM_BORDER }}>
+      <h3 className="m-0 text-[17px] font-extrabold" style={{ color: PINK_INK }}>{med ? `Edit: ${med.dogName}` : "Add medication"}</h3>
       <Field label="Dog's name">
         <input className={FIELD} list="caps-dog-names" autoComplete="off" value={f.dogName} onChange={(e) => set("dogName", e.target.value)} />
       </Field>
@@ -260,16 +276,33 @@ export function VetList({ appts }: { appts: VetAppointment[] }) {
   const [error, setError] = useState<string | null>(null);
   if (appts.length === 0) return <p className="m-0 text-sm text-ink-muted">No appointments coming up.</p>;
   return (
-    <div className="flex flex-col rounded-[var(--radius)] border border-line bg-card px-3">
-      {error && <p className="m-0 pt-2 text-sm font-semibold text-danger">{error}</p>}
+    <div className="flex flex-col gap-2">
+      {error && <p className="m-0 text-sm font-semibold text-danger">{error}</p>}
       {appts.map((a) => (
-        <div key={a.id} className="flex flex-wrap items-start justify-between gap-2 border-b border-line py-2.5 last:border-0">
-          <div className="min-w-0 text-sm">
-            <div className="font-extrabold">
-              {dayLabel(a.date)}, {a.dogName}, {a.time ? hhmm(a.time) : a.part === "morning" ? "Morning" : "Afternoon"}, {KIND_LABEL[a.kind]}
+        <div key={a.id} className="flex items-center gap-3 rounded-[var(--radius)] border border-line bg-card p-2.5">
+          {/* Date badge: day of the week over the day of the month. */}
+          <div className="flex w-[62px] shrink-0 flex-col items-center rounded-[10px] py-1.5 text-white" style={{ background: PINK }}>
+            <span className="text-[11px] font-extrabold tracking-[0.08em]">
+              {parseYmd(a.date).toLocaleDateString("en-AU", { weekday: "short" }).toUpperCase()}
+            </span>
+            <span className="text-2xl font-extrabold leading-tight">{parseYmd(a.date).getDate()}</span>
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-sm">
+            <div className="flex flex-wrap items-center gap-2 text-[15px] font-extrabold">
+              {a.dogName}
+              <span className="rounded-full px-2.5 py-0.5 text-[11px] font-extrabold text-white" style={{ background: KIND_COLOUR[a.kind] }}>
+                {KIND_LABEL[a.kind]}
+              </span>
+              <span className="text-xs font-semibold text-ink-muted">
+                {a.time ? hhmm(a.time) : a.part === "morning" ? "Morning" : "Afternoon"}
+              </span>
             </div>
             {a.reason && <div>{a.reason}</div>}
-            {a.instructions && <div className="font-bold text-[#7E1F4A]">{a.instructions}</div>}
+            {a.instructions && (
+              <div className="font-extrabold" style={{ color: PINK_INK }}>
+                {a.instructions}
+              </div>
+            )}
           </div>
           <div className="flex gap-2">
             <Link href={`/shift/vet?edit=${a.id}`} className={EDIT_BTN}>
@@ -350,8 +383,8 @@ export function VetForm({ appt, dogNames, today }: { appt?: VetAppointment; dogN
   }
 
   return (
-    <div id="add" className="flex scroll-mt-4 flex-col gap-3 rounded-[var(--radius)] border border-line bg-card p-4">
-      <h3 className="m-0 text-base font-extrabold">{appt ? `Edit: ${appt.dogName}` : "Add appointment"}</h3>
+    <div id="add" className="flex scroll-mt-4 flex-col gap-3 rounded-[var(--radius)] border-[1.5px] p-4" style={{ background: FORM_TINT, borderColor: FORM_BORDER }}>
+      <h3 className="m-0 text-[17px] font-extrabold" style={{ color: PINK_INK }}>{appt ? `Edit: ${appt.dogName}` : "Add appointment"}</h3>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Date">
           <input type="date" className={FIELD} value={f.date} onChange={(e) => set("date", e.target.value)} />
