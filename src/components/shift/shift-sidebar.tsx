@@ -124,7 +124,7 @@ export function ShiftSidebar({
     setError(null);
     startTransition(async () => {
       const r = await getEndOfShiftLeft();
-      if (r.error) setError(r.error);
+      if (!("tasks" in r)) setError(r.error);
       else if (r.tasks.length) setEndOfShiftTasks(r.tasks);
       else askVolunteers();
     });
