@@ -264,6 +264,10 @@ export async function endShift(earlyReason?: string): Promise<Result> {
   // The screen asks for it first; this stops an end without it.
   const { data: vc } = await supabase.from("roster_session").select("volunteer_count").eq("id", session.id).maybeSingle();
   if (vc?.volunteer_count == null) return { error: VOLUNTEERS_NEEDED };
+  // Every End of Shift task must be ticked or have a reason (the screen
+  // asks first); this stops an end without them.
+  const left = await endOfShiftLeft(open.id, open.date, open.part);
+  if (left.some((t) => !t.reason)) return { error: END_OF_SHIFT_NEEDED };
 
   const { error } = await supabase
     .from("shift_log")
@@ -275,6 +279,82 @@ export async function endShift(earlyReason?: string): Promise<Result> {
   // maybeSendShiftEmail. Best-effort: a failed send here shouldn't stop
   // someone from actually ending their shift.
   await maybeSendShiftEmail(open.date, open.part).catch((e) => console.error("endShift: email failed", e));
+  bust();
+  return {};
+}
+
+const END_OF_SHIFT_NEEDED = "Tick each End of Shift task, or say why it wasn't done, before ending the shift.";
+
+export type EndOfShiftTask = { id: string; title: string; reason: string | null };
+
+/** The session's End of Shift tasks still unticked, with any reason already
+ *  given (kept in the task's note). Empty unless this is the last shift still
+ *  open on the session: lights off, gates locked and the rest are for whoever
+ *  leaves last, not someone finishing while a colleague carries on. */
+async function endOfShiftLeft(shiftId: string, date: string, part: Part): Promise<EndOfShiftTask[]> {
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("shift_log")
+    .select("id", { count: "exact", head: true })
+    .eq("date", date)
+    .eq("part", part)
+    .is("signed_out_at", null)
+    .neq("id", shiftId);
+  if ((count ?? 0) > 0) return [];
+  const { data, error } = await supabase
+    .from("task_instance")
+    .select("id, title, note")
+    .eq("date", date)
+    .eq("part", part)
+    .eq("category", "end_of_day")
+    .eq("status", "open")
+    .order("sort_order");
+  if (error) console.error("endOfShiftLeft failed", error);
+  return ((data ?? []) as Array<{ id: string; title: string; note: string | null }>).map((t) => ({
+    id: t.id,
+    title: t.title,
+    reason: t.note?.trim() || null,
+  }));
+}
+
+/** Asked when END SHIFT is pressed: the End of Shift tasks not ticked yet. */
+export async function getEndOfShiftLeft(): Promise<{ error: string } | { error?: undefined; tasks: EndOfShiftTask[] }> {
+  const me = await requireOnShift();
+  if (!me) return { error: NO_OPEN_SHIFT };
+  const open = await getOpenShift(me.id);
+  if (!open) return { error: "You don't have an open shift." };
+  return { tasks: await endOfShiftLeft(open.id, open.date, open.part) };
+}
+
+/** The End of Shift box: each unticked task is either ticked now or given a
+ *  reason (which goes in the shift email). All of them must be answered. */
+export async function saveEndOfShift(answers: { id: string; done: boolean; reason: string }[]): Promise<Result> {
+  const me = await requireOnShift();
+  if (!me) return { error: NO_OPEN_SHIFT };
+  if (me.lateBlocked) return { error: LATE_REASON_REQUIRED };
+  const open = await getOpenShift(me.id);
+  if (!open) return { error: "You don't have an open shift." };
+  const left = await endOfShiftLeft(open.id, open.date, open.part);
+  const byId = new Map(answers.map((a) => [a.id, a]));
+  for (const t of left) {
+    const a = byId.get(t.id);
+    if (!a || (!a.done && !a.reason.trim())) return { error: `"${t.title}": tick it, or say why it wasn't done.` };
+  }
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+  for (const t of left) {
+    const a = byId.get(t.id)!;
+    const { error } = await supabase
+      .from("task_instance")
+      .update(
+        a.done
+          ? { status: "done", note: null, actioned_by: me.id, actioned_at: now }
+          : { note: a.reason.trim() },
+      )
+      .eq("id", t.id)
+      .eq("status", "open");
+    if (error) return { error: error.message };
+  }
   bust();
   return {};
 }

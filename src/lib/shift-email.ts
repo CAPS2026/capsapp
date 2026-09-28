@@ -244,7 +244,9 @@ function buildBlocks(
       blockFor(t.actionedByName).notNeeded.push(doneLabel(t, date, endsAtMs, graceMin));
     } else if (t.status === "open") {
       const from = t.carriedOver ? `, from ${t.date === date ? "this morning" : dayShort(t.date)}` : "";
-      const claim = t.claimedByName ? `, claimed by ${t.claimedByName}` : "";
+      // End of Shift tasks can't be left without a reason (asked at END SHIFT).
+      const why = t.category === "end_of_day" && t.note ? `, not done because: ${t.note}` : "";
+      const claim = `${t.claimedByName ? `, claimed by ${t.claimedByName}` : ""}${why}`;
       const detail = `${from}${claim}`.replace(/^, /, "");
       const label = t.category
         ? `${t.title} (${CATEGORY_LABEL[t.category]}${from}${claim})`

@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState, useTransition, type ReactNode } from "react";
-import { dogNameSuggestions, endShift, extendShift, flagHealthConcern } from "@/lib/actions/shift";
+import {
+  dogNameSuggestions,
+  endShift,
+  extendShift,
+  flagHealthConcern,
+  saveEndOfShift,
+  type EndOfShiftTask,
+} from "@/lib/actions/shift";
 
 /** Shared pop-up shell, same look as the late-reason prompt. Deliberately
  *  does NOT close on a click outside the box or on Escape: someone halfway
@@ -73,6 +80,87 @@ export function EndEarlyDialog({
           className="h-11 flex-1 rounded-[var(--radius)] border-[1.5px] border-danger text-sm font-bold text-danger disabled:opacity-50"
         >
           {isPending ? "Ending…" : "End shift"}
+        </button>
+        <button type="button" onClick={onClose} className="h-11 rounded-[var(--radius)] border border-line px-4 text-sm font-bold text-ink-muted">
+          Keep working
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/** END SHIFT with End of Shift tasks still unticked: each one must be
+ *  ticked here or given a reason (the reason goes in the shift email). */
+export function EndOfShiftDialog({
+  tasks,
+  onClose,
+  onSaved,
+}: {
+  tasks: EndOfShiftTask[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [answers, setAnswers] = useState(() =>
+    tasks.map((t) => ({ id: t.id, title: t.title, done: false, reason: t.reason ?? "" })),
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const set = (id: string, change: Partial<{ done: boolean; reason: string }>) =>
+    setAnswers((prev) => prev.map((a) => (a.id === id ? { ...a, ...change } : a)));
+
+  function submit() {
+    const missing = answers.find((a) => !a.done && !a.reason.trim());
+    if (missing) {
+      setError(`"${missing.title}": tick it, or say why it wasn't done.`);
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const r = await saveEndOfShift(answers.map(({ id, done, reason }) => ({ id, done, reason })));
+      if (r.error) setError(r.error);
+      else onSaved();
+    });
+  }
+
+  return (
+    <Modal title="End of Shift tasks not ticked">
+      <p className="m-0 text-sm leading-relaxed text-ink-muted">
+        Tick each one you have done. If you haven&rsquo;t done it, say why. Reasons go in the shift email.
+      </p>
+      <ul className="m-0 flex list-none flex-col gap-3 p-0">
+        {answers.map((a) => (
+          <li key={a.id} className="flex flex-col gap-1.5 rounded-[var(--radius)] border border-line p-3">
+            <label className="flex items-center gap-3 text-[15px] font-bold text-foreground">
+              <input
+                type="checkbox"
+                checked={a.done}
+                onChange={(e) => set(a.id, { done: e.target.checked })}
+                className="h-6 w-6 shrink-0"
+              />
+              <span className={a.done ? "line-through" : ""}>{a.title}</span>
+            </label>
+            {!a.done && (
+              <input
+                type="text"
+                placeholder="Not done? Say why (required)"
+                value={a.reason}
+                onChange={(e) => set(a.id, { reason: e.target.value })}
+                className={FIELD}
+              />
+            )}
+          </li>
+        ))}
+      </ul>
+      {error && <p className="m-0 text-sm font-semibold text-danger">{error}</p>}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={submit}
+          className="h-11 flex-1 rounded-[var(--radius)] border-[1.5px] border-danger text-sm font-bold text-danger disabled:opacity-50"
+        >
+          {isPending ? "Saving…" : "Save and end shift"}
         </button>
         <button type="button" onClick={onClose} className="h-11 rounded-[var(--radius)] border border-line px-4 text-sm font-bold text-ink-muted">
           Keep working
