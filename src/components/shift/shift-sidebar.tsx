@@ -15,13 +15,13 @@ import {
   type OpenShift,
   type Part,
 } from "@/lib/shift";
-import { endShift, setVolunteerCount, switchPerson } from "@/lib/actions/shift";
+import { endShift, getEndOfShiftLeft, setVolunteerCount, switchPerson, type EndOfShiftTask } from "@/lib/actions/shift";
 import type { RosterDaySession } from "@/lib/shift-data";
 import type { VetAppointment } from "@/lib/care-data";
 import { formatLeaveDates } from "@/lib/leave";
 import { EmailPreviewLink } from "@/components/shift/email-preview";
 import { PersonAvatar } from "@/components/shift/person-avatar";
-import { EndEarlyDialog, ExtendShiftDialog, HealthConcernDialog } from "@/components/shift/shift-dialogs";
+import { EndEarlyDialog, EndOfShiftDialog, ExtendShiftDialog, HealthConcernDialog } from "@/components/shift/shift-dialogs";
 
 const SITE_LABEL = "Evans Landing";
 
@@ -98,8 +98,9 @@ export function ShiftSidebar({
     });
   };
 
-  // End shift: the volunteer count first (if nobody has entered it), then
-  // a reason if it is more than the grace period early, then end.
+  // End shift: any unticked End of Shift tasks first (tick or say why), then
+  // the volunteer count (if nobody has entered it), then a reason if it is
+  // more than the grace period early, then end.
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30000);
@@ -114,9 +115,19 @@ export function ShiftSidebar({
     if (minutesToEnd > lateAfterMinutes) setEndEarlyOpen(true);
     else run(() => endShift());
   }
-  function startEnd() {
+  function askVolunteers() {
     if (volunteerCount === null) setVolunteersOpen(true);
     else finish();
+  }
+  const [endOfShiftTasks, setEndOfShiftTasks] = useState<EndOfShiftTask[] | null>(null);
+  function startEnd() {
+    setError(null);
+    startTransition(async () => {
+      const r = await getEndOfShiftLeft();
+      if (!("tasks" in r)) setError(r.error);
+      else if (r.tasks.length) setEndOfShiftTasks(r.tasks);
+      else askVolunteers();
+    });
   }
 
   const btn =
@@ -202,6 +213,16 @@ export function ShiftSidebar({
       </div>
 
       {healthOpen && <HealthConcernDialog onClose={() => setHealthOpen(false)} />}
+      {endOfShiftTasks && (
+        <EndOfShiftDialog
+          tasks={endOfShiftTasks}
+          onClose={() => setEndOfShiftTasks(null)}
+          onSaved={() => {
+            setEndOfShiftTasks(null);
+            askVolunteers();
+          }}
+        />
+      )}
       {volunteersOpen && (
         <VolunteersDialog
           onClose={() => setVolunteersOpen(false)}
