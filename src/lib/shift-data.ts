@@ -503,6 +503,14 @@ function carriedFilter(date: string, part: Part): string {
   return groups.join(",");
 }
 
+/** "Do this first!" and "End of Shift" tasks (lights, gates, sprinklers,
+ *  bringing dogs in) belong to their own shift only: the next shift has its
+ *  own copies, so they are never carried over. */
+const SHIFT_ONLY_CATEGORIES: ReadonlySet<TaskCategory> = new Set<TaskCategory>(["do_first", "end_of_day"]);
+function carriesOver(r: InstanceRow): boolean {
+  return !r.category || !SHIFT_ONLY_CATEGORIES.has(r.category);
+}
+
 /** The checklist for one session (morning or afternoon) of today, grouped
  *  by category, plus anything still open from before it ("carried over":
  *  earlier days, and for the afternoon, the morning's leftovers) and that
@@ -626,7 +634,9 @@ export async function getShiftChecklist(part: Part): Promise<{
   const carriedOver = ((openRows ?? []) as unknown as InstanceRow[])
     .filter((r) => !goLive || r.date >= goLive)
     .filter((r) => !r.template_id || templateById.has(r.template_id))
-    .map((r) => toRow(heal(r), true));
+    .map(heal)
+    .filter(carriesOver)
+    .map((r) => toRow(r, true));
 
   return { byCategory, carriedOver, extras };
 }
@@ -987,7 +997,8 @@ export async function getSessionTasks(date: string, part: Part): Promise<Session
   const rows = new Map<string, ShiftTaskRow>();
   for (const r of (own.data ?? []) as unknown as InstanceRow[]) rows.set(r.id, toRow(r, false));
   for (const r of (older.data ?? []) as unknown as InstanceRow[])
-    if (!rows.has(r.id) && (!goLive || r.date >= goLive) && isCurrent(r)) rows.set(r.id, toRow(r, true));
+    if (!rows.has(r.id) && (!goLive || r.date >= goLive) && isCurrent(r) && carriesOver(r))
+      rows.set(r.id, toRow(r, true));
   for (const r of doneCarried) if (!rows.has(r.id)) rows.set(r.id, toRow(r, true));
   return [...rows.values()];
 }
