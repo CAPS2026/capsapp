@@ -28,8 +28,9 @@ export function EmailPreviewLink({ part }: { part: Part }) {
     });
   }
 
-  // Afternoon shift email lands "tonight"; a morning one doesn't.
-  const label = part === "afternoon" ? "tonight’s" : "this morning’s";
+  // One email per day, sent after the afternoon shift; this shows the
+  // part of it for the shift in progress.
+  const label = part === "afternoon" ? "afternoon" : "morning";
 
   return (
     <>
@@ -44,7 +45,7 @@ export function EmailPreviewLink({ part }: { part: Part }) {
           <path d="m22 7-10 6L2 7" />
         </svg>
         <span>
-          Preview {label} email to Renee <span aria-hidden="true">&rarr;</span>
+          Preview the {label} part of tonight’s email <span aria-hidden="true">&rarr;</span>
         </span>
       </button>
       {error && <p className="text-xs text-danger">{error}</p>}
@@ -61,7 +62,7 @@ function EmailModal({ preview, onClose }: { preview: EmailPreview; onClose: () =
   }, [onClose]);
 
   const day = parseYmd(preview.date).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" });
-  const title = preview.part === "afternoon" ? "Tonight’s shift email" : "This morning’s shift email";
+  const title = preview.part === "afternoon" ? "Tonight’s email: afternoon shift" : "Tonight’s email: morning shift";
 
   return (
     <div
