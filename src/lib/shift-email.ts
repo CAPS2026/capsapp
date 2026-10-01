@@ -387,7 +387,7 @@ function htmlBody(date: string, part: Part, b: Built, updateNote?: string): stri
     ? b.handover
         .map(
           (h) =>
-            `<p style="margin:4px 0;font-size:14px;"><b>${esc(h.personName)}</b> <span style="color:#6B6B68;font-size:12px;">${timeLabel(h.createdAt)}</span><br>${esc(h.body)}</p>`,
+            `<p style="margin:4px 0;font-size:14px;"><b>${esc(h.personName)}</b> <span style="color:#6B6B68;font-size:12px;">${timeLabel(h.createdAt)}</span><br><span style="white-space:pre-line;">${esc(h.body)}</span></p>`,
         )
         .join("")
     : `<p style="margin:0;font-size:14px;color:#6B6B68;">No handover notes this shift.</p>`;

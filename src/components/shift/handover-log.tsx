@@ -21,15 +21,18 @@ export function HandoverLog({ notes }: { notes: HandoverNoteRow[] }) {
   const [isPending, startTransition] = useTransition();
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
   function send() {
     if (!body.trim()) return;
     setError(null);
+    setSaved(false);
     startTransition(async () => {
       const r = await addHandoverNote(body);
       if (r.error) setError(r.error);
       else {
         setBody("");
+        setSaved(true);
         router.refresh();
       }
     });
@@ -83,7 +86,7 @@ export function HandoverLog({ notes }: { notes: HandoverNoteRow[] }) {
                     )}
                     <span className="text-[10.5px] font-semibold text-ink-muted">&middot; {whenLabel(n)}</span>
                   </div>
-                  <p className={`m-0 text-[14px] leading-normal ${done ? "text-ink-muted line-through" : "font-semibold text-foreground"}`}>
+                  <p className={`m-0 whitespace-pre-line text-[14px] leading-normal ${done ? "text-ink-muted line-through" : "font-semibold text-foreground"}`}>
                     {n.body}
                   </p>
                   {done && n.doneByName && n.doneAt && (
@@ -98,31 +101,41 @@ export function HandoverLog({ notes }: { notes: HandoverNoteRow[] }) {
         )}
       </div>
 
+      {/* A proper box (several lines; Enter starts a new line, it never
+          sends) and a Save note button, with "Saved" beside it once the
+          note is in. */}
       <form
-        className="flex items-center gap-2 rounded-full border border-line bg-card py-[5px] pl-[13px] pr-[5px]"
+        className="flex flex-col gap-2.5 rounded-[var(--radius)] border border-line bg-card p-3"
         onSubmit={(e) => {
           e.preventDefault();
           send();
         }}
       >
-        <input
+        <textarea
           value={body}
-          onChange={(e) => setBody(e.target.value)}
+          onChange={(e) => {
+            setBody(e.target.value);
+            setSaved(false);
+          }}
+          rows={6}
           placeholder={"Leave a note for the next shift…"}
           aria-label="Leave a note for the next shift"
-          className="min-w-0 flex-1 border-0 bg-transparent text-[13px] text-foreground outline-none placeholder:text-ink-muted"
+          className="w-full resize-y rounded-[var(--radius)] border border-line-cool bg-white px-3 py-2 text-[15px] leading-normal text-foreground outline-none placeholder:text-ink-muted"
         />
-        <button
-          type="submit"
-          disabled={isPending || !body.trim()}
-          aria-label="Send"
-          className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-brand text-white disabled:opacity-50"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="m22 2-7 20-4-9-9-4Z" />
-            <path d="M22 2 11 13" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={isPending || !body.trim()}
+            className="h-11 rounded-[var(--radius)] bg-brand px-6 text-[16px] font-extrabold text-white disabled:opacity-50"
+          >
+            {isPending ? "Saving…" : "Save note"}
+          </button>
+          {saved && (
+            <span role="status" className="flex items-center gap-1.5 text-[16px] font-extrabold text-ok">
+              <span aria-hidden="true">✓</span> Saved
+            </span>
+          )}
+        </div>
       </form>
       {error && <p className="text-sm text-danger">{error}</p>}
     </div>
