@@ -27,7 +27,7 @@ export type MedicationInput = {
   medicine: string;
   howGiven: string;
   parts: "morning" | "afternoon" | "both";
-  frequency: "daily" | "weekly" | "monthly";
+  frequency: "daily" | "every_second_day" | "weekly" | "monthly";
   weekdays: number[];
   dayOfMonth: number | null;
   startDate: string;
@@ -44,7 +44,7 @@ export async function saveMedication(input: MedicationInput, id?: string): Promi
   if (!dogName) return { error: "Enter the dog's name." };
   if (!medicine) return { error: "Enter the medication and dose." };
   if (!["morning", "afternoon", "both"].includes(input.parts)) return { error: "Choose which shift." };
-  if (!["daily", "weekly", "monthly"].includes(input.frequency)) return { error: "Choose how often." };
+  if (!["daily", "every_second_day", "weekly", "monthly"].includes(input.frequency)) return { error: "Choose how often." };
   const weekdays = [...new Set(input.weekdays.filter((d) => d >= 0 && d <= 6))].sort();
   if (input.frequency === "weekly" && weekdays.length === 0) return { error: "Choose at least one day of the week." };
   if (input.frequency === "monthly" && !(input.dayOfMonth && input.dayOfMonth >= 1 && input.dayOfMonth <= 31))

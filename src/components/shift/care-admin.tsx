@@ -68,7 +68,9 @@ function medWhen(m: Medication): string {
   const often =
     m.frequency === "daily"
       ? "every day"
-      : m.frequency === "weekly"
+      : m.frequency === "every_second_day"
+        ? "every second day"
+        : m.frequency === "weekly"
         ? m.weekdays.map((d) => DAYS[d]).join(", ")
         : `monthly, the ${m.dayOfMonth}${[1, 21, 31].includes(m.dayOfMonth ?? 0) ? "st" : [2, 22].includes(m.dayOfMonth ?? 0) ? "nd" : [3, 23].includes(m.dayOfMonth ?? 0) ? "rd" : "th"}`;
   return `${shift}, ${often}`;
@@ -202,6 +204,7 @@ export function MedicationForm({ med, dogNames }: { med?: Medication; dogNames: 
         <Field label="How often">
           <select className={FIELD} value={f.frequency} onChange={(e) => set("frequency", e.target.value as MedicationInput["frequency"])}>
             <option value="daily">Every day</option>
+            <option value="every_second_day">Every second day (from the start date)</option>
             <option value="weekly">Certain days of the week</option>
             <option value="monthly">Once a month</option>
           </select>
