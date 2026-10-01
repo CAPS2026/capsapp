@@ -171,7 +171,9 @@ function statusLines(s: SessionShiftRow, graceMin: number): string[] {
  *  ticked, so a morning task ticked at 3:49pm never reads as if it was done
  *  on time by the afternoon shift. */
 function doneLabel(t: SessionTasksRow, date: string, endsAtMs: number, graceMin: number): string {
-  const note = t.status === "not_required" && t.note ? `: ${t.note}` : "";
+  // Any note typed on the task shows beside it (Julie, 1 Oct: notes on
+  // ticked tasks, such as "Monthly meds given", were being left out).
+  const note = t.note ? `: ${t.note}` : "";
   if (!t.actionedAt) return `${t.title}${note}`;
   const sameDay =
     new Intl.DateTimeFormat("en-CA", { timeZone: SHELTER_TZ }).format(new Date(t.actionedAt)) === date;
@@ -244,8 +246,9 @@ function buildBlocks(
       blockFor(t.actionedByName).notNeeded.push(doneLabel(t, date, endsAtMs, graceMin));
     } else if (t.status === "open") {
       const from = t.carriedOver ? `, from ${t.date === date ? "this morning" : dayShort(t.date)}` : "";
-      // End of Shift tasks can't be left without a reason (asked at END SHIFT).
-      const why = t.category === "end_of_day" && t.note ? `, not done because: ${t.note}` : "";
+      // Any note shows. On an End of Shift task it is the reason it was not
+      // done (asked at END SHIFT).
+      const why = t.note ? (t.category === "end_of_day" ? `, not done because: ${t.note}` : `, note: ${t.note}`) : "";
       const claim = `${t.claimedByName ? `, claimed by ${t.claimedByName}` : ""}${why}`;
       const detail = `${from}${claim}`.replace(/^, /, "");
       const label = t.category
