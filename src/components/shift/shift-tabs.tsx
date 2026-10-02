@@ -32,6 +32,13 @@ export function ShiftTabs() {
           </Link>
         );
       })}
+      {/* One tap over to the dog app, for everyone (Julie, 2 Oct). */}
+      <Link
+        href="/dogs"
+        className="mb-1 ml-auto inline-flex items-center gap-1.5 self-center rounded-full bg-brand px-3.5 py-1.5 text-[13px] font-extrabold text-white"
+      >
+        Dog app <span aria-hidden="true">&rarr;</span>
+      </Link>
     </nav>
   );
 }
