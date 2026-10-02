@@ -32,6 +32,14 @@ export function ShiftTabs() {
           </Link>
         );
       })}
+      {/* One tap over to the dog app, for everyone (Julie, 2 Oct): Swedish
+          flag colours, blue with bold yellow writing, 17px, about 42px tall. */}
+      <Link
+        href="/dogs"
+        className="mb-1.5 ml-auto inline-flex items-center gap-1.5 self-center rounded-full bg-[#006AA7] px-5 py-[9px] text-[17px] font-extrabold leading-6 text-[#FECC02]"
+      >
+        Dog app <span aria-hidden="true">&rarr;</span>
+      </Link>
     </nav>
   );
 }
