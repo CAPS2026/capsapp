@@ -1,6 +1,6 @@
-// The daily email: ONE per day, covering the morning and the afternoon and
-// everyone who worked them, sent once the afternoon's finish time has passed
-// and no shift that day is still open (see maybeSendShiftEmail, called
+// The end-of-shift email: one per session (date + part), covering
+// everyone who worked it, sent once the session's finish time has passed
+// and the last open shift on it has closed (see maybeSendShiftEmail, called
 // from endShift, the auto-close check and the scheduled checks). Recipients come from
 // org_settings.staff_shift_email_recipients, never from this file.
 //
@@ -490,32 +490,27 @@ export async function sendMissedDoseEmail(opts: {
   return result.ok;
 }
 
-/** ONE email per DAY (Julie, 30 Sep): sent once the afternoon shift is
- *  over, covering the morning and the afternoon. Sends if, and only if, the
- *  afternoon's finish time has passed (plus any overtime logged), no shift
- *  that day is still open, at least one person signed in that day, there
- *  are recipients configured, and it hasn't already gone out. The
- *  afternoon session's email_sent_at records that the day's email went.
- *  Safe to call speculatively (after every sign-out, every auto-close, and
- *  from the scheduled checks); a no-op otherwise. `_part` is ignored: ending
- *  a morning shift never sends anything. */
-export async function maybeSendShiftEmail(date: string, _part?: Part): Promise<void> {
-  const [morning, afternoon, amShifts, pmShifts] = await Promise.all([
-    ensureRosterSession(date, "morning"),
-    ensureRosterSession(date, "afternoon"),
-    getSessionShifts(date, "morning"),
-    getSessionShifts(date, "afternoon"),
-  ]);
-  const shifts = [...amShifts, ...pmShifts];
+/** Sends the summary for (date, part) if, and only if, the session's
+ *  finish time has passed, every shift against it is closed, at least one
+ *  person signed in, there are recipients configured, and it hasn't
+ *  already gone out. Safe to call speculatively (after every sign-out,
+ *  every auto-close, and from the scheduled checks); a no-op otherwise.
+ *
+ *  Waiting for the finish time means someone who ends their shift a little
+ *  early doesn't send an email that leaves out a colleague still to sign
+ *  in. The scheduled checks then send it shortly after the finish time. */
+export async function maybeSendShiftEmail(date: string, part: Part): Promise<void> {
+  const session = await ensureRosterSession(date, part);
+  const shifts = await getSessionShifts(date, part);
   if (shifts.length === 0) return;
-  if (Date.now() < sessionEndMs(date, afternoon.ends, pmShifts)) return;
-  if ((await hasOpenShiftsForSession(date, "morning")) || (await hasOpenShiftsForSession(date, "afternoon"))) return;
+  if (Date.now() < sessionEndMs(date, session.ends, shifts)) return;
+  if (await hasOpenShiftsForSession(date, part)) return;
 
-  // The day's email goes once. But if the picture changed after it went (a
-  // shift closed automatically was then reopened, someone signed in after
-  // it, or a forgotten shift was entered afterwards), send one updated
-  // email that replaces it.
-  const sentAt = afternoon.emailSentAt ? new Date(afternoon.emailSentAt).getTime() : null;
+  // The first email for a session goes once. But if the picture changed
+  // after it went (a shift closed automatically was then reopened, someone
+  // signed in after it, or a forgotten shift was entered afterwards), send
+  // one updated email that replaces it.
+  const sentAt = session.emailSentAt ? new Date(session.emailSentAt).getTime() : null;
   const changedAfterSend =
     sentAt !== null &&
     shifts.some(
@@ -524,60 +519,39 @@ export async function maybeSendShiftEmail(date: string, _part?: Part): Promise<v
     );
   if (sentAt !== null && !changedAfterSend) return;
 
+  const built = await buildSession(date, part);
+  if (built.people.every((p) => !p.startedAt)) return;
+
   const recipients = await getShiftEmailRecipients();
   if (recipients.length === 0) return;
-
-  const [am, pm] = await Promise.all([buildSession(date, "morning"), buildSession(date, "afternoon")]);
-  if ([...am.people, ...pm.people].every((p) => !p.startedAt)) return;
 
   // Claim the send first, so two checks running at the same moment (an End
   // shift and the scheduled check) can't both send it. Only the one whose
   // update matches the old value goes ahead.
   const supabase = await shiftDb();
-  const now = new Date().toISOString();
-  const claim = supabase.from("roster_session").update({ email_sent_at: now }).eq("id", afternoon.id);
-  const { data: claimed } = await (afternoon.emailSentAt
-    ? claim.eq("email_sent_at", afternoon.emailSentAt)
+  const claim = supabase.from("roster_session").update({ email_sent_at: new Date().toISOString() }).eq("id", session.id);
+  const { data: claimed } = await (session.emailSentAt
+    ? claim.eq("email_sent_at", session.emailSentAt)
     : claim.is("email_sent_at", null)
   ).select("id");
   if (!claimed || claimed.length === 0) return;
 
-  const longDay = parseYmd(date).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" });
   const day = parseYmd(date).toLocaleDateString("en-AU", { day: "numeric", month: "short" });
   const updateNote = changedAfterSend
-    ? `UPDATED. This replaces the email sent at ${timeLabel(afternoon.emailSentAt as string)}. Something changed after it went (a shift was reopened, someone signed in later, or a forgotten shift was entered afterwards), so this shows everything.`
+    ? `UPDATED. This replaces the email sent at ${timeLabel(session.emailSentAt as string)}. Something changed after it went (a shift was reopened, someone signed in later, or a forgotten shift was entered afterwards), so this shows everything.`
     : undefined;
   const result = await sendEmail({
     to: recipients,
-    subject: `${changedAfterSend ? "UPDATED: " : ""}CAPS daily report, ${day}`,
-    text: [
-      ...(updateNote ? [updateNote, ""] : []),
-      `CAPS DAILY REPORT, ${longDay.toUpperCase()}`,
-      "",
-      "==========",
-      textBody(date, "morning", am),
-      "",
-      "==========",
-      textBody(date, "afternoon", pm),
-    ].join("\n"),
-    html: `<div style="font-family:sans-serif;max-width:520px;">
-      ${updateNote ? `<p style="margin:0 0 12px;padding:10px 12px;background:#FEF3DC;border:1px solid #F0D69A;border-radius:8px;font-size:14px;">${updateNote}</p>` : ""}
-      <h1 style="font-family:sans-serif;font-size:20px;color:#2C2C2A;margin:0 0 4px;">CAPS daily report</h1>
-      <p style="margin:0 0 8px;font-size:14px;color:#6B6B68;">${longDay}</p>
-      ${htmlBody(date, "morning", am)}
-      <hr style="border:none;border-top:2px solid #E0DDD6;margin:24px 0;">
-      ${htmlBody(date, "afternoon", pm)}
-    </div>`,
+    subject: `${changedAfterSend ? "UPDATED: " : ""}CAPS ${PART_LABEL[part]} shift, ${day}`,
+    text: textBody(date, part, built, updateNote),
+    html: htmlBody(date, part, built, updateNote),
   });
 
   if (!result.ok) {
     console.error("maybeSendShiftEmail: send failed", result.error);
     // Give the claim back, so the next check tries again.
-    await supabase.from("roster_session").update({ email_sent_at: afternoon.emailSentAt }).eq("id", afternoon.id);
-    return;
+    await supabase.from("roster_session").update({ email_sent_at: session.emailSentAt }).eq("id", session.id);
   }
-  // Mark the morning too, so nothing ever treats it as still to send.
-  await supabase.from("roster_session").update({ email_sent_at: now }).eq("id", morning.id);
 }
 
 /** What the summary for (date, part) would say right now, built by the
