@@ -8,6 +8,7 @@ import {
   sessionInstant,
   shelterToday,
   shiftDay,
+  withGuestName,
   CATEGORY_ORDER,
   type OpenShift,
   type Part,
@@ -41,6 +42,22 @@ export async function getRosterablePeople(): Promise<{ id: string; name: string 
     out.push({ id: r.person.id, name: `${r.person.first_name} ${r.person.surname}`.trim() });
   }
   return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** The people row behind the Guest tile (org_settings.staff_guest_person_id),
+ *  or null if none is set up. Someone covering a one-off shift taps Guest
+ *  and types their name; see pickPerson. */
+export async function getGuestPersonId(): Promise<string | null> {
+  const supabase = await shiftDb();
+  const { data } = await supabase.from("org_settings").select("staff_guest_person_id").maybeSingle();
+  return (data?.staff_guest_person_id as string | null | undefined) ?? null;
+}
+
+/** The caretakers without the Guest tile: for leave requests and "Forgot
+ *  to sign in?", which only make sense for someone with their own name. */
+export async function getRegularPeople(): Promise<{ id: string; name: string }[]> {
+  const [people, guestId] = await Promise.all([getRosterablePeople(), getGuestPersonId()]);
+  return people.filter((p) => p.id !== guestId);
 }
 
 /** Everyone who could sign in today, each annotated with their rostered
@@ -208,7 +225,7 @@ export async function getOpenShift(personId: string): Promise<OpenShift | null> 
   const supabase = await shiftDb();
   const { data, error } = await supabase
     .from("shift_log")
-    .select("id, person_id, date, part, signed_in_at, late_minutes, late_reason, roster_session_id, signed_in_distance_m, extended_minutes, reopened_at")
+    .select("id, person_id, date, part, signed_in_at, late_minutes, late_reason, roster_session_id, signed_in_distance_m, extended_minutes, reopened_at, guest_name")
     .eq("person_id", personId)
     .is("signed_out_at", null)
     .maybeSingle();
@@ -241,6 +258,7 @@ export async function getOpenShift(personId: string): Promise<OpenShift | null> 
     distanceM: data.signed_in_distance_m != null ? Number(data.signed_in_distance_m) : null,
     extendedMinutes: data.extended_minutes,
     reopenedAt: data.reopened_at,
+    guestName: data.guest_name ?? null,
   };
 }
 
@@ -663,7 +681,7 @@ export type HandoverNoteRow = {
  *  recent ones already ticked off. */
 export async function getHandoverNotes(limit = 30): Promise<HandoverNoteRow[]> {
   const supabase = await shiftDb();
-  const cols = "id, date, part, body, created_at, is_auto, done_at, done_by_name, person:people!handover_note_person_id_fkey(first_name, surname)";
+  const cols = "id, date, part, body, created_at, is_auto, done_at, done_by_name, person:people!handover_note_person_id_fkey(first_name, surname), shift:shift_log!handover_note_shift_log_id_fkey(guest_name)";
   const [open, done] = await Promise.all([
     supabase.from("handover_note").select(cols).is("done_at", null).order("created_at", { ascending: false }),
     supabase.from("handover_note").select(cols).not("done_at", "is", null).order("created_at", { ascending: false }).limit(limit),
@@ -680,9 +698,10 @@ export async function getHandoverNotes(limit = 30): Promise<HandoverNoteRow[]> {
     done_at: string | null;
     done_by_name: string | null;
     person: { first_name: string; surname: string } | null;
+    shift: { guest_name: string | null } | null;
   }>).map((r) => ({
     id: r.id,
-    personName: r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown",
+    personName: withGuestName(r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown", r.shift?.guest_name),
     date: r.date,
     part: r.part,
     body: r.body,
@@ -845,6 +864,9 @@ export async function getHealthConcernRecipients(): Promise<string[]> {
 }
 
 export type SessionShiftRow = {
+  /** Plain name from people ("Guest" for a guest): what their ticks are filed under. */
+  personKey: string;
+  /** Name to show: "Guest (Morgan)" for a guest. */
   personName: string;
   startedAt: string;
   endedAt: string | null;
@@ -881,7 +903,7 @@ export async function getSessionShifts(date: string, part: Part): Promise<Sessio
     .select(
       "person_id, signed_in_at, signed_out_at, late_minutes, late_reason, signed_in_distance_m, auto_closed, " +
         "ended_early_reason, extended_minutes, extended_reason, reopened_at, created_at, entered_afterwards_reason, " +
-        "person:people(first_name, surname)",
+        "guest_name, person:people(first_name, surname)",
     )
     .eq("date", date)
     .eq("part", part)
@@ -905,9 +927,13 @@ export async function getSessionShifts(date: string, part: Part): Promise<Sessio
     reopened_at: string | null;
     created_at: string;
     entered_afterwards_reason: string | null;
+    guest_name: string | null;
     person: { first_name: string; surname: string } | null;
   }>).map((r) => ({
-    personName: r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown",
+    // The tasks are filed under the plain name ("Guest"); this shift row
+    // says which guest that was.
+    personKey: r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown",
+    personName: withGuestName(r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown", r.guest_name),
     startedAt: r.signed_in_at,
     endedAt: r.signed_out_at,
     lateMinutes: r.late_minutes,
@@ -1010,7 +1036,7 @@ export async function getSessionHandover(date: string, part: Part): Promise<Sess
   const supabase = await shiftDb();
   const { data, error } = await supabase
     .from("handover_note")
-    .select("body, created_at, person:people(first_name, surname)")
+    .select("body, created_at, person:people(first_name, surname), shift:shift_log!handover_note_shift_log_id_fkey(guest_name)")
     .eq("date", date)
     .eq("part", part)
     .order("created_at");
@@ -1018,9 +1044,10 @@ export async function getSessionHandover(date: string, part: Part): Promise<Sess
   return ((data ?? []) as unknown as Array<{
     body: string;
     created_at: string;
+    shift: { guest_name: string | null } | null;
     person: { first_name: string; surname: string } | null;
   }>).map((r) => ({
-    personName: r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown",
+    personName: withGuestName(r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown", r.shift?.guest_name),
     body: r.body,
     createdAt: r.created_at,
   }));
@@ -1039,7 +1066,7 @@ export async function getSessionHealthConcerns(date: string, part: Part): Promis
   const supabase = await shiftDb();
   const { data, error } = await supabase
     .from("health_concern")
-    .select("dog_name, urgent, body, created_at, person:people!health_concern_person_id_fkey(first_name, surname)")
+    .select("dog_name, urgent, body, created_at, person:people!health_concern_person_id_fkey(first_name, surname), shift:shift_log!health_concern_shift_log_id_fkey(guest_name)")
     .eq("date", date)
     .eq("part", part)
     .order("created_at");
@@ -1048,10 +1075,11 @@ export async function getSessionHealthConcerns(date: string, part: Part): Promis
     dog_name: string | null;
     urgent: boolean;
     body: string;
+    shift: { guest_name: string | null } | null;
     created_at: string;
     person: { first_name: string; surname: string } | null;
   }>).map((r) => ({
-    personName: r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown",
+    personName: withGuestName(r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown", r.shift?.guest_name),
     dogName: r.dog_name,
     urgent: r.urgent,
     body: r.body,
@@ -1085,7 +1113,7 @@ export async function getHealthConcerns(limit = 40): Promise<HealthConcernRow[]>
     .from("health_concern")
     .select(
       "id, dog_name, urgent, body, date, part, created_at, resolved_at, resolved_by_name, resolved_note, " +
-        "person:people!health_concern_person_id_fkey(first_name, surname)",
+        "person:people!health_concern_person_id_fkey(first_name, surname), shift:shift_log!health_concern_shift_log_id_fkey(guest_name)",
     )
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -1099,12 +1127,13 @@ export async function getHealthConcerns(limit = 40): Promise<HealthConcernRow[]>
     part: Part;
     created_at: string;
     resolved_at: string | null;
+    shift: { guest_name: string | null } | null;
     resolved_by_name: string | null;
     resolved_note: string | null;
     person: { first_name: string; surname: string } | null;
   }>).map((r) => ({
     id: r.id,
-    personName: r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown",
+    personName: withGuestName(r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown", r.shift?.guest_name),
     dogName: r.dog_name,
     urgent: r.urgent,
     body: r.body,
@@ -1233,7 +1262,7 @@ export async function getTodayShifts(): Promise<TodayShiftRow[]> {
     .from("shift_log")
     .select(
       "part, signed_in_at, signed_out_at, late_minutes, late_reason, signed_in_distance_m, auto_closed, " +
-        "entered_afterwards_reason, person:people!shift_log_person_id_fkey(first_name, surname)",
+        "entered_afterwards_reason, guest_name, person:people!shift_log_person_id_fkey(first_name, surname)",
     )
     .eq("date", shelterToday())
     .order("signed_in_at");
@@ -1247,9 +1276,10 @@ export async function getTodayShifts(): Promise<TodayShiftRow[]> {
     signed_in_distance_m: number | null;
     auto_closed: boolean;
     entered_afterwards_reason: string | null;
+    guest_name: string | null;
     person: { first_name: string; surname: string } | null;
   }>).map((r) => ({
-    personName: r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown",
+    personName: withGuestName(r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown", r.guest_name),
     part: r.part,
     startedAt: r.signed_in_at,
     endedAt: r.signed_out_at,

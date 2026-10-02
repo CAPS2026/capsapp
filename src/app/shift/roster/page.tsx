@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Fragment } from "react";
-import { getMonthRoster, getRosterDayDetail, getRosterablePeople } from "@/lib/shift-data";
+import { getMonthRoster, getRegularPeople, getRosterDayDetail } from "@/lib/shift-data";
 import { checkAutoCloseAndSendEmails } from "@/lib/shift-email";
 import { PART_LABEL, nameInitials, parseYmd, shelterToday, shiftDay, timeRange } from "@/lib/shift";
 import { getCurrentPerson } from "@/lib/auth";
@@ -59,7 +59,7 @@ export default async function RosterPage({
     getRosterDayDetail(selected),
     getApprovedLeave(monthFrom, monthTo),
     resolveRequester(),
-    getRosterablePeople(),
+    getRegularPeople(),
     person?.isAdmin ? getAllLeaveRequests() : Promise.resolve([]),
     // The month on show, plus the selected day if it is outside it.
     getVetAppointments(selected < monthFrom ? selected : monthFrom, selected > monthTo ? selected : monthTo),

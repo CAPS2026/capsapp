@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentPerson } from "@/lib/auth";
 import { setLeaveIdentity, clearLeaveIdentity } from "@/lib/leave-identity";
-import { getRosterablePeople } from "@/lib/shift-data";
+import { getRegularPeople } from "@/lib/shift-data";
 import { shelterToday } from "@/lib/shift";
 import { LEAVE_LINK_DAYS, LEAVE_SCOPES, formatLeaveDates, leaveLinkExpired, type LeaveScope } from "@/lib/leave";
 import {
@@ -36,7 +36,7 @@ function bust() {
 export async function identifyPerson(personId: string): Promise<Result> {
   const device = await getCurrentPerson();
   if (!device?.isStaff) return { error: "Staff only." };
-  const people = await getRosterablePeople();
+  const people = await getRegularPeople();
   if (!people.some((p) => p.id === personId)) return { error: "That person wasn't found." };
   await setLeaveIdentity(personId);
   revalidatePath("/shift/roster");

@@ -199,6 +199,11 @@ function buildBlocks(
   endsAtMs: number,
 ): Pick<Built, "people" | "outstanding" | "handover" | "health"> {
   const people = new Map<string, PersonBlock>();
+  // Ticks carry the plain name from people; a guest's shift shows the name
+  // they typed. This sends "Guest" ticks to that guest's block.
+  const shownAs = new Map<string, string>();
+  for (const s of shifts) shownAs.set(s.personKey, s.personName);
+  const shown = (name: string) => shownAs.get(name) ?? name;
   for (const s of shifts) {
     const flags: string[] = [];
     if (!s.rostered) flags.push("Covering, not on the roster");
@@ -224,7 +229,8 @@ function buildBlocks(
     });
   }
 
-  const blockFor = (name: string): PersonBlock => {
+  const blockFor = (raw: string): PersonBlock => {
+    const name = shown(raw);
     let p = people.get(name);
     if (!p) {
       p = { name, startedAt: null, endedAt: null, status: [], flags: [], done: [], notNeeded: [], extraDone: [] };
