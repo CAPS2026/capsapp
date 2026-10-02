@@ -13,6 +13,8 @@
 
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { shiftDb } from "@/lib/shift-db";
+import { withGuestName } from "@/lib/shift";
 
 export const SHIFT_PERSON_COOKIE = "caps_shift_person";
 
@@ -29,9 +31,13 @@ export async function getActiveShiftPerson(): Promise<{ id: string; name: string
   const id = await getActiveShiftPersonId();
   if (!id) return null;
   const supabase = await createClient();
-  const { data } = await supabase.from("people").select("id, first_name, surname").eq("id", id).maybeSingle();
+  const [{ data }, { data: open }] = await Promise.all([
+    supabase.from("people").select("id, first_name, surname").eq("id", id).maybeSingle(),
+    // Someone on the Guest tile is named by what they typed at sign-in.
+    (await shiftDb()).from("shift_log").select("guest_name").eq("person_id", id).is("signed_out_at", null).maybeSingle(),
+  ]);
   if (!data) return null;
-  return { id: data.id, name: `${data.first_name} ${data.surname}`.trim() };
+  return { id: data.id, name: withGuestName(`${data.first_name} ${data.surname}`.trim(), open?.guest_name) };
 }
 
 export async function setActiveShiftPerson(personId: string): Promise<void> {

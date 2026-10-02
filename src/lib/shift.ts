@@ -105,10 +105,22 @@ export function personColour(key: string): string {
   return PERSON_COLOURS[h % PERSON_COLOURS.length];
 }
 
-/** "Wayne Wilshire-Cumming" -> "Wayne". */
+/** "Wayne Wilshire-Cumming" -> "Wayne". A guest, "Guest (Morgan Smith)",
+ *  -> "Morgan". */
 export function firstName(full: string): string {
-  return full.trim().split(/\s+/)[0] || full;
+  const guest = /^Guest \((.+)\)$/.exec(full.trim());
+  const name = guest ? guest[1] : full;
+  return name.trim().split(/\s+/)[0] || full;
 }
+
+/** The name shown for a shift: someone who signed in on the Guest tile is
+ *  "Guest (the name they typed)"; everyone else just their own name. */
+export function withGuestName(name: string, guestName: string | null | undefined): string {
+  return guestName ? `${name} (${guestName})` : name;
+}
+
+/** Longest name a guest can type (the database allows 60). */
+export const GUEST_NAME_MAX = 60;
 
 /** A shift date + "HH:MM" as a real instant. Brisbane has no daylight
  *  saving, so "+10:00" is always right, no timezone library needed. Use
@@ -179,6 +191,8 @@ export type OpenShift = {
   extendedMinutes: number | null;
   /** When this shift was reopened after being closed automatically, if it was. */
   reopenedAt: string | null;
+  /** The name typed at sign-in on the Guest tile; null for everyone else. */
+  guestName: string | null;
 };
 
 /** "Jo B" -> "JB". Falls back to the first initial, then "?". */

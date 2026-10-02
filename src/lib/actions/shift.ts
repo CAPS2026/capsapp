@@ -12,9 +12,9 @@ import {
 } from "@/lib/shift-identity";
 import {
   ensureRosterSession,
-
+  getGuestPersonId,
   getOpenShift,
-  getRosterablePeople,
+  getRegularPeople,
   getShiftSettings,
   resolvePart,
   touchShiftActivity,
@@ -26,7 +26,7 @@ import {
   sendMissedDoseEmail,
   type EmailPreview,
 } from "@/lib/shift-email";
-import { distanceMetres, minutesLate, sessionInstant, shelterToday, shiftDay, type Part } from "@/lib/shift";
+import { GUEST_NAME_MAX, distanceMetres, minutesLate, sessionInstant, shelterToday, shiftDay, type Part } from "@/lib/shift";
 
 type Result = { error: string } | { error?: undefined };
 
@@ -112,15 +112,32 @@ export async function pickPerson(
   rosteredPart: Part | null,
   lat: number | null,
   lng: number | null,
+  guestNameInput: string | null = null,
 ): Promise<Result> {
   if (!(await requireDeviceStaff())) return { error: "Staff only." };
 
   const supabase = await createClient();
-  const { data: person } = await supabase.from("people").select("id").eq("id", personId).maybeSingle();
+  const [{ data: person }, guestId] = await Promise.all([
+    supabase.from("people").select("id").eq("id", personId).maybeSingle(),
+    getGuestPersonId(),
+  ]);
   if (!person) return { error: "That person wasn't found." };
+
+  // The Guest tile: whoever taps it types their name, kept on the shift.
+  const isGuest = guestId !== null && personId === guestId;
+  const guestName = isGuest ? (guestNameInput ?? "").trim().replace(/\s+/g, " ") : null;
+  if (isGuest && !guestName) return { error: "Please type your name first." };
+  if (guestName && guestName.length > GUEST_NAME_MAX) return { error: `Please keep your name under ${GUEST_NAME_MAX} letters.` };
+  const sameGuest = (stored: string | null) => !isGuest || (stored ?? "").toLowerCase() === (guestName ?? "").toLowerCase();
 
   const existing = await getOpenShift(personId);
   if (existing) {
+    // Only one guest can be signed in at a time (one Guest tile).
+    if (!sameGuest(existing.guestName)) {
+      return {
+        error: `${existing.guestName ?? "Someone"} is still signed in as Guest. They need to press END SHIFT before anyone else can use Guest.`,
+      };
+    }
     await setActiveShiftPerson(personId);
     bust();
     return {};
@@ -140,7 +157,7 @@ export async function pickPerson(
   // after that, tapping a name is a genuinely new sign-in.
   const { data: autoClosed } = await supabase
     .from("shift_log")
-    .select("id, extended_minutes")
+    .select("id, extended_minutes, guest_name")
     .eq("person_id", personId)
     .eq("date", date)
     .eq("part", part)
@@ -148,7 +165,8 @@ export async function pickPerson(
     .order("signed_in_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (autoClosed) {
+  // A different guest on the same tile is a new sign-in, never a reopen.
+  if (autoClosed && sameGuest(autoClosed.guest_name)) {
     const endAt = sessionInstant(date, session.ends).getTime() + (autoClosed.extended_minutes ?? 0) * 60000;
     const windowMin = settings.autocloseGraceMinutes + REOPEN_MINUTES_AFTER_AUTOCLOSE;
     if (now.getTime() <= endAt + windowMin * 60000) {
@@ -195,6 +213,7 @@ export async function pickPerson(
     signed_in_lng: lng,
     signed_in_distance_m: distanceM,
     late_minutes: lateMinutes,
+    guest_name: guestName,
   });
   // 23505 = they already have an open shift (a near-simultaneous double
   // tap), fine, just proceed as a resume.
@@ -652,7 +671,7 @@ export async function recordForgottenShift(input: {
 }): Promise<Result> {
   if (!(await requireDeviceStaff())) return { error: "Staff only." };
 
-  const people = await getRosterablePeople();
+  const people = await getRegularPeople();
   const person = people.find((p) => p.id === input.personId);
   if (!person) return { error: "Choose who worked the shift." };
 
