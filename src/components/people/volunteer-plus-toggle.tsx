@@ -37,9 +37,9 @@ export function VolunteerPlusToggle({
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm">
           {isPlus ? (
-            <span className="font-semibold text-brand-ink">Volunteer Plus</span>
+            <span className="font-semibold text-brand-ink">Volunteer +</span>
           ) : (
-            <span className="text-ink-muted">Not a Volunteer Plus</span>
+            <span className="text-ink-muted">Not a Volunteer +</span>
           )}
         </span>
         <button
@@ -50,7 +50,7 @@ export function VolunteerPlusToggle({
             isPlus ? "border border-line-cool" : "bg-brand text-white"
           }`}
         >
-          {isPending ? "…" : isPlus ? "Remove" : "Make Volunteer Plus"}
+          {isPending ? "…" : isPlus ? "Remove" : "Make Volunteer +"}
         </button>
       </div>
       {error && <p className="text-sm text-danger">{error}</p>}
