@@ -7,8 +7,7 @@ import { deletePerson } from "@/lib/actions/people";
 import type { MergeCandidate } from "@/lib/people-data";
 import { PersonRoleActions } from "@/components/people/person-role-actions";
 import { PersonArchiveButton } from "@/components/people/person-archive-button";
-import { CommitteeToggle } from "@/components/people/committee-toggle";
-import { VolunteerPlusToggle } from "@/components/people/volunteer-plus-toggle";
+import { UpdateStatusMenu } from "@/components/people/update-status-menu";
 import { MergePersonDialog } from "@/components/people/merge-person-dialog";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { Field } from "@/components/detail-field";
@@ -158,30 +157,15 @@ export function PersonDetailView({
         ))}
       </Section>
 
-      {viewerIsAdmin &&
-        person.roles.some(
-          (r) => (r.role === "volunteer" || r.role === "volunteer_plus") && r.status === "active",
-        ) && (
-        <Section title="Kiosk access">
-          <VolunteerPlusToggle
-            personId={person.id}
-            firstName={person.firstName}
-            email={person.email}
-            isPlus={person.roles.some((r) => r.role === "volunteer_plus" && r.status === "active")}
-          />
-        </Section>
-      )}
-
-      {viewerIsAdmin && (
-        <Section title="Committee">
-          <CommitteeToggle
-            personId={person.id}
-            firstName={person.firstName}
-            email={person.email}
-            isMember={person.roles.some((r) => r.role === "committee" && r.status === "active")}
-          />
-        </Section>
-      )}
+      <Section title="Status">
+        <UpdateStatusMenu
+          personId={person.id}
+          firstName={person.firstName}
+          email={person.email}
+          roles={person.roles.map((r) => ({ role: r.role, status: r.status }))}
+          viewerIsAdmin={viewerIsAdmin}
+        />
+      </Section>
 
       <Section title="Contact">
         <Field label="Email" value={person.email} />
