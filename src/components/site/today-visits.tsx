@@ -1,11 +1,10 @@
-import Link from "next/link";
 import type { DayVisit } from "@/lib/site-visits-data";
 import { formatTime24 } from "@/lib/format";
 
 // The "log for the day" under the who's-here board (Paul, 2026-09-10):
 // everyone who signed in today, with in / out / reason. Anything older
-// lives in Logs.
-export function TodayVisits({ visits, isStaff }: { visits: DayVisit[]; isStaff: boolean }) {
+// lives in Logs (linked from the Site Visitors page).
+export function TodayVisits({ visits }: { visits: DayVisit[] }) {
   return (
     <section className="flex flex-col gap-2">
       <h2 className="text-sm font-bold uppercase tracking-wide text-ink-muted">Today</h2>
@@ -26,14 +25,6 @@ export function TodayVisits({ visits, isStaff }: { visits: DayVisit[]; isStaff: 
         </ul>
       )}
 
-      {isStaff && (
-        <Link
-          href="/logs?tab=site"
-          className="text-sm font-semibold text-brand-ink self-start"
-        >
-          Earlier visits in Logs →
-        </Link>
-      )}
     </section>
   );
 }

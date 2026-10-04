@@ -8,12 +8,12 @@ const OK = "#3f9d6b";
 const INK = "#2C2C2A";
 const MUTED = "#6B6B68";
 
-function esc(s: string): string {
+export function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 }
 
 /** Wrap body HTML in a plain, mail-client-safe shell. */
-function shell(bodyHtml: string): string {
+export function shell(bodyHtml: string): string {
   return `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${INK};font-size:15px;line-height:1.5;max-width:520px;margin:0 auto;padding:8px">
 ${bodyHtml}
 <p style="color:${MUTED};font-size:12px;margin-top:28px">Cape Animal Protection Shelter</p>

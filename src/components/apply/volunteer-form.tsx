@@ -89,6 +89,7 @@ export function VolunteerForm() {
     parentName: "",
     parentPhone: "",
     parentEmail: "",
+    parentSignature: "",
     parentalConsent: false,
     experienceLevel: "",
     experienceOther: "",
@@ -299,6 +300,66 @@ export function VolunteerForm() {
         </div>
       </fieldset>
 
+      {isMinor && (
+        <fieldset className="flex flex-col gap-3 border border-warm rounded-[var(--radius)] p-4 bg-warm-tint">
+          <legend className="text-sm font-bold px-1">Parent or guardian</legend>
+          <p className="text-xs text-warm-ink">
+            You&apos;re under 18, so a parent or guardian must consent. We&apos;ll email them a
+            copy of what&apos;s been agreed, and CAPS will confirm before you can start.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Parent / guardian name">
+              <input
+                className={inputClass}
+                required
+                value={form.parentName}
+                onChange={(e) => set("parentName", e.target.value)}
+              />
+            </Field>
+            <Field label="Parent / guardian phone">
+              <input
+                type="tel"
+                inputMode="tel"
+                className={inputClass}
+                required
+                value={form.parentPhone}
+                onChange={(e) => set("parentPhone", e.target.value)}
+              />
+            </Field>
+          </div>
+          <Field label="Parent / guardian email" hint="We email their consent confirmation here.">
+            <input
+              type="email"
+              inputMode="email"
+              className={inputClass}
+              required
+              value={form.parentEmail}
+              onChange={(e) => set("parentEmail", e.target.value)}
+            />
+          </Field>
+          <Field label="Parent / guardian: type your full name to give consent">
+            <input
+              className={inputClass}
+              required
+              value={form.parentSignature}
+              onChange={(e) => set("parentSignature", e.target.value)}
+            />
+          </Field>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={form.parentalConsent}
+              onChange={(e) => set("parentalConsent", e.target.checked)}
+            />
+            <span>
+              I am the parent or guardian named above and I consent to this person volunteering
+              with CAPS.
+            </span>
+          </label>
+        </fieldset>
+      )}
+
       <fieldset className="flex flex-col gap-3 border border-line rounded-[var(--radius)] p-4">
         <legend className="text-sm font-bold px-1">Emergency contact</legend>
         <p className="text-xs text-ink-muted">
@@ -343,57 +404,6 @@ export function VolunteerForm() {
           </Field>
         </div>
       </fieldset>
-
-      {isMinor && (
-        <fieldset className="flex flex-col gap-3 border border-warm rounded-[var(--radius)] p-4 bg-warm-tint">
-          <legend className="text-sm font-bold px-1">Parent or guardian</legend>
-          <p className="text-xs text-warm-ink">
-            You&apos;re under 18, so a parent or guardian must consent. CAPS will confirm this
-            before you can start.
-          </p>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Parent / guardian name">
-              <input
-                className={inputClass}
-                required
-                value={form.parentName}
-                onChange={(e) => set("parentName", e.target.value)}
-              />
-            </Field>
-            <Field label="Parent / guardian phone">
-              <input
-                type="tel"
-                inputMode="tel"
-                className={inputClass}
-                required
-                value={form.parentPhone}
-                onChange={(e) => set("parentPhone", e.target.value)}
-              />
-            </Field>
-          </div>
-          <Field label="Parent / guardian email" hint="Optional.">
-            <input
-              type="email"
-              inputMode="email"
-              className={inputClass}
-              value={form.parentEmail}
-              onChange={(e) => set("parentEmail", e.target.value)}
-            />
-          </Field>
-          <label className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={form.parentalConsent}
-              onChange={(e) => set("parentalConsent", e.target.checked)}
-            />
-            <span>
-              I am the parent or guardian named above and I consent to this person volunteering
-              with CAPS.
-            </span>
-          </label>
-        </fieldset>
-      )}
 
       <RadioRows
         legend="Briefly describe your experience and confidence in handling dogs"
