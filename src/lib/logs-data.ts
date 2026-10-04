@@ -10,31 +10,49 @@ function titleCase(s: string): string {
   return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// The shelter is in Weipa (Queensland, UTC+10, no daylight saving). A bare
+// "YYYY-MM-DDT00:00:00" is read as UTC by the database, which put a local
+// day's early-morning walks in the previous day, so day boundaries carry the
+// +10:00 offset explicitly.
 function dayStart(d?: string) {
-  return d ? `${d}T00:00:00` : null;
+  return d ? `${d}T00:00:00+10:00` : null;
 }
 function dayEnd(d?: string) {
-  return d ? `${d}T23:59:59.999` : null;
+  return d ? `${d}T23:59:59.999+10:00` : null;
 }
 
-const ACTIVITY_TYPE: Record<
-  Exclude<LogTab, "medical" | "site" | "dogs" | "people">,
-  string[]
-> = {
+const ACTIVITY_TYPE: Record<string, string[]> = {
+  activity: ["walk", "yard", "bed_rest", "jail_break", "foster"],
   walks: ["walk"],
+  jail_break: ["jail_break"],
+  foster: ["foster"],
   homecare: ["jail_break", "foster"],
   yard: ["yard"],
   bed_rest: ["bed_rest"],
 };
 
+const TYPE_LABEL: Record<string, string> = {
+  walk: "Walk",
+  yard: "Yard",
+  bed_rest: "Bed Rest",
+  jail_break: "Jail Break",
+  foster: "Foster",
+};
+
 async function activityLog(tab: keyof typeof ACTIVITY_TYPE, f: LogFilters): Promise<LogTable> {
   const supabase = await createClient();
+  // On the All activity tab the type chips narrow it; the other tabs are fixed.
+  const types =
+    tab === "activity" && f.types && f.types.length > 0
+      ? f.types.filter((t) => ACTIVITY_TYPE.activity.includes(t))
+      : ACTIVITY_TYPE[tab];
+
   let q = supabase
     .from("dog_activity")
     .select(
-      "id, type, started_at, ended_at, reason, entered_late, edited_at, dog:dogs!dog_activity_dog_id_fkey(name), person:people!dog_activity_person_id_fkey(first_name, surname)",
+      "id, type, started_at, ended_at, due_back, reason, notes, entered_late, edited_at, dog:dogs!dog_activity_dog_id_fkey(name), person:people!dog_activity_person_id_fkey(first_name, surname)",
     )
-    .in("type", ACTIVITY_TYPE[tab])
+    .in("type", types)
     .order("started_at", { ascending: false })
     .limit(LIMIT + 1);
 
@@ -44,6 +62,12 @@ async function activityLog(tab: keyof typeof ACTIVITY_TYPE, f: LogFilters): Prom
   if (to) q = q.lte("started_at", to);
   if (f.dogId) q = q.eq("dog_id", f.dogId);
   if (f.personId) q = q.eq("person_id", f.personId);
+  if (f.status === "open") q = q.is("ended_at", null);
+  if (f.status === "closed") q = q.not("ended_at", "is", null);
+  if (f.flag === "late") q = q.eq("entered_late", true);
+  if (f.flag === "edited") q = q.not("edited_at", "is", null);
+  const text = (f.q ?? "").trim().replace(/[%,()]/g, " ");
+  if (text) q = q.or(`reason.ilike.%${text}%,notes.ilike.%${text}%`);
 
   const { data, error } = await q;
   if (error) console.error("logs-data query failed", error);
@@ -52,7 +76,9 @@ async function activityLog(tab: keyof typeof ACTIVITY_TYPE, f: LogFilters): Prom
     type: string;
     started_at: string;
     ended_at: string | null;
+    due_back: string | null;
     reason: string | null;
+    notes: string | null;
     entered_late: boolean;
     edited_at: string | null;
     dog: { name: string } | null;
@@ -60,31 +86,39 @@ async function activityLog(tab: keyof typeof ACTIVITY_TYPE, f: LogFilters): Prom
   }>;
 
   const capped = raw.length > LIMIT;
-  const columns =
-    tab === "homecare"
-      ? ["Dog", "Type", "Carer", "Out", "In", "Duration", "Reason", "Flags"]
-      : ["Dog", tab === "walks" ? "Walker" : "Person", "Out", "In", "Duration", "Reason", "Flags"];
+  const showType = types.length > 1;
+  const personLabel =
+    tab === "walks" ? "Walker" : tab === "jail_break" || tab === "foster" || tab === "homecare" ? "Carer" : "Person";
+  const columns = ["Dog", ...(showType ? ["Type"] : []), personLabel, "Out", "In", "Duration", "Notes", "Flags"];
 
-  const rows = raw.slice(0, LIMIT).map((r) => {
+  const kept = raw.slice(0, LIMIT);
+  let minutes = 0;
+  const dogs = new Set<string>();
+  const rows = kept.map((r) => {
     const person = r.person ? `${r.person.first_name} ${r.person.surname}` : "";
-    const base: Record<string, string> = {
+    if (r.ended_at) minutes += Math.max(0, (new Date(r.ended_at).getTime() - new Date(r.started_at).getTime()) / 60_000);
+    if (r.dog?.name) dogs.add(r.dog.name);
+    const overdue = !r.ended_at && r.due_back && new Date(r.due_back) < new Date();
+    const row: Record<string, string> = {
       Dog: r.dog?.name ?? "",
       Out: formatLogDateTime(r.started_at),
       In: r.ended_at ? formatLogDateTime(r.ended_at) : "(still out)",
       Duration: r.ended_at ? formatDuration(r.started_at, r.ended_at) : "",
-      Reason: r.reason ?? "",
-      Flags: [r.entered_late && "late", r.edited_at && "edited"].filter(Boolean).join(", "),
+      Notes: [r.reason, r.notes].filter(Boolean).join(" · "),
+      Flags: [r.entered_late && "late", r.edited_at && "edited", overdue && "overdue"].filter(Boolean).join(", "),
     };
-    if (tab === "homecare") {
-      base.Type = r.type === "jail_break" ? "Jail break" : "Foster";
-      base.Carer = person;
-    } else {
-      base[tab === "walks" ? "Walker" : "Person"] = person;
-    }
-    return base;
+    if (showType) row.Type = TYPE_LABEL[r.type] ?? r.type;
+    row[personLabel] = person;
+    return row;
   });
 
-  return { columns, rows, capped };
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  const summary = rows.length
+    ? `${rows.length}${capped ? "+" : ""} record${rows.length === 1 ? "" : "s"} · ${h > 0 ? `${h}h ` : ""}${m}m total (returned only) · ${dogs.size} dog${dogs.size === 1 ? "" : "s"}`
+    : undefined;
+
+  return { columns, rows, capped, summary };
 }
 
 async function medicalLog(f: LogFilters): Promise<LogTable> {
@@ -252,7 +286,7 @@ export async function getLog(tab: LogTab, filters: LogFilters): Promise<LogTable
   if (tab === "site") return siteLog(filters);
   if (tab === "dogs") return dogsLog(filters);
   if (tab === "people") return peopleLog(filters);
-  return activityLog(tab, filters);
+  return activityLog(tab as keyof typeof ACTIVITY_TYPE, filters);
 }
 
 export async function getLogFilterOptions(): Promise<{

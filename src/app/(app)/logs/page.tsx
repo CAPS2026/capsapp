@@ -16,12 +16,16 @@ export default async function LogsPage({
   const sp = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
-  const tab: LogTab = isLogTab(one(sp.tab)) ? (one(sp.tab) as LogTab) : "walks";
+  const tab: LogTab = isLogTab(one(sp.tab)) ? (one(sp.tab) as LogTab) : "activity";
   const filters = {
     from: one(sp.from),
     to: one(sp.to),
     dogId: one(sp.dog),
     personId: one(sp.person),
+    types: (one(sp.types) ?? "").split(",").filter(Boolean),
+    status: one(sp.status) === "open" || one(sp.status) === "closed" ? (one(sp.status) as "open" | "closed") : undefined,
+    flag: one(sp.flag) === "late" || one(sp.flag) === "edited" ? (one(sp.flag) as "late" | "edited") : undefined,
+    q: one(sp.q),
   };
 
   const [data, options] = await Promise.all([getLog(tab, filters), getLogFilterOptions()]);
