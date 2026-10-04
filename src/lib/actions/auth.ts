@@ -1,6 +1,8 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { CAFE_COOKIE, UNLOCK_COOKIE } from "@/lib/cafe";
 import { linkPersonToAuthUser } from "@/lib/link-person";
 
 type Result = { ok: true } | { error: "not_registered" | "no_session" };
@@ -25,5 +27,11 @@ export async function completeCodeSignIn(): Promise<Result> {
     await supabase.auth.signOut();
     return { error: "not_registered" };
   }
+  // Proving who you are with an emailed code is stronger than the shared PIN,
+  // so a fresh sign-in leaves volunteer mode on this device. This is the
+  // way back in if the PIN is forgotten (Paul, 2026-10-04).
+  const jar = await cookies();
+  jar.delete(CAFE_COOKIE);
+  jar.delete(UNLOCK_COOKIE);
   return { ok: true };
 }
