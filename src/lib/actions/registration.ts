@@ -11,6 +11,7 @@ import {
   type RegisterResult,
 } from "@/lib/registration";
 import { sendEmail, siteUrl } from "@/lib/email";
+import { parentConsentEmail } from "@/lib/consent-email";
 import { DEFAULT_ADMIN_EMAIL, adminNotificationEmail, applicantAckEmail } from "@/lib/homecare";
 
 // Public, unauthenticated intake. Runs with the service-role client because
@@ -42,6 +43,8 @@ export async function registerVolunteer(input: {
   parentName: string;
   parentPhone: string;
   parentEmail: string;
+  /** Typed full name of the parent/guardian giving consent. */
+  parentSignature: string;
   parentalConsent: boolean;
   over18: boolean;
   interests: string[];
@@ -100,6 +103,10 @@ export async function registerVolunteer(input: {
       return {
         error: "Because you're under 18, please give a parent or guardian's name and phone number.",
       };
+    if (!clean(input.parentEmail) || !/^[^@s]+@[^@s]+.[^@s]+$/.test(clean(input.parentEmail)))
+      return { error: "Please give the parent or guardian's email address — we send them a copy of their consent." };
+    if (!clean(input.parentSignature))
+      return { error: "The parent or guardian needs to type their full name to give consent." };
     if (!input.parentalConsent)
       return {
         error: "A parent or guardian needs to tick the consent box for an under-18 to volunteer.",
@@ -145,6 +152,7 @@ export async function registerVolunteer(input: {
     parent_email: minor ? clean(input.parentEmail) || null : null,
     parental_consent: minor,
     parental_consent_date: minor ? today : null,
+    parent_signature_name: minor ? clean(input.parentSignature) : null,
     image_consent: input.imageConsent,
   };
 
@@ -154,6 +162,7 @@ export async function registerVolunteer(input: {
   // been applied yet. Retry without it so registration still works.
   if (personRes.error?.code === "42703") {
     delete personFields.image_consent;
+    delete personFields.parent_signature_name;
     personRes = await supabase.from("people").insert(personFields).select("id").single();
   }
 
@@ -239,6 +248,29 @@ export async function registerVolunteer(input: {
       jailBreakRoleId:
         (insertedRoles ?? []).find((r) => r.role === "jailbreak_carer")?.id ?? null,
     });
+  }
+
+  // Under-18: confirm to the parent/guardian what they've agreed to.
+  // Best-effort, never fails the registration.
+  if (minor) {
+    try {
+      const mail = parentConsentEmail({
+        parentName: clean(input.parentName),
+        parentSignature: clean(input.parentSignature),
+        parentPhone: clean(input.parentPhone),
+        childName: `${firstName} ${surname}`,
+        childDob: dob,
+        activities: interests,
+        wantsFoster: input.fosterInterest,
+        wantsJailBreak: input.jailBreakInterest,
+        imageConsent: input.imageConsent,
+        signedOn: today,
+      });
+      const r = await sendEmail({ to: clean(input.parentEmail), subject: mail.subject, text: mail.text, html: mail.html });
+      if (!r.ok) console.error("parent consent email failed:", r.error);
+    } catch (e) {
+      console.error("parent consent email threw:", e);
+    }
   }
 
   return { ok: true, status: minor ? "pending" : "active" };

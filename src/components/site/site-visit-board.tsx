@@ -49,7 +49,7 @@ function VisitRow({ visit }: { visit: OpenVisit }) {
         type="button"
         onClick={signOut}
         disabled={isPending}
-        className="h-9 px-4 rounded-full bg-danger text-white text-sm font-bold disabled:opacity-60 shrink-0"
+        className="h-9 px-4 rounded-full bg-warm text-ink text-sm font-bold disabled:opacity-60 shrink-0"
       >
         {isPending ? "…" : "Sign out"}
       </button>
