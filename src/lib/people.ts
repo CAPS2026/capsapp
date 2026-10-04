@@ -20,7 +20,7 @@ export const ROLE_BADGE_CLASS: Record<Role, string> = {
   jailbreak_carer: "bg-sun text-ink",
   foster_carer: "bg-warm text-ink",
   adopter: "bg-gray-tint text-ink-muted",
-  staff: "bg-ink text-white",
+  staff: "bg-[#2C2C2A] text-white",
   committee: "bg-[#6b7a99] text-white",
   admin: "bg-danger text-white",
 };
