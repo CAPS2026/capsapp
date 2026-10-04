@@ -52,12 +52,6 @@ export async function getPeopleList(): Promise<PersonListItem[]> {
     .order("first_name");
   if (error) console.error("getPeopleList failed", error);
 
-  // Julie's staff app keeps a placeholder "Guest" person for its one-off
-  // cover sign-in tile (org_settings.staff_guest_person_id). It isn't a real
-  // person, so it's left off this list. Read-only; nothing is changed there.
-  const { data: settings } = await supabase.from("org_settings").select("staff_guest_person_id").maybeSingle();
-  const guestId = (settings?.staff_guest_person_id as string | null | undefined) ?? null;
-
   // Walk stats per person (all walks, newest data wins for "last walk").
   const { data: walkRows, error: walkErr } = await supabase
     .from("dog_activity")
@@ -92,7 +86,7 @@ export async function getPeopleList(): Promise<PersonListItem[]> {
     photo_path: string | null;
     updated_at: string | null;
     person_roles: RoleRow[] | null;
-  }>).filter((p) => p.id !== guestId).map((p) => {
+  }>).map((p) => {
     const roles = p.person_roles ?? [];
     const active = roles.filter((r) => r.status === "active");
     const age = ageFromDob(p.date_of_birth);

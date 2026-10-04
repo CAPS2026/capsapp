@@ -26,6 +26,43 @@ function revalidate(personId: string) {
   revalidatePath(`/people/${personId}`);
 }
 
+/**
+ * Staff and their shift history belong to the Staff app (Julie's side):
+ * their roster, shifts, ticked tasks, handover notes, leave and medication
+ * records all hang off the person row and are deleted with it. So from the
+ * People area a person with a staff/admin role, or ANY shift record, can't
+ * be deleted, merged away or archived (Paul, 2026-10-04). Returns a reason
+ * to show, or null if it's safe. Fails closed if a check can't run.
+ */
+async function staffProtection(personId: string): Promise<string | null> {
+  const admin = createAdminClient();
+  const why = "Staff and their shift history are managed in the Staff app, so this can't be done from People.";
+
+  const { count: roleCount, error: roleErr } = await admin
+    .from("person_roles")
+    .select("id", { count: "exact", head: true })
+    .eq("person_id", personId)
+    .in("role", ["staff", "admin"]);
+  if (roleErr) return "Couldn't check whether this person is staff, so nothing was changed.";
+  if (roleCount) return why;
+
+  const checks: [string, string][] = [
+    ["shift_log", "person_id"],
+    ["handover_note", "person_id"],
+    ["health_concern", "person_id"],
+    ["leave_request", "person_id"],
+    ["task_instance", "actioned_by"],
+    ["task_instance", "claimed_by"],
+    ["medication_dose", "actioned_by"],
+  ];
+  for (const [table, col] of checks) {
+    const { count, error } = await admin.from(table).select("id", { count: "exact", head: true }).eq(col, personId);
+    if (error) return "Couldn't check this person's shift history, so nothing was changed.";
+    if (count) return why;
+  }
+  return null;
+}
+
 /** Move a pending role to active (docs/ui-flows.md §8 — approve). */
 export async function approveRole(personRoleId: string, personId: string): Promise<Result> {
   const me = await requireStaff();
@@ -87,6 +124,8 @@ export async function declineRole(personRoleId: string, personId: string): Promi
 export async function archivePerson(personId: string): Promise<Result> {
   const me = await requireStaff();
   if (!me) return { error: "Staff only." };
+  const blocked = await staffProtection(personId);
+  if (blocked) return { error: blocked };
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -243,98 +282,39 @@ export async function setVolunteerPlus(personId: string, on: boolean): Promise<R
 }
 
 /**
- * Add a staff member directly (admin only) — the counterpart to public
- * self-registration, for people who need Staff-area access without going
- * through the volunteer application form. Grants roles immediately (no
- * pending/approve step, unlike jailbreak_carer/foster_carer which need a
- * home/yard check first — those still go through the normal apply flow,
- * never through here). "Volunteer" can be granted alongside so the same
- * person shows up as a walker on the dog-activity side, since that picker
- * (`listActiveVolunteers`) only looks at the volunteer role, not staff.
+ * Committee membership (Paul, 2026-10-04): granted by admins only. A
+ * committee member can see everything staff can (they sign in with their
+ * email, like Volunteer +) but isn't a caretaker and isn't rostered.
  */
-export async function createStaffMember(input: {
-  firstName: string;
-  surname: string;
-  email: string;
-  phone: string;
-  dateOfBirth: string;
-  address: string;
-  ecName: string;
-  ecPhone: string;
-  ecRelationship: string;
-  ecEmail: string;
-  medicalIssues: string;
-  roles: { admin: boolean; staff: boolean; volunteer: boolean };
-}): Promise<Result> {
+export async function setCommittee(personId: string, on: boolean): Promise<Result> {
   const me = await requireAdmin();
   if (!me) return { error: "Admin only." };
 
-  const firstName = input.firstName.trim();
-  const surname = input.surname.trim();
-  if (!firstName || !surname) return { error: "First name and surname are required." };
-
-  const email = input.email.trim().toLowerCase();
-  if (!email) return { error: "Email is required — it's how they'll sign in." };
-  if (!EMAIL_RE.test(email)) return { error: "That email address doesn't look right." };
-
-  const phone = input.phone.trim();
-  const phoneDigits = phone.replace(/\D/g, "");
-  if (phone && (phoneDigits.length < 8 || phoneDigits.length > 15))
-    return { error: "That phone number doesn't look right." };
-  const ecEmail = input.ecEmail.trim().toLowerCase();
-  if (ecEmail && !EMAIL_RE.test(ecEmail)) return { error: "The emergency contact email doesn't look right." };
-
-  if (!input.roles.staff && !input.roles.admin && !input.roles.volunteer)
-    return { error: "Pick at least one role." };
-
   const supabase = await createClient();
-
-  const { data: person, error: personError } = await supabase
-    .from("people")
-    .insert({
-      first_name: firstName,
-      surname,
-      email,
-      phone: phone || null,
-      date_of_birth: input.dateOfBirth || null,
-      address: input.address.trim() || null,
-      ec_name: input.ecName.trim() || null,
-      ec_phone: input.ecPhone.trim() || null,
-      ec_relationship: input.ecRelationship.trim() || null,
-      ec_email: ecEmail || null,
-    })
-    .select("id")
-    .single();
-
-  if (personError) {
-    if (personError.code === "23505") return { error: "Someone already has that email address." };
-    return { error: personError.message };
+  if (on) {
+    const { data: person } = await supabase.from("people").select("email").eq("id", personId).maybeSingle();
+    if (!person?.email) return { error: "Add an email address first — committee members sign in with it." };
+    const { error } = await supabase.from("person_roles").upsert(
+      {
+        person_id: personId,
+        role: "committee",
+        status: "active",
+        approved_by: me.id,
+        granted_on: today(),
+        ended_on: null,
+      },
+      { onConflict: "person_id,role" },
+    );
+    if (error) return { error: error.message };
+  } else {
+    const { error } = await supabase
+      .from("person_roles")
+      .update({ status: "exited", ended_on: today() })
+      .eq("person_id", personId)
+      .eq("role", "committee");
+    if (error) return { error: error.message };
   }
-
-  const roles: Array<"admin" | "staff" | "volunteer"> = [];
-  if (input.roles.admin) roles.push("admin");
-  if (input.roles.staff) roles.push("staff");
-  if (input.roles.volunteer) roles.push("volunteer");
-
-  const { error: rolesError } = await supabase.from("person_roles").insert(
-    roles.map((role) => ({
-      person_id: person.id,
-      role,
-      status: "active" as const,
-      approved_by: me.id,
-      granted_on: today(),
-    })),
-  );
-  if (rolesError) return { error: rolesError.message };
-
-  if (input.medicalIssues.trim()) {
-    const { error: vpError } = await supabase
-      .from("volunteer_profile")
-      .upsert({ person_id: person.id, medical_issues: input.medicalIssues.trim() });
-    if (vpError) return { error: vpError.message };
-  }
-
-  revalidatePath("/people");
+  revalidate(personId);
   return {};
 }
 
@@ -351,6 +331,10 @@ export async function mergePeople(keepId: string, removeId: string): Promise<Res
   if (keepId === removeId) return { error: "Pick two different records." };
   if (removeId === me.id)
     return { error: "That would delete your own record — keep yours and remove the other one." };
+
+  // The removed record is deleted, along with anything tied to it.
+  const blocked = await staffProtection(removeId);
+  if (blocked) return { error: blocked };
 
   const admin = createAdminClient();
   const { error } = await admin.rpc("merge_people", { p_keep: keepId, p_remove: removeId });
@@ -371,6 +355,8 @@ export async function deletePerson(personId: string): Promise<Result> {
   const me = await requireAdmin();
   if (!me) return { error: "Admin only." };
   if (me.id === personId) return { error: "You can't delete your own record." };
+  const blocked = await staffProtection(personId);
+  if (blocked) return { error: blocked };
 
   const admin = createAdminClient();
 

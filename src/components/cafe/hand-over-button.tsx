@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { enterCafeMode } from "@/lib/actions/cafe";
 
-// Shown in the header for a staff account that is NOT already in café
+// (Called "Hand over" until 2026-10-04 — renamed because "handover" is the
+// staff app's own word for shift notes.) Shown in the header for a staff account that is NOT already in café
 // mode. Tapping it drops the shared device to the limited volunteer
 // surface; getting back needs the staff PIN.
 export function HandOverButton({ pinIsSet }: { pinIsSet: boolean }) {
@@ -28,7 +29,7 @@ export function HandOverButton({ pinIsSet }: { pinIsSet: boolean }) {
         onClick={() => dialogRef.current?.showModal()}
         className="text-sm font-semibold text-brand-ink underline underline-offset-2"
       >
-        Hand over
+        Staff mode · switch to volunteer mode
       </button>
 
       <dialog
@@ -37,11 +38,11 @@ export function HandOverButton({ pinIsSet }: { pinIsSet: boolean }) {
         onClick={(e) => e.target === e.currentTarget && dialogRef.current?.close()}
       >
         <div className="flex flex-col gap-3 p-5">
-          <h2 className="font-bold text-lg">Hand this device to volunteers?</h2>
+          <h2 className="font-bold text-lg">Switch to volunteer mode?</h2>
           <p className="text-sm text-ink-muted">
             The app switches to the volunteer surface — walk and yard check in/out, sign-in,
             basic dog info. Confidential notes, the People area, placements, reports and
-            deleting are hidden until someone enters the staff PIN.
+            deleting are hidden until someone enters the staff PIN to return to staff mode.
           </p>
           {!pinIsSet && (
             <p className="text-sm text-warm-ink font-semibold">
@@ -64,7 +65,7 @@ export function HandOverButton({ pinIsSet }: { pinIsSet: boolean }) {
                 disabled={isPending}
                 className="h-10 px-4 rounded-[var(--radius)] bg-brand text-white font-bold disabled:opacity-60"
               >
-                {isPending ? "Switching…" : "Hand over"}
+                {isPending ? "Switching…" : "Switch to volunteer mode"}
               </button>
             ) : (
               <Link

@@ -11,7 +11,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect(`/login?next=${encodeURIComponent(pathname)}`);
   }
 
-  // Only relevant for the "Hand over" prompt, which only staff see.
+  // Only relevant for the "Switch to volunteer mode" prompt, which only staff see.
   const pinIsSet = person.isStaff ? await staffPinIsSet() : false;
 
   return (

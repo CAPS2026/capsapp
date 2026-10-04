@@ -131,10 +131,14 @@ export async function listActiveVolunteers(): Promise<{ id: string; name: string
     .select(
       "person:people!person_roles_person_id_fkey(id, first_name, surname, volunteer_profile(interests))",
     )
-    .eq("role", "volunteer")
+    .in("role", ["volunteer", "staff"])
     .eq("status", "active");
   if (error) console.error("listActiveVolunteers failed", error);
 
+  // Staff (caretakers) can walk dogs too, so they're in the walking list
+  // alongside volunteers (Paul, 2026-10-04) — but NOT in the Jail Break /
+  // Foster carer lists, which need an approved carer role.
+  const seen = new Set<string>();
   return ((data ?? []) as unknown as Array<{
     person: {
       id: string;
@@ -144,6 +148,8 @@ export async function listActiveVolunteers(): Promise<{ id: string; name: string
     };
   }>)
     .filter((r) => {
+      if (seen.has(r.person.id)) return false;
+      seen.add(r.person.id);
       const interests = r.person.volunteer_profile?.interests ?? [];
       return interests.length === 0 || interests.includes("dog_walking");
     })
