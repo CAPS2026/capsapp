@@ -137,7 +137,7 @@ export function ActivitySection({
                 }
               />
               {selected.dueBack && <Row label="Due back" value={formatFullDateTime(selected.dueBack)} />}
-              {selected.reason && <Row label="Reason" value={selected.reason} />}
+              {selected.reason && <Row label={selected.type === "yard" ? "Yard" : "Notes"} value={selected.reason} />}
               {selected.enteredLate && <Row label="Flag" value="Logged after the fact" />}
               {selected.editedAt && <Row label="Edited" value={formatDate(selected.editedAt)} />}
             </dl>

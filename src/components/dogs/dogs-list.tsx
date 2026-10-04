@@ -204,6 +204,7 @@ function DogCard({
             dogId={dog.id}
             mode="bring_in"
             label={endActionLabel(dog.status)}
+            overdue={!!dog.current.dueBack && new Date(dog.current.dueBack) < new Date()}
             canKiosk={canKiosk}
             currentPersonId={currentPersonId}
             currentPersonName={currentPersonName}
@@ -265,7 +266,7 @@ function CardLine({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSett
     }
     case "available":
       return (
-        <p className="text-xs truncate text-ink-muted">
+        <p className="text-xs truncate text-ink">
           {dog.lastWalkAt
             ? `Last walk: ${daysAgoLabel(dog.lastWalkAt)}, 4wk time: ${formatHoursMinutes(dog.fourWeekWalkMinutes)}`
             : "Never walked"}
@@ -274,7 +275,7 @@ function CardLine({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSett
     case "bed_rest":
       if (!c) return null;
       return (
-        <p className="text-xs text-ink-muted">
+        <p className="text-xs text-ink">
           {formatStartedLine("Start", c.startedAt)}
           {c.dueBack && <> · {formatStartedLine("Due End", c.dueBack)}</>}
           {c.dueBack && <OverdueFlag dueBack={c.dueBack} />}
@@ -285,11 +286,16 @@ function CardLine({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSett
     case "fostered":
       if (!c) return null;
       return (
-        <p className="text-xs text-ink-muted">
-          With: {c.personName ?? "someone"} · {formatStartedLine("Start", c.startedAt)}
-          {c.dueBack && <> · {formatStartedLine("Due End", c.dueBack)}</>}
-          {c.dueBack && <OverdueFlag dueBack={c.dueBack} />} · Time out: {formatDaysHoursOut(c.startedAt)}
-        </p>
+        <div className="text-xs text-ink">
+          <p>
+            With: {c.personName ?? "someone"} · Time out: {formatDaysHoursOut(c.startedAt)}
+          </p>
+          <p>
+            {formatStartedLine("Start", c.startedAt)}
+            {c.dueBack && <> · {formatStartedLine("Due End", c.dueBack)}</>}
+            {c.dueBack && <OverdueFlag dueBack={c.dueBack} />}
+          </p>
+        </div>
       );
     default:
       return null;

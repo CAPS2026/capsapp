@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { StartPlacementDialog, type PlacementType } from "@/components/dogs/start-placement-dialog";
-import { ManualWalkDialog } from "@/components/dogs/manual-walk-dialog";
+import { ManualEntryDialog } from "@/components/dogs/manual-entry-dialog";
 
 type MenuAction = PlacementType | "manual";
 
@@ -42,7 +42,7 @@ export function ActionMenu({
 
   if (!canKiosk) {
     return (
-      <ManualWalkDialogTrigger
+      <ManualEntryTrigger
         dogId={dogId}
         canKiosk={false}
         currentPersonId={currentPersonId}
@@ -72,7 +72,7 @@ export function ActionMenu({
         onClick={(e) => e.target === e.currentTarget && sheetRef.current?.close()}
       >
         <div className="flex flex-col p-2" onClick={(e) => e.stopPropagation()}>
-          <p className="text-xs font-bold uppercase tracking-wide text-ink-muted px-3 pt-2 pb-1">Take out</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-ink-muted px-3 pt-2 pb-1">Start activity</p>
           {rows.map((row) => (
             <button
               key={row.action}
@@ -110,8 +110,9 @@ export function ActionMenu({
           onClose={() => setActive(null)}
         />
       ))}
-      <ManualWalkDialog
+      <ManualEntryDialog
         dogId={dogId}
+        isStaff={isStaff}
         canKiosk={canKiosk}
         currentPersonId={currentPersonId}
         currentPersonName={currentPersonName}
@@ -123,7 +124,7 @@ export function ActionMenu({
 }
 
 /** Plain-volunteer case: a small trigger, no bottom sheet. */
-function ManualWalkDialogTrigger({
+function ManualEntryTrigger({
   dogId,
   canKiosk,
   currentPersonId,
@@ -144,12 +145,13 @@ function ManualWalkDialogTrigger({
           e.stopPropagation();
           setIsOpen(true);
         }}
-        className="text-xs text-ink-muted underline underline-offset-2"
+        className="text-xs text-ink underline underline-offset-2"
       >
         Manual entry
       </button>
-      <ManualWalkDialog
+      <ManualEntryDialog
         dogId={dogId}
+        isStaff={false}
         canKiosk={canKiosk}
         currentPersonId={currentPersonId}
         currentPersonName={currentPersonName}

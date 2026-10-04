@@ -21,6 +21,7 @@ export function DogActionButton({
   dogId,
   mode,
   label,
+  overdue = false,
   canKiosk,
   currentPersonId,
   currentPersonName,
@@ -28,6 +29,8 @@ export function DogActionButton({
   dogId: string;
   mode: "walk" | "bring_in";
   label: string;
+  /** End button only: turns red once a due-back time has passed (blue otherwise). */
+  overdue?: boolean;
   canKiosk: boolean;
   currentPersonId: string;
   currentPersonName: string;
@@ -59,7 +62,7 @@ export function DogActionButton({
         onClick={handleClick}
         disabled={isPending}
         className={`h-9 px-4 rounded-full text-sm font-bold text-white disabled:opacity-60 ${
-          mode === "walk" ? "bg-ok" : "bg-danger"
+          mode === "walk" ? "bg-ok" : overdue ? "bg-danger" : "bg-brand"
         }`}
       >
         {isPending ? "…" : label}

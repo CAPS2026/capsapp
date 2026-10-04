@@ -165,11 +165,11 @@ export function formatHoursMinutes(totalMinutes: number): string {
   return `${h}:${String(m).padStart(2, "0")}`;
 }
 
-/** Timer colour per docs/design.md: muted -> warm past the alert threshold -> danger at ~2x. */
+/** Timer colour per docs/design.md: ink -> warm past the alert threshold -> danger at ~2x. */
 export function timerColor(minutesElapsed: number, alertAfterMinutes: number): string {
   if (minutesElapsed >= alertAfterMinutes * 2) return "var(--danger)";
   if (minutesElapsed >= alertAfterMinutes) return "var(--warm)";
-  return "var(--ink-muted)";
+  return "var(--ink)";
 }
 
 /** "2y 3m" / "5 months" style span between two dates — used for age and time-with-CAPS. */
