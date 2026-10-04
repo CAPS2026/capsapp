@@ -65,8 +65,8 @@ async function staffProtection(personId: string): Promise<string | null> {
 
 /** Move a pending role to active (docs/ui-flows.md §8 — approve). */
 export async function approveRole(personRoleId: string, personId: string): Promise<Result> {
-  const me = await requireStaff();
-  if (!me) return { error: "Staff only." };
+  const me = await requireAdmin();
+  if (!me) return { error: "Only an admin can approve or decline." };
 
   const supabase = await createClient();
 
@@ -100,8 +100,8 @@ export async function approveRole(personRoleId: string, personId: string): Promi
 }
 
 export async function declineRole(personRoleId: string, personId: string): Promise<Result> {
-  const me = await requireStaff();
-  if (!me) return { error: "Staff only." };
+  const me = await requireAdmin();
+  if (!me) return { error: "Only an admin can approve or decline." };
 
   const supabase = await createClient();
   const { error } = await supabase

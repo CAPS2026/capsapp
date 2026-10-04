@@ -52,22 +52,6 @@ export function AppShell({
         ? "max-w-3xl"
         : "max-w-lg";
 
-  const accountLinks = (
-    <div className="flex items-center gap-3 shrink-0">
-      {person.isAdmin && (
-        <Link href="/settings" aria-label="Settings" className="text-lg leading-none text-ink-muted">
-          ⚙
-        </Link>
-      )}
-      {person.isStaff && <HandOverButton pinIsSet={pinIsSet} />}
-      <form action="/auth/signout" method="post">
-        <button type="submit" className="text-sm font-semibold text-brand-ink underline underline-offset-2">
-          Sign out
-        </button>
-      </form>
-    </div>
-  );
-
   return (
     <div className="flex-1 flex flex-col min-h-screen">
       <IdleGuard />
@@ -87,23 +71,50 @@ export function AppShell({
           </div>
           {/* Staff and admins only: one tap over to the staff app, in the same
               place and colours as the "Dog app" button over there. */}
-          {person.isStaff ? (
+          {person.isStaff && (
             <Link
               href="/shift"
               className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#006AA7] px-5 py-[9px] text-[17px] font-extrabold leading-6 text-[#FECC02]"
             >
               Staff app <span aria-hidden="true">&rarr;</span>
             </Link>
-          ) : (
-            accountLinks
           )}
         </div>
-        {person.isStaff && (
-          <div className={`${shellWidth} mx-auto flex items-center justify-end px-4 pb-1.5 -mt-1`}>
-            {accountLinks}
-          </div>
-        )}
       </header>
+
+      {/* One tidy bar under the header for the signed-in account: the mode
+          label and switch on the left/centre, settings and sign out on the
+          right. In volunteer mode the CafeBar below takes over the mode part. */}
+      <div className="bg-gray-tint border-b border-line">
+        <div className={`${shellWidth} mx-auto flex items-center gap-3 px-4 h-11`}>
+          {person.isStaff ? (
+            <>
+              <span className="hidden sm:inline text-xs font-bold uppercase tracking-wide text-ink-muted">
+                Staff Mode
+              </span>
+              <HandOverButton pinIsSet={pinIsSet} />
+            </>
+          ) : (
+            <span />
+          )}
+          <div className="ml-auto flex items-center gap-4">
+            {person.isAdmin && (
+              <Link
+                href="/settings"
+                aria-label="Settings"
+                className="text-lg leading-none text-ink-muted focus:outline-none"
+              >
+                ⚙
+              </Link>
+            )}
+            <form action="/auth/signout" method="post">
+              <button type="submit" className="text-sm font-semibold text-brand-ink underline underline-offset-2">
+                Sign out
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
 
       {person.cafeMode && <CafeBar />}
 

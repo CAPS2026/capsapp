@@ -157,3 +157,78 @@ export async function getMergeCandidates(excludeId: string): Promise<MergeCandid
     };
   });
 }
+
+export type PendingApproval = {
+  roleId: string;
+  personId: string;
+  personName: string;
+  role: Role;
+  /** When they applied (homecare application date, else the record's created date). */
+  appliedOn: string | null;
+  isMinor: boolean;
+  /** Set when Approve can't be used yet, with where to go to fix it. */
+  blockedReason?: string;
+  blockedHref?: string;
+};
+
+/** Everything waiting on an approval, oldest first — the People page's
+ *  Approvals list. Foster is blocked until a home check has passed. */
+export async function getPendingApprovals(): Promise<PendingApproval[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("person_roles")
+    .select(
+      "id, role, status, person:people!person_roles_person_id_fkey(id, first_name, surname, nickname, date_of_birth, created_at)",
+    )
+    .eq("status", "pending");
+  if (error) console.error("getPendingApprovals failed", error);
+
+  const rows = (data ?? []) as unknown as Array<{
+    id: string;
+    role: Role;
+    person: {
+      id: string;
+      first_name: string;
+      surname: string;
+      nickname: string | null;
+      date_of_birth: string | null;
+      created_at: string | null;
+    } | null;
+  }>;
+  const ids = [...new Set(rows.filter((r) => r.person).map((r) => r.person!.id))];
+  const { data: hps, error: hpErr } = ids.length
+    ? await supabase
+        .from("homecare_profile")
+        .select("person_id, applied_on, yard_check_done, yard_check_outcome")
+        .in("person_id", ids)
+    : { data: [], error: null };
+  if (hpErr) console.error("getPendingApprovals homecare_profile failed", hpErr);
+  const hpBy = new Map(
+    ((hps ?? []) as Array<{ person_id: string; applied_on: string | null; yard_check_done: boolean | null; yard_check_outcome: string | null }>).map(
+      (h) => [h.person_id, h],
+    ),
+  );
+
+  return rows
+    .filter((r) => r.person)
+    .map((r) => {
+      const p = r.person!;
+      const hp = hpBy.get(p.id);
+      const age = ageFromDob(p.date_of_birth);
+      const out: PendingApproval = {
+        roleId: r.id,
+        personId: p.id,
+        personName: p.nickname ? `${p.nickname} (${p.first_name} ${p.surname})` : `${p.first_name} ${p.surname}`.trim(),
+        role: r.role,
+        appliedOn: hp?.applied_on ?? p.created_at,
+        isMinor: age !== null && age < 18,
+      };
+      if (r.role === "foster_carer" && !hp?.yard_check_done) {
+        out.blockedReason =
+          hp?.yard_check_outcome === "improvements_needed" ? "Home check found improvements needed." : "Needs a home check first.";
+        out.blockedHref = `/people/${p.id}/home-check`;
+      }
+      return out;
+    })
+    .sort((a, b) => (a.appliedOn ?? "").localeCompare(b.appliedOn ?? ""));
+}
