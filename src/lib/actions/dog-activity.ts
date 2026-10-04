@@ -201,7 +201,7 @@ export async function startPlacement(input: {
     return { error: "Due back is required." };
   }
   if (input.type === "bed_rest" && !input.reason?.trim()) {
-    return { error: "Reason is required for bed rest." };
+    return { error: "Notes are required for bed rest." };
   }
 
   let dueBackIso: string | null = null;
@@ -232,23 +232,40 @@ export async function startPlacement(input: {
 }
 
 /**
- * Manual entry (docs/ui-flows.md §6, "Dog was walked, never checked out") —
- * the old app's own name for this (`Is_Manual_Entry` on the Walks table) is
- * kept here rather than inventing new wording. Always recorded as
- * `entered_late` since by definition it's added after the fact.
+ * Manual entry (docs/ui-flows.md §6) — the old app's own name for logging
+ * something that already happened (`Is_Manual_Entry` on the Walks table).
+ * Since 2026-10-04 it covers every activity type, not just walks (Paul):
+ * the person picks the type, and who may log which mirrors RLS — a plain
+ * volunteer only a walk for themselves, a kiosk operator also yard, staff
+ * everything. Always recorded as `entered_late` since by definition it's
+ * added after the fact. Jail break / foster need an active carer of that
+ * type; yard and bed rest have no person. For bed rest the Notes text is
+ * stored in `reason`, same as Start Bed Rest.
  */
-export async function logManualWalk(input: {
+export async function logManualActivity(input: {
   dogId: string;
-  personId: string;
+  type: "walk" | "yard" | "bed_rest" | "jail_break" | "foster";
+  personId?: string;
   checkOut: string;
   checkIn: string;
   notes: string;
+  /** Which yard, for type "yard". */
+  yard?: string;
 }): Promise<ActionResult> {
   const person = await getCurrentPerson();
   if (!person || !person.id) return { error: "Not signed in." };
-  if (!person.canKiosk && input.personId !== person.id) {
+
+  const { type } = input;
+  const needsPerson = type === "walk" || type === "jail_break" || type === "foster";
+  if (needsPerson && !input.personId) return { error: type === "walk" ? "Pick who walked the dog." : "Pick a carer." };
+  if (type === "walk" && !person.canKiosk && input.personId !== person.id) {
     return { error: "You can only log a walk for yourself." };
   }
+  if (type === "yard" && !person.canKiosk) return { error: "You can't log this." };
+  if ((type === "bed_rest" || type === "jail_break" || type === "foster") && !person.isStaff) {
+    return { error: "You can't log this." };
+  }
+  if (type === "bed_rest" && !input.notes.trim()) return { error: "Notes are required for bed rest." };
 
   const checkOut = new Date(input.checkOut);
   const checkIn = new Date(input.checkIn);
@@ -267,12 +284,14 @@ export async function logManualWalk(input: {
   const supabase = await createClient();
   const { error } = await supabase.from("dog_activity").insert({
     dog_id: input.dogId,
-    type: "walk",
-    person_id: input.personId,
+    type,
+    person_id: needsPerson ? input.personId : null,
+    placed_by: type === "walk" ? null : person.id,
     started_at: checkOut.toISOString(),
     ended_at: checkIn.toISOString(),
     entered_late: true,
-    notes: input.notes.trim() || null,
+    reason: type === "yard" ? input.yard?.trim() || null : type === "bed_rest" ? input.notes.trim() : null,
+    notes: type === "bed_rest" ? null : input.notes.trim() || null,
   });
 
   if (error) return { error: friendlyError(error) };

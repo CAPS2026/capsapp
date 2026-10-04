@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { listActiveCarers, startPlacement } from "@/lib/actions/dog-activity";
-import { DateTimeField } from "@/components/dogs/datetime-field";
+import { DateTimeField, DaysAheadSelect, TimeOfDayField } from "@/components/dogs/datetime-field";
 import { formatTime24 } from "@/lib/format";
 
 export type PlacementType = "yard" | "bed_rest" | "jail_break" | "foster";
@@ -15,12 +15,12 @@ const TYPE_LABEL: Record<PlacementType, string> = {
   foster: "Foster",
 };
 
-const YARD_OPTIONS = ["Yard 1", "Yard 2"];
+export const YARD_OPTIONS = ["Yard 1", "Yard 2"];
 
 // A countdown reads much better than picking an exact date+time for
 // something that's almost always "a couple of hours from now" — Paul's
-// feedback (2026-09-07): the date/time entry for Yard "didn't work" (as in,
-// wasn't the right tool), a duration countdown would be.
+// feedback (2026-09-07). Since 2026-10-04 there's also an "at a specific
+// time" mode (e.g. back by 14:00) for when the day is running late.
 const YARD_DURATIONS = [
   { label: "15 min", minutes: 15 },
   { label: "30 min", minutes: 30 },
@@ -29,6 +29,15 @@ const YARD_DURATIONS = [
   { label: "3 hr", minutes: 180 },
   { label: "4 hr", minutes: 240 },
 ];
+
+/** Today at "HH:MM" (local), or null if not set. */
+function todayAt(hhmm: string): Date | null {
+  if (!hhmm) return null;
+  const [h, m] = hhmm.split(":").map(Number);
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d;
+}
 
 // Controlled — opened from ActionMenu with a fixed type, one focused form
 // per action (Start Yard / Start Bed Rest / Start Jail Break / Start
@@ -48,7 +57,10 @@ export function StartPlacementDialog({
   const [carers, setCarers] = useState<{ id: string; name: string }[]>([]);
   const [personId, setPersonId] = useState("");
   const [dueBack, setDueBack] = useState("");
-  const [reason, setReason] = useState(type === "yard" ? YARD_OPTIONS[0] : "");
+  const [yard, setYard] = useState(YARD_OPTIONS[0]);
+  const [yardMode, setYardMode] = useState<"in" | "at">("in");
+  const [yardMinutes, setYardMinutes] = useState<number | null>(null);
+  const [yardAt, setYardAt] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -59,7 +71,10 @@ export function StartPlacementDialog({
       setError(null);
       setPersonId("");
       setDueBack("");
-      setReason(type === "yard" ? YARD_OPTIONS[0] : "");
+      setYard(YARD_OPTIONS[0]);
+      setYardMode("in");
+      setYardMinutes(null);
+      setYardAt("");
       setNotes("");
       if (type === "jail_break" || type === "foster") listActiveCarers(type).then(setCarers);
       dialogRef.current?.showModal();
@@ -68,17 +83,35 @@ export function StartPlacementDialog({
     }
   }, [isOpen, type]);
 
+  /** The due-back instant for the current form state, or an error message. */
+  function resolveDueBack(): { iso: string } | { error: string } {
+    if (type === "yard") {
+      if (yardMode === "in") {
+        if (yardMinutes === null) return { error: "Pick how long, or switch to a specific time." };
+        return { iso: new Date(Date.now() + yardMinutes * 60_000).toISOString() };
+      }
+      const at = todayAt(yardAt);
+      if (!at) return { error: "Pick the time they're due back." };
+      if (at <= new Date()) return { error: "That time has already passed today." };
+      return { iso: at.toISOString() };
+    }
+    if (!dueBack) return { error: "Pick a Due End date and time." };
+    return { iso: new Date(dueBack).toISOString() };
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    const due = resolveDueBack();
+    if ("error" in due) return setError(due.error);
     startTransition(async () => {
       const result = await startPlacement({
         dogId,
         type,
         personId: personId || undefined,
-        dueBack: dueBack ? new Date(dueBack).toISOString() : undefined,
-        reason: reason || undefined,
-        notes: notes || undefined,
+        dueBack: due.iso,
+        reason: type === "yard" ? yard : type === "bed_rest" ? notes : undefined,
+        notes: type === "jail_break" || type === "foster" ? notes : undefined,
       });
       if (result.error) setError(result.error);
       else {
@@ -89,8 +122,15 @@ export function StartPlacementDialog({
   }
 
   const needsCarer = type === "jail_break" || type === "foster";
-  const needsReason = type === "bed_rest";
-  const needsYardPicker = type === "yard";
+  const isYard = type === "yard";
+  const yardPreview =
+    yardMode === "in"
+      ? yardMinutes !== null
+        ? formatTime24(new Date(Date.now() + yardMinutes * 60_000).toISOString())
+        : null
+      : todayAt(yardAt)
+        ? formatTime24(todayAt(yardAt)!.toISOString())
+        : null;
 
   return (
     <dialog
@@ -102,12 +142,12 @@ export function StartPlacementDialog({
       <form onSubmit={handleSubmit} className="flex flex-col gap-3 p-5" onClick={(e) => e.stopPropagation()}>
         <h2 className="font-bold text-lg">Start {TYPE_LABEL[type]}</h2>
 
-        {needsYardPicker && (
+        {isYard && (
           <label className="flex flex-col gap-1 text-sm">
             Which yard
             <select
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
+              value={yard}
+              onChange={(e) => setYard(e.target.value)}
               className="h-11 px-3 rounded-[var(--radius)] border border-line-cool bg-white"
             >
               {YARD_OPTIONS.map((y) => (
@@ -143,44 +183,58 @@ export function StartPlacementDialog({
           </label>
         )}
 
-        {needsYardPicker ? (
-          <div className="flex flex-col gap-1 text-sm">
-            Due back in
-            <div className="grid grid-cols-3 gap-2">
-              {YARD_DURATIONS.map((d) => {
-                const target = new Date(Date.now() + d.minutes * 60_000).toISOString();
-                const active = dueBack === target;
-                return (
+        {isYard ? (
+          <div className="flex flex-col gap-2 text-sm">
+            <div className="flex gap-2">
+              {(["in", "at"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setYardMode(m)}
+                  className={`h-9 px-3 rounded-full text-sm font-semibold border ${
+                    yardMode === m ? "bg-brand text-white border-brand" : "border-line-cool bg-white text-ink"
+                  }`}
+                >
+                  {m === "in" ? "Due back in…" : "Due back at…"}
+                </button>
+              ))}
+            </div>
+            {yardMode === "in" ? (
+              <div className="grid grid-cols-3 gap-2">
+                {YARD_DURATIONS.map((d) => (
                   <button
                     key={d.minutes}
                     type="button"
-                    onClick={() => setDueBack(target)}
+                    onClick={() => setYardMinutes(d.minutes)}
                     className={`h-11 rounded-[var(--radius)] border text-sm font-semibold ${
-                      active ? "bg-brand text-white border-brand" : "border-line-cool bg-white text-ink"
+                      yardMinutes === d.minutes ? "bg-brand text-white border-brand" : "border-line-cool bg-white text-ink"
                     }`}
                   >
                     {d.label}
                   </button>
-                );
-              })}
-            </div>
-            {dueBack && <span className="text-xs text-ink-muted">Back by {formatTime24(dueBack)}</span>}
+                ))}
+              </div>
+            ) : (
+              <TimeOfDayField value={yardAt} onChange={setYardAt} />
+            )}
+            {yardPreview && <span className="text-xs text-ink">Back by {yardPreview}</span>}
           </div>
         ) : (
-          <label className="flex flex-col gap-1 text-sm">
-            Due End
+          <div className="flex flex-col gap-2 text-sm">
+            <span>Due End</span>
             <DateTimeField required value={dueBack} onChange={setDueBack} />
-          </label>
+            <DaysAheadSelect value={dueBack} onChange={setDueBack} />
+          </div>
         )}
 
-        {needsReason && (
+        {type === "bed_rest" && (
           <label className="flex flex-col gap-1 text-sm">
-            Reason
+            Notes
             <input
               type="text"
               required
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
               className="h-11 px-3 rounded-[var(--radius)] border border-line-cool bg-white"
             />
           </label>
