@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentPerson } from "@/lib/auth";
 import { getPersonDetail } from "@/lib/person-detail";
+import { canApprove } from "@/lib/approvers";
 import { getMergeCandidates } from "@/lib/people-data";
 import { PersonDetailView } from "@/components/people/person-detail-view";
 
@@ -10,9 +11,10 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
   const viewer = await getCurrentPerson();
   if (!viewer?.isStaff) redirect("/dogs");
 
-  const [person, mergeCandidates] = await Promise.all([
+  const [person, mergeCandidates, mayApprove] = await Promise.all([
     getPersonDetail(id),
     getMergeCandidates(id),
+    canApprove(viewer),
   ]);
   if (!person) notFound();
 
@@ -25,6 +27,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
         person={person}
         mergeCandidates={mergeCandidates}
         viewerIsAdmin={viewer.isAdmin}
+        viewerCanApprove={mayApprove}
       />
     </div>
   );

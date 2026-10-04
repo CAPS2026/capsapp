@@ -11,6 +11,7 @@ import {
   type RegisterResult,
 } from "@/lib/registration";
 import { sendEmail } from "@/lib/email";
+import type { homePayload } from "@/lib/homecare-form";
 import { parentConsentEmail } from "@/lib/consent-email";
 import { sendHomecareEmails } from "@/lib/homecare-notify";
 
@@ -50,6 +51,8 @@ export async function registerVolunteer(input: {
   interests: string[];
   fosterInterest: boolean;
   jailBreakInterest: boolean;
+  /** Home / garden details, filled in when a homecare box is ticked. */
+  home?: ReturnType<typeof homePayload>;
   experienceLevel: string;
   experienceOther: string;
   medicalIssues: string;
@@ -226,6 +229,24 @@ export async function registerVolunteer(input: {
       person_id: personRow.id,
       over_18: input.over18,
       experience: experienceText,
+      ...(input.home
+        ? {
+            property_ownership: clean(input.home.propertyOwnership) || null,
+            fence_type: clean(input.home.fenceType) || null,
+            fence_height: clean(input.home.fenceHeight) || null,
+            people_at_home: Number.isFinite(parseInt(input.home.peopleAtHome, 10)) ? parseInt(input.home.peopleAtHome, 10) : null,
+            children_u16: Number.isFinite(parseInt(input.home.childrenU16, 10)) ? parseInt(input.home.childrenU16, 10) : null,
+            other_animals: clean(input.home.otherAnimals) || null,
+            animal_details: clean(input.home.animalDetails) || null,
+            vaccines_current: input.home.vaccinesCurrent,
+            jb_day: input.home.jbDay,
+            jb_weekend: input.home.jbWeekend,
+            jb_shift: input.home.jbShift,
+            jb_school: input.home.jbSchool,
+            foster_short: input.home.fosterShort,
+            foster_long: input.home.fosterLong,
+          }
+        : {}),
       agree_terms: true,
       signature_name: signature,
       signature_date: today,

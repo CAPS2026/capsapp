@@ -14,11 +14,25 @@ export async function listAllPeople(): Promise<{ id: string; name: string }[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("people")
-    .select("id, first_name, surname")
+    .select("id, first_name, surname, person_roles!person_roles_person_id_fkey(role, status)")
     .order("first_name");
   if (error) console.error("listAllPeople failed", error);
 
-  return (data ?? []).map((p) => ({ id: p.id, name: `${p.first_name} ${p.surname}` }));
+  // Site Visitors is for volunteers, carers, committee and admins — not the
+  // caretakers, who sign in through the staff app (Paul, 2026-10-04). A
+  // caretaker is someone with an active staff role who isn't also an admin
+  // (Shayna and the other admins stay on the list).
+  return ((data ?? []) as unknown as Array<{
+    id: string;
+    first_name: string;
+    surname: string;
+    person_roles: { role: string; status: string }[] | null;
+  }>)
+    .filter((p) => {
+      const active = (p.person_roles ?? []).filter((r) => r.status === "active").map((r) => r.role);
+      return !(active.includes("staff") && !active.includes("admin"));
+    })
+    .map((p) => ({ id: p.id, name: `${p.first_name} ${p.surname}` }));
 }
 
 export async function signIntoSite(input: {

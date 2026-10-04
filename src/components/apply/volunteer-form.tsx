@@ -10,6 +10,8 @@ import {
   type RegisterResult,
 } from "@/lib/registration";
 import { VOLUNTEER_TERMS } from "@/lib/terms";
+import { EMPTY_HOME, homePayload, type HomeDetails } from "@/lib/homecare-form";
+import { HomeDetailsFields } from "@/components/apply/home-details-fields";
 
 const inputClass =
   "h-11 px-3 rounded-[var(--radius)] border border-line-cool bg-white text-base w-full";
@@ -73,12 +75,20 @@ function RadioRows({
   );
 }
 
-export function VolunteerForm() {
+export function VolunteerForm({
+  initialEmail = "",
+  initialFoster = false,
+  initialJailBreak = false,
+}: {
+  initialEmail?: string;
+  initialFoster?: boolean;
+  initialJailBreak?: boolean;
+}) {
   const [form, setForm] = useState({
     firstName: "",
     surname: "",
     nickname: "",
-    email: "",
+    email: initialEmail,
     phone: "",
     dateOfBirth: "",
     address: "",
@@ -101,8 +111,9 @@ export function VolunteerForm() {
   });
   const [over18, setOver18] = useState<"" | "yes" | "no">("");
   const [interests, setInterests] = useState<string[]>([]);
-  const [fosterInterest, setFosterInterest] = useState(false);
-  const [jailBreakInterest, setJailBreakInterest] = useState(false);
+  const [fosterInterest, setFosterInterest] = useState(initialFoster);
+  const [jailBreakInterest, setJailBreakInterest] = useState(initialJailBreak);
+  const [home, setHome] = useState<HomeDetails>(EMPTY_HOME);
   const [imageConsent, setImageConsent] = useState<"" | "yes" | "no">("");
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -140,6 +151,7 @@ export function VolunteerForm() {
         interests,
         fosterInterest,
         jailBreakInterest,
+        home: fosterInterest || jailBreakInterest ? homePayload(home) : undefined,
         imageConsent: imageConsent === "yes",
         agreeTerms,
       });
@@ -475,6 +487,10 @@ export function VolunteerForm() {
           the next steps.
         </p>
       </fieldset>
+
+      {(fosterInterest || jailBreakInterest) && (
+        <HomeDetailsFields value={home} onChange={setHome} jailBreak={jailBreakInterest} foster={fosterInterest} />
+      )}
 
       <Field
         label="Any medical conditions we should know about?"

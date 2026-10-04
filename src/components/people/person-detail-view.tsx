@@ -49,10 +49,12 @@ export function PersonDetailView({
   person,
   mergeCandidates,
   viewerIsAdmin,
+  viewerCanApprove,
 }: {
   person: PersonDetail;
   mergeCandidates: MergeCandidate[];
   viewerIsAdmin: boolean;
+  viewerCanApprove: boolean;
 }) {
   const archived =
     person.roles.length > 0 &&
@@ -135,10 +137,10 @@ export function PersonDetailView({
             )}
             {r.endedOn && <p className="text-xs text-ink-muted">Ended {formatDate(r.endedOn)}</p>}
             {r.note && <p className="text-xs text-ink-muted">{r.note}</p>}
-            {r.status === "pending" && !viewerIsAdmin && (
-              <p className="text-xs text-ink mt-1">Needs an admin to approve.</p>
+            {r.status === "pending" && !viewerCanApprove && (
+              <p className="text-xs text-ink mt-1">Needs Paul, Julie or Shayna to approve.</p>
             )}
-            {r.status === "pending" && viewerIsAdmin && (
+            {r.status === "pending" && viewerCanApprove && (
               <PersonRoleActions
                 roleId={r.id}
                 personId={person.id}
