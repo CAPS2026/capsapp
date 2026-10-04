@@ -5,6 +5,7 @@ import Link from "next/link";
 import { applyForHomecarePublic, checkHomecareApplicant } from "@/lib/actions/homecare-public";
 import { EMPTY_HOME, homePayload, type HomeDetails } from "@/lib/homecare-form";
 import { HomeDetailsFields } from "@/components/apply/home-details-fields";
+import { PhotoPicker } from "@/components/apply/photo-picker";
 
 const inputClass = "h-11 px-3 rounded-[var(--radius)] border border-line-cool bg-white text-base w-full";
 
@@ -22,6 +23,7 @@ export function HomecarePublicForm() {
   const [jailBreak, setJailBreak] = useState(false);
   const [home, setHome] = useState<HomeDetails>(EMPTY_HOME);
   const [agree, setAgree] = useState(false);
+  const [photo, setPhoto] = useState("");
   const [signatureName, setSignatureName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -45,6 +47,7 @@ export function HomecarePublicForm() {
         surname,
         website,
         application: { jailBreak, foster, ...homePayload(home), agreeTerms: agree, signatureName },
+        photoData: photo || undefined,
       });
       if (r.error) setError(r.error);
       else setStage("done");
@@ -102,6 +105,7 @@ export function HomecarePublicForm() {
           {programText}.
         </p>
         <HomeDetailsFields value={home} onChange={setHome} jailBreak={jailBreak} foster={foster} />
+        <PhotoPicker value={photo} onChange={setPhoto} label="Photo (optional)" hint="Only added if we don't already have one for you." />
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" className="mt-1" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
           <span>I confirm these details are correct and I agree to the CAPS terms and conditions.</span>

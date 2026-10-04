@@ -1,6 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { savePersonPhotoFromDataUrl } from "@/lib/person-photo-upload";
 import { submitHomecareApplication, type HomecareApplicationInput } from "@/lib/homecare-apply-core";
 
 // Public, unauthenticated homecare form (the one behind the QR code). The
@@ -37,6 +38,8 @@ export async function applyForHomecarePublic(input: {
   surname: string;
   website: string;
   application: HomecareApplicationInput;
+  /** Optional photo (JPEG data URL); only saved if they don't already have one. */
+  photoData?: string;
 }): Promise<{ error: string } | { ok: true; error?: undefined }> {
   if (clean(input.website)) return { ok: true }; // honeypot: look successful, write nothing
   const person = await findPerson(input.email, input.surname);
@@ -46,5 +49,6 @@ export async function applyForHomecarePublic(input: {
     fillBlanksOnly: true,
   });
   if (result.error) return { error: result.error };
+  await savePersonPhotoFromDataUrl(createAdminClient(), person.id, input.photoData, { onlyIfBlank: true });
   return { ok: true };
 }
