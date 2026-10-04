@@ -7,6 +7,7 @@ import { deletePerson } from "@/lib/actions/people";
 import type { MergeCandidate } from "@/lib/people-data";
 import { PersonRoleActions } from "@/components/people/person-role-actions";
 import { PersonArchiveButton } from "@/components/people/person-archive-button";
+import { CommitteeToggle } from "@/components/people/committee-toggle";
 import { VolunteerPlusToggle } from "@/components/people/volunteer-plus-toggle";
 import { MergePersonDialog } from "@/components/people/merge-person-dialog";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
@@ -58,6 +59,8 @@ export function PersonDetailView({
     person.roles.length > 0 &&
     !person.roles.some((r) => r.status === "active" || r.status === "pending");
   const ecMissing = !person.ec.name || !person.ec.phone;
+  // Staff live in the Staff app; see staffProtection() in actions/people.ts.
+  const isStaffPerson = person.roles.some((r) => r.role === "staff" || r.role === "admin");
 
   return (
     <div className="flex flex-col gap-4">
@@ -87,8 +90,8 @@ export function PersonDetailView({
           >
             Edit
           </Link>
-          <PersonArchiveButton personId={person.id} archived={archived} />
-          {viewerIsAdmin && (
+          {!isStaffPerson && <PersonArchiveButton personId={person.id} archived={archived} />}
+          {viewerIsAdmin && !isStaffPerson && (
             <>
               <MergePersonDialog
                 person={{ id: person.id, name: `${person.firstName} ${person.surname}`, hasAccount: person.hasAccount }}
@@ -106,6 +109,14 @@ export function PersonDetailView({
           )}
         </div>
       </div>
+
+      {isStaffPerson && (
+        <p className="text-sm bg-gray-tint rounded-[var(--radius)] p-3 text-ink">
+          This person is on the Staff app. They show here for reference, but staff, their roster and
+          their shift history are managed in the Staff app (Roster → Staff), so Archive, Merge and
+          Delete are turned off here.
+        </p>
+      )}
 
       <Section title="Roles">
         {person.roles.length === 0 && <p className="text-sm text-ink-muted">No roles.</p>}
@@ -157,6 +168,17 @@ export function PersonDetailView({
             firstName={person.firstName}
             email={person.email}
             isPlus={person.roles.some((r) => r.role === "volunteer_plus" && r.status === "active")}
+          />
+        </Section>
+      )}
+
+      {viewerIsAdmin && (
+        <Section title="Committee">
+          <CommitteeToggle
+            personId={person.id}
+            firstName={person.firstName}
+            email={person.email}
+            isMember={person.roles.some((r) => r.role === "committee" && r.status === "active")}
           />
         </Section>
       )}

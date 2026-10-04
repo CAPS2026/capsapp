@@ -23,6 +23,10 @@ export type PersonListItem = {
   /** They explicitly said no to promotional-image use. */
   noImageConsent: boolean;
   photoUrl: string | null;
+  /** Walk stats, same idea as the Dogs list: only meaningful for walkers. */
+  lastWalkAt: string | null;
+  /** Minutes walked in the trailing 28 days (completed walks). */
+  fourWeekWalkMinutes: number;
 };
 
 export function ageFromDob(dob: string | null): number | null {
@@ -47,6 +51,25 @@ export async function getPeopleList(): Promise<PersonListItem[]> {
     .order("surname")
     .order("first_name");
   if (error) console.error("getPeopleList failed", error);
+
+  // Walk stats per person (all walks, newest data wins for "last walk").
+  const { data: walkRows, error: walkErr } = await supabase
+    .from("dog_activity")
+    .select("person_id, started_at, ended_at")
+    .eq("type", "walk")
+    .not("person_id", "is", null)
+    .order("started_at", { ascending: false })
+    .limit(10000);
+  if (walkErr) console.error("getPeopleList walk stats failed", walkErr);
+  const since = Date.now() - 28 * 24 * 3_600_000;
+  const walkStats = new Map<string, { last: string; minutes: number }>();
+  for (const w of (walkRows ?? []) as Array<{ person_id: string; started_at: string; ended_at: string | null }>) {
+    const cur = walkStats.get(w.person_id) ?? { last: w.ended_at ?? w.started_at, minutes: 0 };
+    if (w.ended_at && new Date(w.started_at).getTime() >= since) {
+      cur.minutes += Math.max(0, Math.round((new Date(w.ended_at).getTime() - new Date(w.started_at).getTime()) / 60_000));
+    }
+    walkStats.set(w.person_id, cur);
+  }
 
   return ((data ?? []) as unknown as Array<{
     id: string;
@@ -83,6 +106,8 @@ export async function getPeopleList(): Promise<PersonListItem[]> {
       missingEmergencyContact: active.some((r) => r.role === "volunteer") && (!p.ec_name || !p.ec_phone),
       noImageConsent: p.image_consent === false,
       photoUrl: personPhotoUrl(p.photo_path, p.updated_at),
+      lastWalkAt: walkStats.get(p.id)?.last ?? null,
+      fourWeekWalkMinutes: walkStats.get(p.id)?.minutes ?? 0,
     };
   });
 }

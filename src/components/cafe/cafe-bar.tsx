@@ -47,7 +47,7 @@ export function CafeBar() {
           onClick={open}
           className="text-sm font-semibold text-warm-ink underline underline-offset-2"
         >
-          Staff access
+          Enter PIN for staff mode
         </button>
       </div>
 
@@ -57,9 +57,9 @@ export function CafeBar() {
         onClick={(e) => e.target === e.currentTarget && dialogRef.current?.close()}
       >
         <form onSubmit={submit} className="flex flex-col gap-3 p-5">
-          <h2 className="font-bold text-lg">Staff PIN</h2>
+          <h2 className="font-bold text-lg">Switch to staff mode</h2>
           <p className="text-sm text-ink-muted">
-            Enter the shared staff PIN to switch this device back to full access.
+            Enter the shared staff PIN to switch this device back to staff mode (full access).
           </p>
           <input
             autoFocus
@@ -86,7 +86,7 @@ export function CafeBar() {
               disabled={isPending || pin.length < 4}
               className="h-10 px-4 rounded-[var(--radius)] bg-brand text-white font-bold disabled:opacity-60"
             >
-              {isPending ? "Checking…" : "Unlock"}
+              {isPending ? "Checking…" : "Switch to staff mode"}
             </button>
           </div>
         </form>

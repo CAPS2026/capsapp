@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentPerson } from "@/lib/auth";
 import { getPeopleList } from "@/lib/people-data";
@@ -23,14 +22,6 @@ export default async function PeoplePage() {
             {pendingCount > 0 ? ` · ${pendingCount} awaiting approval` : ""}
           </p>
         </div>
-        {person.isAdmin && (
-          <Link
-            href="/people/new"
-            className="shrink-0 h-9 px-3 rounded-[var(--radius)] bg-brand text-white text-sm font-bold flex items-center"
-          >
-            + Add staff
-          </Link>
-        )}
       </div>
 
       <PeopleList people={people} />

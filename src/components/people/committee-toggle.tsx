@@ -2,18 +2,18 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { setVolunteerPlus } from "@/lib/actions/people";
+import { setCommittee } from "@/lib/actions/people";
 
-export function VolunteerPlusToggle({
+export function CommitteeToggle({
   personId,
   firstName,
   email,
-  isPlus,
+  isMember,
 }: {
   personId: string;
   firstName: string;
   email: string | null;
-  isPlus: boolean;
+  isMember: boolean;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [justGranted, setJustGranted] = useState(false);
@@ -23,7 +23,7 @@ export function VolunteerPlusToggle({
   function toggle(on: boolean) {
     setError(null);
     startTransition(async () => {
-      const r = await setVolunteerPlus(personId, on);
+      const r = await setCommittee(personId, on);
       if (r.error) setError(r.error);
       else {
         setJustGranted(on);
@@ -36,21 +36,21 @@ export function VolunteerPlusToggle({
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm">
-          {isPlus ? (
-            <span className="font-semibold text-brand-ink">Volunteer +</span>
+          {isMember ? (
+            <span className="font-semibold text-brand-ink">Committee member</span>
           ) : (
-            <span className="text-ink-muted">Not a Volunteer +</span>
+            <span className="text-ink-muted">Not a committee member</span>
           )}
         </span>
         <button
           type="button"
           disabled={isPending}
-          onClick={() => toggle(!isPlus)}
+          onClick={() => toggle(!isMember)}
           className={`h-9 px-3 rounded-[var(--radius)] text-sm font-bold disabled:opacity-60 ${
-            isPlus ? "border border-line-cool" : "bg-brand text-white"
+            isMember ? "border border-line-cool" : "bg-brand text-white"
           }`}
         >
-          {isPending ? "…" : isPlus ? "Remove" : "Make Volunteer +"}
+          {isPending ? "…" : isMember ? "Remove" : "Make committee member"}
         </button>
       </div>
       {error && <p className="text-sm text-danger">{error}</p>}
@@ -63,7 +63,7 @@ export function VolunteerPlusToggle({
               with <strong>{email}</strong>
             </>
           ) : null}
-          . They can then check people in and out themselves.
+          . They can then see everything staff can, except the Staff app roster.
         </p>
       )}
     </div>
