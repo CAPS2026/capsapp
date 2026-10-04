@@ -1,13 +1,14 @@
 import { redirect } from "next/navigation";
 import { getCurrentPerson } from "@/lib/auth";
-import { getPeopleList } from "@/lib/people-data";
+import { getPeopleList, getPendingApprovals } from "@/lib/people-data";
+import { ApprovalsList } from "@/components/people/approvals-list";
 import { PeopleList } from "@/components/people/people-list";
 
 export default async function PeoplePage() {
   const person = await getCurrentPerson();
   if (!person?.isStaff) redirect("/dogs");
 
-  const people = await getPeopleList();
+  const [people, approvals] = await Promise.all([getPeopleList(), getPendingApprovals()]);
   const pendingCount = people.filter((p) => p.hasPending).length;
 
   return (
@@ -23,6 +24,8 @@ export default async function PeoplePage() {
           </p>
         </div>
       </div>
+
+      <ApprovalsList items={approvals} viewerIsAdmin={person.isAdmin} />
 
       <PeopleList people={people} />
     </div>

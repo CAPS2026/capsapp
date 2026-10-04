@@ -135,7 +135,10 @@ export function PersonDetailView({
             )}
             {r.endedOn && <p className="text-xs text-ink-muted">Ended {formatDate(r.endedOn)}</p>}
             {r.note && <p className="text-xs text-ink-muted">{r.note}</p>}
-            {r.status === "pending" && (
+            {r.status === "pending" && !viewerIsAdmin && (
+              <p className="text-xs text-ink mt-1">Needs an admin to approve.</p>
+            )}
+            {r.status === "pending" && viewerIsAdmin && (
               <PersonRoleActions
                 roleId={r.id}
                 personId={person.id}
