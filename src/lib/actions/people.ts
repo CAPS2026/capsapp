@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentPerson } from "@/lib/auth";
+import { canApprove } from "@/lib/approvers";
 
 type Result = { error: string } | { error?: undefined };
 
@@ -19,6 +20,13 @@ async function requireAdmin() {
   const me = await getCurrentPerson();
   if (!me?.isAdmin || !me.id) return null;
   return me;
+}
+
+/** Admin who is also on the approvers list (see lib/approvers.ts). */
+async function requireApprover() {
+  const me = await requireAdmin();
+  if (!me) return null;
+  return (await canApprove(me)) ? me : null;
 }
 
 function revalidate(personId: string) {
@@ -65,8 +73,8 @@ async function staffProtection(personId: string): Promise<string | null> {
 
 /** Move a pending role to active (docs/ui-flows.md §8 — approve). */
 export async function approveRole(personRoleId: string, personId: string): Promise<Result> {
-  const me = await requireAdmin();
-  if (!me) return { error: "Only an admin can approve or decline." };
+  const me = await requireApprover();
+  if (!me) return { error: "Only Paul, Julie or Shayna can approve or decline." };
 
   const supabase = await createClient();
 
@@ -100,8 +108,8 @@ export async function approveRole(personRoleId: string, personId: string): Promi
 }
 
 export async function declineRole(personRoleId: string, personId: string): Promise<Result> {
-  const me = await requireAdmin();
-  if (!me) return { error: "Only an admin can approve or decline." };
+  const me = await requireApprover();
+  if (!me) return { error: "Only Paul, Julie or Shayna can approve or decline." };
 
   const supabase = await createClient();
   const { error } = await supabase

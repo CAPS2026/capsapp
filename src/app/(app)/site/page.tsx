@@ -45,6 +45,12 @@ export default async function SitePage() {
       </Link>
 
       {person?.isStaff && (
+        <Link href="/apply/qr" className="text-sm font-semibold text-brand-ink self-start">
+          Printable QR codes for the forms →
+        </Link>
+      )}
+
+      {person?.isStaff && (
         <Link href="/logs?tab=site" className="text-sm font-semibold text-brand-ink self-start">
           Past Site Visitor logs →
         </Link>
