@@ -27,9 +27,9 @@ export function HandOverButton({ pinIsSet }: { pinIsSet: boolean }) {
       <button
         type="button"
         onClick={() => dialogRef.current?.showModal()}
-        className="text-sm font-semibold text-brand-ink underline underline-offset-2"
+        className="h-8 px-3 rounded-full border-2 border-brand text-brand-ink text-sm font-bold whitespace-nowrap"
       >
-        Staff mode · switch to volunteer mode
+        Switch to Volunteer Mode
       </button>
 
       <dialog
@@ -38,7 +38,7 @@ export function HandOverButton({ pinIsSet }: { pinIsSet: boolean }) {
         onClick={(e) => e.target === e.currentTarget && dialogRef.current?.close()}
       >
         <div className="flex flex-col gap-3 p-5">
-          <h2 className="font-bold text-lg">Switch to volunteer mode?</h2>
+          <h2 className="font-bold text-lg">Switch to Volunteer Mode?</h2>
           <p className="text-sm text-ink-muted">
             The app switches to the volunteer surface — walk and yard check in/out, sign-in,
             basic dog info. Confidential notes, the People area, placements, reports and
@@ -65,7 +65,7 @@ export function HandOverButton({ pinIsSet }: { pinIsSet: boolean }) {
                 disabled={isPending}
                 className="h-10 px-4 rounded-[var(--radius)] bg-brand text-white font-bold disabled:opacity-60"
               >
-                {isPending ? "Switching…" : "Switch to volunteer mode"}
+                {isPending ? "Switching…" : "Switch to Volunteer Mode"}
               </button>
             ) : (
               <Link
