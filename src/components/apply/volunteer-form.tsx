@@ -562,15 +562,13 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
                 onChange={(e) => set("ecPhone", e.target.value)}
               />
             </Field>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
             <Field label="Relationship" hint="e.g. partner, parent, friend.">
               <input className={inputClass} value={form.ecRelationship} onChange={(e) => set("ecRelationship", e.target.value)} />
             </Field>
-            <Field label="Email" hint="Optional.">
-              <input type="email" inputMode="email" className={inputClass} value={form.ecEmail} onChange={(e) => set("ecEmail", e.target.value)} />
-            </Field>
           </div>
+          <Field label="Email" hint="Optional.">
+            <input type="email" inputMode="email" className={inputClass} value={form.ecEmail} onChange={(e) => set("ecEmail", e.target.value)} />
+          </Field>
         </fieldset>
       )}
 
