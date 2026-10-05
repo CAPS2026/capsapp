@@ -120,28 +120,17 @@ export const HELP_ARTICLES: HelpArticle[] = [
   // ---------------- Registering
   {
     id: "register-volunteer",
-    title: "Register as a new volunteer",
+    title: "Join CAPS: volunteer, foster or jail break (one form)",
     topic: "Registering",
     audience: "everyone",
-    keywords: "sign up join new application form qr code under 18 minor parent consent",
+    keywords: "sign up join new application form qr code under 18 minor parent consent homecare foster jailbreak garden fence photo",
     steps: [
-      "Scan the volunteer QR code at the shelter, or go to capsapp-five.vercel.app/volunteer.",
-      "Fill in your details, emergency contact, experience and what you'd like to help with, then agree to the terms and type your name.",
+      "Scan the QR code at the shelter, or go to capsapp-five.vercel.app/volunteer.",
+      "Tick what you're interested in: volunteering at the shelter, fostering, jail break — any mix — and give your email and surname.",
+      "Already registered? We'll recognise you and only ask what's new (for fostering or jail break, just your home and garden details). Otherwise it's a few short pages: about you, an emergency contact, you and dogs, then your home if you ticked fostering or jail break.",
       "Under 18? A parent or guardian's name, phone, email and typed name are needed too. They'll be emailed a confirmation, and CAPS confirms before you start.",
-      "Adults can start dog walking straight away; check in with a caretaker next time you're at the shelter.",
-    ],
-  },
-  {
-    id: "apply-homecare",
-    title: "Apply to foster or do a jail break",
-    topic: "Registering",
-    audience: "everyone",
-    keywords: "homecare foster jailbreak take dog home application garden fence qr",
-    steps: [
-      "Scan the foster / jail break QR code, or go to capsapp-five.vercel.app/homecare.",
-      "Tick fostering, jail break, or both, then give your email and surname.",
-      "Already registered? You only answer questions about your home and garden. New? You'll be taken to the one registration form with the home questions included.",
-      "CAPS reviews it. You can't take a dog out on homecare until you're approved.",
+      "On the last page you can add a photo if you like (optional), then agree to the terms and type your name to sign.",
+      "Adults can start dog walking straight away; check in with a caretaker next time you're at the shelter. Fostering and jail break need CAPS approval first.",
     ],
   },
   // ---------------- Out of the kennel
