@@ -12,6 +12,7 @@ import {
 import { VOLUNTEER_TERMS } from "@/lib/terms";
 import { EMPTY_HOME, homePayload, type HomeDetails } from "@/lib/homecare-form";
 import { HomeDetailsFields } from "@/components/apply/home-details-fields";
+import { PhotoPicker } from "@/components/apply/photo-picker";
 
 const inputClass =
   "h-11 px-3 rounded-[var(--radius)] border border-line-cool bg-white text-base w-full";
@@ -114,6 +115,7 @@ export function VolunteerForm({
   const [fosterInterest, setFosterInterest] = useState(initialFoster);
   const [jailBreakInterest, setJailBreakInterest] = useState(initialJailBreak);
   const [home, setHome] = useState<HomeDetails>(EMPTY_HOME);
+  const [photo, setPhoto] = useState("");
   const [imageConsent, setImageConsent] = useState<"" | "yes" | "no">("");
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -152,6 +154,7 @@ export function VolunteerForm({
         fosterInterest,
         jailBreakInterest,
         home: fosterInterest || jailBreakInterest ? homePayload(home) : undefined,
+        photoData: photo || undefined,
         imageConsent: imageConsent === "yes",
         agreeTerms,
       });
@@ -284,6 +287,8 @@ export function VolunteerForm({
           />
         </Field>
       </div>
+
+      <PhotoPicker value={photo} onChange={setPhoto} />
 
       <fieldset className="flex flex-col gap-2">
         <legend className="text-sm font-bold">Are you 18 or over?</legend>

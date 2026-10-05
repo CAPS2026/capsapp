@@ -7,20 +7,23 @@ import type { CurrentPerson } from "@/lib/auth";
 import { CafeBar } from "@/components/cafe/cafe-bar";
 import { HandOverButton } from "@/components/cafe/hand-over-button";
 import { IdleGuard } from "@/components/cafe/idle-guard";
+import { ClipboardIcon, HelpIcon, LogsIcon, PawIcon, PeopleIcon, ReportsIcon, SignInIcon } from "@/components/nav-icons";
 
 type NavItem = {
   href: string;
   label: string;
+  Icon: (p: { className?: string }) => React.ReactElement;
   staffOnly?: boolean;
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/dogs", label: "Dogs" },
-  { href: "/site", label: "Site Visitors" },
-  { href: "/staff", label: "Staff", staffOnly: true },
-  { href: "/people", label: "People", staffOnly: true },
-  { href: "/logs", label: "Logs", staffOnly: true },
-  { href: "/reports", label: "Reports", staffOnly: true },
+  { href: "/dogs", label: "Dogs", Icon: PawIcon },
+  { href: "/site", label: "Site Visitors", Icon: SignInIcon },
+  { href: "/staff", label: "Staff", Icon: ClipboardIcon, staffOnly: true },
+  { href: "/people", label: "People", Icon: PeopleIcon, staffOnly: true },
+  { href: "/logs", label: "Logs", Icon: LogsIcon, staffOnly: true },
+  { href: "/reports", label: "Reports", Icon: ReportsIcon, staffOnly: true },
+  { href: "/help", label: "Help", Icon: HelpIcon },
 ];
 
 export function AppShell({
@@ -128,11 +131,12 @@ export function AppShell({
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex-1 flex flex-col items-center justify-center gap-0.5 h-16 text-[13px] font-semibold ${
+                className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 h-16 px-0.5 text-[11px] leading-tight text-center font-semibold ${
                   active ? "text-brand" : "text-ink-muted"
                 }`}
               >
-                {item.label}
+                <item.Icon className="shrink-0" />
+                <span>{item.label}</span>
               </Link>
             );
           })}

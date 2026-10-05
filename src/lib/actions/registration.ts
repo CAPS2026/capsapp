@@ -14,6 +14,7 @@ import { sendEmail } from "@/lib/email";
 import type { homePayload } from "@/lib/homecare-form";
 import { parentConsentEmail } from "@/lib/consent-email";
 import { sendHomecareEmails } from "@/lib/homecare-notify";
+import { savePersonPhotoFromDataUrl } from "@/lib/person-photo-upload";
 
 // Public, unauthenticated intake. Runs with the service-role client because
 // RLS on `people` is staff-only for insert (docs/schema.md §8) and an
@@ -61,6 +62,8 @@ export async function registerVolunteer(input: {
   imageConsent: boolean | null;
   agreeTerms: boolean;
   signatureName: string;
+  /** Optional photo, a small JPEG data URL shrunk in the browser. */
+  photoData?: string;
   /** Honeypot — real users never see or fill this. */
   website: string;
 }): Promise<RegisterResult> {
@@ -182,6 +185,9 @@ export async function registerVolunteer(input: {
     }
     return { error: personErr?.message ?? "Something went wrong saving your registration." };
   }
+
+  // Optional photo — best effort, never fails the registration.
+  await savePersonPhotoFromDataUrl(supabase, personRow.id, input.photoData, { onlyIfBlank: false });
 
   const experienceText = experienceLabel(experienceCode || null, input.experienceOther);
   const signature = clean(input.signatureName);

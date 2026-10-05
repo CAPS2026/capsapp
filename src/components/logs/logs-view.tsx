@@ -1,11 +1,70 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { LOG_TABS, REGISTER_TABS, rowsToCsv, type LogTab, type LogTable } from "@/lib/logs";
+import {
+  ACTIVITY_TABS,
+  ACTIVITY_TYPES,
+  LOG_TABS,
+  REGISTER_TABS,
+  rowsToCsv,
+  type LogTab,
+  type LogTable,
+} from "@/lib/logs";
 
-const controlClass =
-  "h-10 px-2 rounded-[var(--radius)] border border-line-cool bg-white text-sm";
+const controlClass = "h-10 px-2 rounded-[var(--radius)] border border-line-cool bg-white text-sm";
+
+type Option = { id: string; name: string };
+
+const pad = (n: number) => String(n).padStart(2, "0");
+const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+/** Type-to-search picker: start typing a name, pick it from the list. Much
+ *  quicker than scrolling a 40-name dropdown to find one person. */
+function SearchPick({
+  label,
+  options,
+  valueId,
+  onPick,
+}: {
+  label: string;
+  options: Option[];
+  valueId: string;
+  onPick: (id: string) => void;
+}) {
+  const current = options.find((o) => o.id === valueId)?.name ?? "";
+  const [text, setText] = useState(current);
+  useEffect(() => setText(current), [current]);
+  const listId = `pick-${label}`;
+
+  function resolve(t: string) {
+    const exact = options.find((o) => o.name.toLowerCase() === t.trim().toLowerCase());
+    if (exact) onPick(exact.id);
+    else if (t.trim() === "") onPick("");
+  }
+
+  return (
+    <label className="flex flex-col gap-0.5 text-xs text-ink">
+      {label}
+      <input
+        list={listId}
+        value={text}
+        placeholder="All"
+        onChange={(e) => {
+          setText(e.target.value);
+          resolve(e.target.value);
+        }}
+        onBlur={() => setText(current)}
+        className={`${controlClass} w-44`}
+      />
+      <datalist id={listId}>
+        {options.map((o) => (
+          <option key={o.id} value={o.name} />
+        ))}
+      </datalist>
+    </label>
+  );
+}
 
 export function LogsView({
   tab,
@@ -14,7 +73,7 @@ export function LogsView({
 }: {
   tab: LogTab;
   data: LogTable;
-  options: { dogs: { id: string; name: string }[]; people: { id: string; name: string }[] };
+  options: { dogs: Option[]; people: Option[] };
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -25,22 +84,49 @@ export function LogsView({
   const to = params.get("to") ?? "";
   const dogId = params.get("dog") ?? "";
   const personId = params.get("person") ?? "";
+  const status = params.get("status") ?? "";
+  const flag = params.get("flag") ?? "";
+  const q = params.get("q") ?? "";
+  const types = (params.get("types") ?? "").split(",").filter(Boolean);
+  const [qText, setQText] = useState(q);
+  useEffect(() => setQText(q), [q]);
 
-  function setParam(key: string, value: string) {
+  function setParams(changes: Record<string, string>) {
     const next = new URLSearchParams(params.toString());
-    if (value) next.set(key, value);
-    else next.delete(key);
+    for (const [k, v] of Object.entries(changes)) {
+      if (v) next.set(k, v);
+      else next.delete(k);
+    }
     router.replace(`${pathname}?${next.toString()}`);
   }
+  const setParam = (key: string, value: string) => setParams({ [key]: value });
 
   function goTab(t: LogTab) {
     const next = new URLSearchParams(params.toString());
     next.set("tab", t);
-    // person filter doesn't apply to Medical; dog doesn't apply to Visitors;
-    // the registers (Dogs / People) take neither.
+    // Filters that don't apply to the new tab are dropped: person doesn't
+    // apply to Medical, dog doesn't apply to Visitors, registers take
+    // neither, and the activity-only ones (type, status, flags, notes) only
+    // apply to the activity tabs.
     if (t === "medical" || REGISTER_TABS.includes(t)) next.delete("person");
     if (t === "site" || REGISTER_TABS.includes(t)) next.delete("dog");
+    if (!ACTIVITY_TABS.includes(t)) for (const k of ["status", "flag", "q"]) next.delete(k);
+    if (t !== "activity") next.delete("types");
     router.replace(`${pathname}?${next.toString()}`);
+  }
+
+  function preset(kind: "today" | "7" | "28" | "month") {
+    const now = new Date();
+    const start = new Date(now);
+    if (kind === "7") start.setDate(now.getDate() - 6);
+    if (kind === "28") start.setDate(now.getDate() - 27);
+    if (kind === "month") start.setDate(1);
+    setParams({ from: ymd(start), to: ymd(now) });
+  }
+
+  function toggleType(key: string) {
+    const next = types.includes(key) ? types.filter((t) => t !== key) : [...types, key];
+    setParam("types", next.join(","));
   }
 
   function downloadCsv() {
@@ -57,8 +143,10 @@ export function LogsView({
   }
 
   const isRegister = REGISTER_TABS.includes(tab);
+  const isActivity = ACTIVITY_TABS.includes(tab);
   const showDog = !isRegister && tab !== "site";
   const showPerson = !isRegister && tab !== "medical";
+  const anyFilter = from || to || dogId || personId || status || flag || q || types.length > 0;
 
   return (
     <div className="flex flex-col gap-3">
@@ -69,7 +157,7 @@ export function LogsView({
             type="button"
             onClick={() => goTab(t.key)}
             className={`shrink-0 px-3 h-8 rounded-full text-sm font-semibold border ${
-              tab === t.key ? "bg-brand text-white border-brand" : "border-line-cool text-ink-muted"
+              tab === t.key ? "bg-brand text-white border-brand" : "border-line-cool text-ink"
             }`}
           >
             {t.label}
@@ -77,42 +165,99 @@ export function LogsView({
         ))}
       </div>
 
+      {tab === "activity" && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-ink mr-1">Show:</span>
+          {ACTIVITY_TYPES.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => toggleType(t.key)}
+              className={`px-3 h-8 rounded-full text-sm font-semibold border ${
+                types.includes(t.key) ? "bg-brand text-white border-brand" : "border-line-cool text-ink"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+          <span className="text-xs text-ink">{types.length === 0 ? "(all types)" : ""}</span>
+        </div>
+      )}
+
+      {true ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-ink mr-1">Quick dates:</span>
+          {(
+            [
+              ["today", "Today"],
+              ["7", "Last 7 days"],
+              ["28", "Last 28 days"],
+              ["month", "This month"],
+            ] as const
+          ).map(([k, label]) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => preset(k)}
+              className="px-3 h-8 rounded-full text-sm font-semibold border border-line-cool text-ink"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col gap-0.5 text-xs text-ink-muted">
+        <label className="flex flex-col gap-0.5 text-xs text-ink">
           From
           <input type="date" value={from} onChange={(e) => setParam("from", e.target.value)} className={controlClass} />
         </label>
-        <label className="flex flex-col gap-0.5 text-xs text-ink-muted">
+        <label className="flex flex-col gap-0.5 text-xs text-ink">
           To
           <input type="date" value={to} onChange={(e) => setParam("to", e.target.value)} className={controlClass} />
         </label>
-        {showDog && (
-          <label className="flex flex-col gap-0.5 text-xs text-ink-muted">
-            Dog
-            <select value={dogId} onChange={(e) => setParam("dog", e.target.value)} className={controlClass}>
-              <option value="">All</option>
-              {options.dogs.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
+        {showDog && <SearchPick label="Dog" options={options.dogs} valueId={dogId} onPick={(id) => setParam("dog", id)} />}
         {showPerson && (
-          <label className="flex flex-col gap-0.5 text-xs text-ink-muted">
-            Person
-            <select value={personId} onChange={(e) => setParam("person", e.target.value)} className={controlClass}>
-              <option value="">All</option>
-              {options.people.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SearchPick label="Person" options={options.people} valueId={personId} onPick={(id) => setParam("person", id)} />
         )}
-        {(from || to || dogId || personId) && (
+        {isActivity && (
+          <>
+            <label className="flex flex-col gap-0.5 text-xs text-ink">
+              Status
+              <select value={status} onChange={(e) => setParam("status", e.target.value)} className={controlClass}>
+                <option value="">Any</option>
+                <option value="open">Still out</option>
+                <option value="closed">Returned</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-0.5 text-xs text-ink">
+              Flags
+              <select value={flag} onChange={(e) => setParam("flag", e.target.value)} className={controlClass}>
+                <option value="">Any</option>
+                <option value="late">Logged after the fact</option>
+                <option value="edited">Edited</option>
+              </select>
+            </label>
+            <form
+              className="flex flex-col gap-0.5 text-xs text-ink"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setParam("q", qText.trim());
+              }}
+            >
+              <label htmlFor="log-notes">Search notes</label>
+              <input
+                id="log-notes"
+                value={qText}
+                onChange={(e) => setQText(e.target.value)}
+                onBlur={() => qText.trim() !== q && setParam("q", qText.trim())}
+                placeholder="e.g. heart worm"
+                className={`${controlClass} w-40`}
+              />
+            </form>
+          </>
+        )}
+        {anyFilter && (
           <button
             type="button"
             onClick={() => router.replace(`${pathname}?tab=${tab}`)}
@@ -131,8 +276,8 @@ export function LogsView({
         </button>
       </div>
 
-      <p className="text-xs text-ink-muted">
-        {data.rows.length} row{data.rows.length === 1 ? "" : "s"}
+      <p className="text-xs text-ink">
+        {data.summary ?? `${data.rows.length} row${data.rows.length === 1 ? "" : "s"}`}
         {data.capped ? ` (showing the most recent ${data.rows.length} — narrow the dates for more)` : ""}
       </p>
 
@@ -150,7 +295,7 @@ export function LogsView({
           <tbody>
             {data.rows.length === 0 && (
               <tr>
-                <td colSpan={data.columns.length} className="px-3 py-6 text-center text-ink-muted">
+                <td colSpan={data.columns.length} className="px-3 py-6 text-center text-ink">
                   Nothing for this filter.
                 </td>
               </tr>

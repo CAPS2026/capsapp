@@ -5,7 +5,6 @@ import { setStaffPin } from "@/lib/actions/cafe";
 import { PIN_MAX } from "@/lib/cafe";
 
 export function StaffPinForm({ pinIsSet }: { pinIsSet: boolean }) {
-  const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -21,12 +20,11 @@ export function StaffPinForm({ pinIsSet }: { pinIsSet: boolean }) {
       return;
     }
     startTransition(async () => {
-      const res = await setStaffPin(current, next);
+      const res = await setStaffPin(next);
       if ("error" in res) {
         setError(res.error);
       } else {
         setDone(true);
-        setCurrent("");
         setNext("");
         setConfirm("");
       }
@@ -40,23 +38,8 @@ export function StaffPinForm({ pinIsSet }: { pinIsSet: boolean }) {
     <form onSubmit={submit} className="flex flex-col gap-3">
       <p className="text-sm text-ink-muted">
         One shared PIN (4–6 digits) that a staff member enters to switch a device back from
-        volunteer mode to full access. Keep it off the shared iPad&rsquo;s notes.
+        volunteer mode to full access. Keep it off the shared iPad&rsquo;s notes. Forgotten it? Just set a new one here — no need to know the old one.
       </p>
-
-      {pinIsSet && (
-        <label className="flex flex-col gap-1 text-sm font-semibold">
-          Current PIN
-          <input
-            type="password"
-            inputMode="numeric"
-            autoComplete="off"
-            maxLength={PIN_MAX}
-            value={current}
-            onChange={(e) => setCurrent(e.target.value.replace(/\D/g, ""))}
-            className={box}
-          />
-        </label>
-      )}
 
       <label className="flex flex-col gap-1 text-sm font-semibold">
         {pinIsSet ? "New PIN" : "PIN"}

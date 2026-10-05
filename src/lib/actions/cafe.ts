@@ -12,6 +12,9 @@ import {
   isValidPin,
 } from "@/lib/cafe";
 
+const PIN_FAIL_COOKIE = "caps_pin_fail";
+const PIN_LOCK_COOKIE = "caps_pin_lock";
+
 function hashPin(pin: string): string {
   const salt = randomBytes(16);
   const hash = scryptSync(pin, salt, 32);
@@ -60,11 +63,30 @@ export async function exitCafeMode(pin: string): Promise<{ ok: true } | { error:
     return { error: "No staff PIN has been set yet. A staff member can set one in Settings." };
   }
 
-  // A small constant delay blunts brute-forcing a short PIN.
-  await new Promise((r) => setTimeout(r, 400));
-  if (!verifyPin(pin, stored)) return { error: "That PIN isn't right." };
-
   const jar = await cookies();
+
+  // After 5 wrong tries this device waits 5 minutes. Blunts guessing a short
+  // PIN by hand; the fresh-sign-in route back in is unaffected.
+  const lockedUntil = Number(jar.get(PIN_LOCK_COOKIE)?.value ?? 0);
+  if (lockedUntil > Date.now()) {
+    const mins = Math.ceil((lockedUntil - Date.now()) / 60_000);
+    return { error: `Too many wrong tries. Try again in ${mins} minute${mins === 1 ? "" : "s"}.` };
+  }
+
+  // A small constant delay slows each guess too.
+  await new Promise((r) => setTimeout(r, 400));
+  if (!verifyPin(pin, stored)) {
+    const fails = Number(jar.get(PIN_FAIL_COOKIE)?.value ?? 0) + 1;
+    if (fails >= 5) {
+      jar.set(PIN_LOCK_COOKIE, String(Date.now() + 5 * 60_000), { httpOnly: true, sameSite: "lax", path: "/", maxAge: 300 });
+      jar.delete(PIN_FAIL_COOKIE);
+    } else {
+      jar.set(PIN_FAIL_COOKIE, String(fails), { httpOnly: true, sameSite: "lax", path: "/", maxAge: 600 });
+    }
+    return { error: "That PIN isn't right." };
+  }
+  jar.delete(PIN_FAIL_COOKIE);
+
   jar.delete(CAFE_COOKIE);
   jar.set(UNLOCK_COOKIE, String(Date.now() + UNLOCK_MAX_MS), {
     httpOnly: false, // read by the client idle-guard
@@ -75,21 +97,16 @@ export async function exitCafeMode(pin: string): Promise<{ ok: true } | { error:
   return { ok: true };
 }
 
-/** Set or change the shared staff PIN. Admin only (and not reachable from
+/** Set, change or reset the shared staff PIN. Admin only (and not reachable from
  *  café mode, since isAdmin is false there — which is the intended guard). */
-export async function setStaffPin(
-  currentPin: string,
-  newPin: string,
-): Promise<{ ok: true } | { error: string }> {
+export async function setStaffPin(newPin: string): Promise<{ ok: true } | { error: string }> {
   const person = await getCurrentPerson();
   if (!person?.isAdmin) return { error: "Admin only." };
   if (!isValidPin(newPin)) return { error: "The new PIN must be 4–6 digits." };
 
-  const existing = await readPinHash();
-  if (existing && !verifyPin(currentPin, existing)) {
-    return { error: "The current PIN isn't right." };
-  }
-
+  // No "current PIN" needed: an admin is already signed in with their own
+  // login (and isn't in volunteer mode), which is stronger proof than the PIN
+  // — so a forgotten PIN is fixed by simply setting a new one.
   // org_settings is a single row (id = true) with a staff-only update
   // policy; the signed-in staff client is allowed to write it.
   const supabase = await createClient();
