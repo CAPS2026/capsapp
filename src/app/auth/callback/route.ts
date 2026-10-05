@@ -26,15 +26,15 @@ export async function GET(request: Request) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error && data.user?.email) {
-      const isRegistered = await linkPersonToAuthUser(data.user.id, data.user.email);
+      const linked = await linkPersonToAuthUser(data.user.id, data.user.email);
 
-      if (!isRegistered) {
+      if (linked !== "ok") {
         // Google sign-in has no pre-check like magic link's shouldCreateUser
         // (that only applies to OTP) — this is where an unregistered Google
         // sign-in gets caught. Sign the session back out rather than leave
         // them authenticated with nothing behind it.
         await supabase.auth.signOut();
-        return NextResponse.redirect(`${origin}/login?error=not_registered`);
+        return NextResponse.redirect(`${origin}/login?error=${linked}`);
       }
 
       return NextResponse.redirect(`${origin}${next}`);

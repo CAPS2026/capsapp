@@ -19,7 +19,7 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error" | "not_registered">("idle");
-  const [codeStatus, setCodeStatus] = useState<"idle" | "checking" | "error" | "not_registered">("idle");
+  const [codeStatus, setCodeStatus] = useState<"idle" | "checking" | "error" | "not_registered" | "no_access">("idle");
 
   const callbackError = searchParams.get("error");
 
@@ -58,7 +58,7 @@ function LoginForm() {
     }
     const result = await completeCodeSignIn();
     if ("error" in result) {
-      setCodeStatus(result.error === "not_registered" ? "not_registered" : "error");
+      setCodeStatus(result.error === "not_registered" || result.error === "no_access" ? result.error : "error");
       return;
     }
     router.push(next);
@@ -97,6 +97,12 @@ function LoginForm() {
           </p>
         )}
 
+        {callbackError === "no_access" && status === "idle" && (
+          <p className="text-sm text-danger text-center">
+            Signing in to the app is for staff, committee and Volunteer + only. Volunteers are checked in by a caretaker — no sign-in needed.
+          </p>
+        )}
+
         {status === "sent" ? (
           <div className="flex flex-col gap-3">
             <p className="text-center text-sm text-ink-muted">
@@ -127,6 +133,11 @@ function LoginForm() {
                 <p className="text-sm text-danger">
                   No CAPS account found for that email. Ask a staff member — new volunteers
                   register at the shelter.
+                </p>
+              )}
+              {codeStatus === "no_access" && (
+                <p className="text-sm text-danger">
+                  Signing in to the app is for staff, committee and Volunteer + only. Volunteers are checked in by a caretaker — no sign-in needed.
                 </p>
               )}
               {codeStatus === "error" && (
