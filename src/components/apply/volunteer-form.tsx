@@ -110,7 +110,7 @@ const STEP_TITLE: Record<Step, string> = {
 // surname given on the first page already belong to someone registered, the
 // personal pages are skipped — they only give the home details for
 // fostering / jail break, and sign.
-export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boolean }) {
+export function VolunteerForm({ homecareFirst = false, onDone }: { homecareFirst?: boolean; onDone?: () => void }) {
   const [form, setForm] = useState({
     firstName: "",
     surname: "",
@@ -159,6 +159,9 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
   };
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<"active" | "pending" | "applied" | null>(null);
+  useEffect(() => {
+    if (done) onDone?.();
+  }, [done, onDone]);
   const [isPending, startTransition] = useTransition();
 
   const wantsHomecare = fosterInterest || jailBreakInterest;
@@ -394,7 +397,16 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
           <p>You said you&apos;re interested in adoption — someone from CAPS will be in touch to chat about the next steps.</p>
         )}
 
-        <p className="text-ink">You can close this page now.</p>
+        <p className="text-ink">
+          Want to change your interests, or foster or adopt later? Just fill in this form again and update your
+          interests.
+        </p>
+        <a
+          href="https://capeanimalprotectionshelter.org.au"
+          className="h-11 flex items-center justify-center rounded-[var(--radius)] bg-brand text-white font-bold"
+        >
+          Go to the CAPS website
+        </a>
       </div>
     );
   }
