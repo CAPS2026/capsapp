@@ -1,14 +1,15 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentPerson } from "@/lib/auth";
-import { getPeopleList } from "@/lib/people-data";
+import { getPeopleList, getPendingApprovals } from "@/lib/people-data";
+import { canApprove } from "@/lib/approvers";
+import { ApprovalsList } from "@/components/people/approvals-list";
 import { PeopleList } from "@/components/people/people-list";
 
 export default async function PeoplePage() {
   const person = await getCurrentPerson();
   if (!person?.isStaff) redirect("/dogs");
 
-  const people = await getPeopleList();
+  const [people, approvals, mayApprove] = await Promise.all([getPeopleList(), getPendingApprovals(), canApprove(person)]);
   const pendingCount = people.filter((p) => p.hasPending).length;
 
   return (
@@ -23,15 +24,9 @@ export default async function PeoplePage() {
             {pendingCount > 0 ? ` · ${pendingCount} awaiting approval` : ""}
           </p>
         </div>
-        {person.isAdmin && (
-          <Link
-            href="/people/new"
-            className="shrink-0 h-9 px-3 rounded-[var(--radius)] bg-brand text-white text-sm font-bold flex items-center"
-          >
-            + Add staff
-          </Link>
-        )}
       </div>
+
+      <ApprovalsList items={approvals} viewerCanApprove={mayApprove} />
 
       <PeopleList people={people} />
     </div>

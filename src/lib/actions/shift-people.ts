@@ -17,7 +17,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentPerson } from "@/lib/auth";
 import { sendEmail, siteUrl } from "@/lib/email";
 import { shelterToday } from "@/lib/shift";
-import type { StaffRole } from "@/lib/shift-people-data";
+import { guestPersonId, type StaffRole } from "@/lib/shift-people-data";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const ROLES: StaffRole[] = ["staff", "admin", "volunteer"];
@@ -39,6 +39,8 @@ export type StaffInput = {
 
 /** What happened with their login, said plainly on screen. */
 export type LoginOutcome = { loginReady: boolean; emailed: boolean; problem?: string };
+
+const GUEST_LOCKED = "The Guest sign-in can't be changed here.";
 
 async function requireAdmin() {
   const me = await getCurrentPerson();
@@ -229,6 +231,7 @@ export async function addStaffMember(
 export async function updateStaffMember(id: string, input: StaffInput): Promise<{ error?: string }> {
   const me = await requireAdmin();
   if (!me) return { error: "Admin only." };
+  if (id === (await guestPersonId())) return { error: GUEST_LOCKED };
   const c = clean(input);
   if ("error" in c) return c;
   const v = c.value;
@@ -267,6 +270,7 @@ export async function updateStaffMember(id: string, input: StaffInput): Promise<
 export async function sendLoginInvite(id: string): Promise<{ error: string } | { error?: undefined; login: LoginOutcome }> {
   const me = await requireAdmin();
   if (!me) return { error: "Admin only." };
+  if (id === (await guestPersonId())) return { error: GUEST_LOCKED };
   const supabase = await createClient();
   const { data: p } = await supabase.from("people").select("first_name, email").eq("id", id).maybeSingle();
   if (!p?.email) return { error: "They need an email address first." };
@@ -283,6 +287,7 @@ export async function sendLoginInvite(id: string): Promise<{ error: string } | {
 export async function removeStaffMember(id: string): Promise<{ error?: string; loginOff?: boolean }> {
   const me = await requireAdmin();
   if (!me) return { error: "Admin only." };
+  if (id === (await guestPersonId())) return { error: GUEST_LOCKED };
   if (id === me.id) return { error: "You can't remove yourself." };
 
   const supabase = await createClient();

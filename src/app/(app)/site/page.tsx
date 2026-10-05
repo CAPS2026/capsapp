@@ -22,7 +22,7 @@ export default async function SitePage() {
     <div className="p-4 flex flex-col gap-5">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
-          Site
+          Site Visitors
         </h1>
         <SignInDialog reasons={reasons} />
       </div>
@@ -32,7 +32,7 @@ export default async function SitePage() {
         <SiteVisitBoard visits={visits} />
       </div>
 
-      <TodayVisits visits={today} isStaff={Boolean(person?.isStaff)} />
+      <TodayVisits visits={today} />
 
       {/* Where a new walk-up gets the registration form — they fill it in
           themselves. This is the surface the shared shelter iPad shows. */}
@@ -43,6 +43,18 @@ export default async function SitePage() {
         New volunteer? Open the registration form
         <span aria-hidden="true">→</span>
       </Link>
+
+      {person?.isStaff && (
+        <Link href="/apply/qr" className="text-sm font-semibold text-brand-ink self-start">
+          Printable QR codes for the forms →
+        </Link>
+      )}
+
+      {person?.isStaff && (
+        <Link href="/logs?tab=site" className="text-sm font-semibold text-brand-ink self-start">
+          Past Site Visitor logs →
+        </Link>
+      )}
     </div>
   );
 }

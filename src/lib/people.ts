@@ -5,7 +5,7 @@ import type { Role } from "@/lib/auth";
 
 export const ROLE_LABEL: Record<Role, string> = {
   volunteer: "Volunteer",
-  volunteer_plus: "Volunteer Plus",
+  volunteer_plus: "Volunteer +",
   jailbreak_carer: "Jail break carer",
   foster_carer: "Foster carer",
   adopter: "Adopter",
@@ -16,12 +16,12 @@ export const ROLE_LABEL: Record<Role, string> = {
 
 export const ROLE_BADGE_CLASS: Record<Role, string> = {
   volunteer: "bg-brand-tint text-brand-ink",
-  volunteer_plus: "bg-brand text-white",
-  jailbreak_carer: "bg-warm-tint text-warm-ink",
-  foster_carer: "bg-warm-tint text-warm-ink",
+  volunteer_plus: "bg-brand-ink text-white",
+  jailbreak_carer: "bg-sun text-ink",
+  foster_carer: "bg-warm text-ink",
   adopter: "bg-gray-tint text-ink-muted",
-  staff: "bg-ink text-white",
-  committee: "bg-ink text-white",
+  staff: "bg-[#2C2C2A] text-white",
+  committee: "bg-[#6b7a99] text-white",
   admin: "bg-danger text-white",
 };
 

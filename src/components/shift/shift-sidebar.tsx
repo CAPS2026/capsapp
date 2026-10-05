@@ -5,24 +5,33 @@ import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  MEDS_STYLE,
   PART_LABEL,
-  clock12,
-  firstName,
-  parseYmd,
+  PART_STYLE,
+  clockTime,
+  hhmm,
   sessionInstant,
-  time12,
   timeRange,
   type OpenShift,
   type Part,
 } from "@/lib/shift";
-import { endShift, switchPerson } from "@/lib/actions/shift";
+import { endShift, getEndOfShiftLeft, setVolunteerCount, switchPerson, type EndOfShiftTask } from "@/lib/actions/shift";
 import type { RosterDaySession } from "@/lib/shift-data";
+import type { VetAppointment } from "@/lib/care-data";
 import { formatLeaveDates } from "@/lib/leave";
 import { EmailPreviewLink } from "@/components/shift/email-preview";
 import { PersonAvatar } from "@/components/shift/person-avatar";
-import { EndEarlyDialog, ExtendShiftDialog, HealthConcernDialog } from "@/components/shift/shift-dialogs";
+import { EndEarlyDialog, EndOfShiftDialog, ExtendShiftDialog, HealthConcernDialog } from "@/components/shift/shift-dialogs";
 
 const SITE_LABEL = "Evans Landing";
+
+// Colours chosen by Julie so none of them matches a checklist section.
+const HANDOVER_BG = "#FFE27A";
+const HANDOVER_BORDER = "#D9A800";
+const HANDOVER_INK = "#4A3A00";
+const HEALTH_ORANGE = "#F26B1D";
+const SWITCH_OLIVE = "#6B7A1F";
+const END_RED = "#C8102E";
 
 /** "Xh Ym" (or just "Ym" under an hour). */
 function formatDuration(totalMinutes: number): string {
@@ -42,9 +51,7 @@ function formatGrace(totalMinutes: number): string {
 }
 
 /** Only ever mounted once someone's actually signed in, see the "active
- *  && openShift && session" check in layout.tsx. No "nobody signed in"
- *  fallback state here on purpose, that's what NOT showing this sidebar
- *  at all is for. */
+ *  && openShift && session" check in layout.tsx. */
 export function ShiftSidebar({
   person,
   shift,
@@ -52,10 +59,11 @@ export function ShiftSidebar({
   alsoOn,
   autocloseGraceMinutes,
   lateAfterMinutes,
-  radiusM,
-  latestHandover,
   todayRoster,
   leaveNotices,
+  volunteerCount,
+  vetToday,
+  openHandoverCount,
 }: {
   person: { id: string; name: string };
   shift: OpenShift;
@@ -63,15 +71,18 @@ export function ShiftSidebar({
   /** First names of anyone else rostered on the same session. */
   alsoOn: string[];
   autocloseGraceMinutes: number;
-  /** Grace period in minutes: lateness and finishing early are only
-   *  flagged (and a reason required) beyond it. */
+  /** Grace period in minutes: finishing early is only flagged (and a
+   *  reason required) beyond it. */
   lateAfterMinutes: number;
-  /** How close counts as "on site", metres. */
-  radiusM: number;
-  latestHandover: { personName: string; body: string; part: Part; date: string } | null;
   todayRoster: RosterDaySession[];
   /** Leave decisions to show once, on the first shift after they were made. */
   leaveNotices: { id: string; status: "approved" | "declined"; startDate: string; endDate: string; message: string | null }[];
+  /** How many volunteers came this shift, null until someone enters it. */
+  volunteerCount: number | null;
+  /** Today's vet appointments. */
+  vetToday: VetAppointment[];
+  /** Handover notes not ticked off yet. */
+  openHandoverCount: number;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -87,8 +98,43 @@ export function ShiftSidebar({
     });
   };
 
+  // End shift: any unticked End of Shift tasks first (tick or say why), then
+  // the volunteer count (if nobody has entered it), then a reason if it is
+  // more than the grace period early, then end.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(id);
+  }, []);
+  const endsAtMs = sessionInstant(shift.date, session.ends).getTime() + (shift.extendedMinutes ?? 0) * 60000;
+  const minutesToEnd = (endsAtMs - now.getTime()) / 60000;
+  const [volunteersOpen, setVolunteersOpen] = useState(false);
+  const [endEarlyOpen, setEndEarlyOpen] = useState(false);
+
+  function finish() {
+    if (minutesToEnd > lateAfterMinutes) setEndEarlyOpen(true);
+    else run(() => endShift());
+  }
+  function askVolunteers() {
+    if (volunteerCount === null) setVolunteersOpen(true);
+    else finish();
+  }
+  const [endOfShiftTasks, setEndOfShiftTasks] = useState<EndOfShiftTask[] | null>(null);
+  function startEnd() {
+    setError(null);
+    startTransition(async () => {
+      const r = await getEndOfShiftLeft();
+      if (!("tasks" in r)) setError(r.error);
+      else if (r.tasks.length) setEndOfShiftTasks(r.tasks);
+      else askVolunteers();
+    });
+  }
+
+  const btn =
+    "flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius)] px-2.5 font-extrabold text-white disabled:opacity-50";
+
   return (
-    <aside className="flex w-[clamp(260px,26vw,340px)] shrink-0 flex-col gap-3.5 overflow-y-auto border-r border-line bg-card px-3.5 py-4">
+    <aside className="flex w-[clamp(300px,28vw,340px)] shrink-0 flex-col gap-3.5 overflow-y-auto border-r border-line bg-card px-3.5 py-4">
       <div className="flex items-center gap-2">
         <Image src="/logo.jpg" alt="" width={28} height={28} className="rounded-full" />
         <div>
@@ -99,193 +145,202 @@ export function ShiftSidebar({
         </div>
       </div>
 
-      {error && <p className="text-sm text-danger">{error}</p>}
+      {error && <p className="m-0 text-sm font-semibold text-danger">{error}</p>}
 
-      <ShiftStatus
+      <ShiftCard
         person={person}
         shift={shift}
         session={session}
         alsoOn={alsoOn}
         autocloseGraceMinutes={autocloseGraceMinutes}
-        lateAfterMinutes={lateAfterMinutes}
-        radiusM={radiusM}
+        minutesToEnd={minutesToEnd}
+        volunteerCount={volunteerCount}
         busy={isPending}
         run={run}
-        onEnded={() => router.refresh()}
+        onChanged={() => router.refresh()}
       />
 
-      <button
-        type="button"
-        onClick={() => setHealthOpen(true)}
-        className="flex h-[42px] items-center justify-center gap-2 rounded-[var(--radius)] bg-danger text-[13px] font-extrabold text-white"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
-        </svg>
-        Flag a health concern
-      </button>
-      {healthOpen && <HealthConcernDialog onClose={() => setHealthOpen(false)} />}
-
-      <EmailPreviewLink part={shift.part} />
+      {vetToday.length > 0 && <VetToday appts={vetToday} />}
 
       {leaveNotices.map((n) => (
         <LeaveNotice key={n.id} notice={n} />
       ))}
 
-      {latestHandover && <HandoverBanner note={latestHandover} />}
+      {openHandoverCount > 0 && (
+        <Link
+          href="/shift/handover"
+          className="flex w-full items-center justify-center rounded-[var(--radius)] border-2 px-2.5 py-3 text-center text-[17px] font-extrabold leading-snug"
+          style={{ background: HANDOVER_BG, borderColor: HANDOVER_BORDER, color: HANDOVER_INK }}
+        >
+          Check the handover log now ({openHandoverCount})
+        </Link>
+      )}
+
+      <EmailPreviewLink part={shift.part} />
 
       <TodayRoster sessions={todayRoster} />
 
-      <button
-        type="button"
-        disabled={isPending}
-        onClick={() => run(() => switchPerson().then(() => ({})))}
-        className="mt-auto flex items-center gap-2 text-left text-sm font-bold text-brand-ink disabled:opacity-50"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M21 12a9 9 0 1 1-3-6.7" />
-          <path d="M21 3v6h-6" />
-        </svg>
-        Switch person
-      </button>
-    </aside>
-  );
-}
-
-function ShiftStatus({
-  person,
-  shift,
-  session,
-  alsoOn,
-  autocloseGraceMinutes,
-  lateAfterMinutes,
-  radiusM,
-  busy,
-  run,
-  onEnded,
-}: {
-  person: { id: string; name: string };
-  shift: OpenShift;
-  session: { starts: string; ends: string };
-  alsoOn: string[];
-  autocloseGraceMinutes: number;
-  lateAfterMinutes: number;
-  radiusM: number;
-  busy: boolean;
-  run: (fn: () => Promise<{ error?: string }>) => void;
-  onEnded: () => void;
-}) {
-  const [now, setNow] = useState(() => new Date());
-  const [endEarlyOpen, setEndEarlyOpen] = useState(false);
-  const [extendOpen, setExtendOpen] = useState(false);
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 30000);
-    return () => clearInterval(id);
-  }, []);
-
-  // The finish time counts any overtime already logged with "Extend shift".
-  const endsAtMs = sessionInstant(shift.date, session.ends).getTime() + (shift.extendedMinutes ?? 0) * 60000;
-  const minutesToEnd = (endsAtMs - now.getTime()) / 60000;
-  const isOver = minutesToEnd <= 0;
-  // Amber once over time, red once deep enough into overrun that
-  // auto-close would apply to a genuinely quiet shift, so the colour
-  // means something rather than just escalating for its own sake.
-  const overColor = -minutesToEnd >= autocloseGraceMinutes ? "text-danger" : "text-warm-ink";
-  // From 15 minutes before the finish, and after it, until they extend: say
-  // plainly what happens next and point at the extend button, so nobody
-  // finds out by having their shift close while they are still working.
-  const nudgeToExtend = !shift.extendedMinutes && minutesToEnd <= 15;
-
-  return (
-    <div
-      className="flex flex-col gap-2 rounded-[var(--radius)] border border-line-cool p-3.5"
-      style={{ background: "linear-gradient(180deg, var(--brand-tint), var(--card) 70%)" }}
-    >
-      <div>
-        <div className="text-[15px] font-extrabold text-foreground" style={{ fontFamily: "var(--font-display)" }}>
-          {PART_LABEL[shift.part]} shift
-        </div>
-        <div className="text-[11.5px] font-semibold text-ink-muted">
-          {timeRange(session.starts, session.ends)}
-          {alsoOn.length > 0 ? ` · also on: ${alsoOn.join(", ")}` : ""}
-          {!shift.rostered ? " · covering, not on the roster" : ""}
-        </div>
-      </div>
-
-      <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[#E9F5EF] px-2 py-0.5 text-[10.5px] font-extrabold text-ok">
-        <span className="h-1.5 w-1.5 rounded-full bg-ok motion-safe:animate-pulse" />
-        {firstName(person.name)} &middot; on shift
-      </span>
-
-      <div>
-        <div className="text-[11px] font-extrabold uppercase tracking-[0.04em] text-ink-muted">
-          {isOver ? "Over by" : "Time left"}
-        </div>
-        <div
-          suppressHydrationWarning
-          className={`text-2xl font-extrabold leading-[1.3] tabular-nums ${isOver ? overColor : "text-brand-ink"}`}
-          style={{ fontFamily: "var(--font-display)" }}
+      <div className="mt-auto flex flex-col gap-2.5">
+        <button type="button" onClick={() => setHealthOpen(true)} className={`${btn} py-[13px] text-[19px]`} style={{ background: HEALTH_ORANGE }}>
+          <svg className="shrink-0" width="17" height="24" viewBox="3.5 2 15 21" aria-hidden="true">
+            <path d="M5 22V3" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" fill="none" />
+            <path d="M5 4h12l-2.5 4.5L17 13H5z" fill="#fff" />
+          </svg>
+          Flag a health concern
+        </button>
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => run(() => switchPerson().then(() => ({})))}
+          className={`${btn} py-[13px] text-[19px]`}
+          style={{ background: SWITCH_OLIVE }}
         >
-          {formatDuration(Math.abs(minutesToEnd))}
-        </div>
-        <div className="text-[11px] text-ink-muted">
-          signed in {clock12(shift.startedAt)}
-          {shift.lateMinutes ? `, ${shift.lateMinutes} min late` : ""}
-        </div>
+          <svg className="shrink-0" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 8h14l-4-4" />
+            <path d="M20 16H6l4 4" />
+          </svg>
+          Switch person
+        </button>
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={startEnd}
+          className={`${btn} py-[15px] text-[23px] tracking-[0.06em]`}
+          style={{ background: END_RED }}
+        >
+          END SHIFT
+        </button>
       </div>
 
-      <GeoLine distanceM={shift.distanceM} radiusM={radiusM} />
-
-      {nudgeToExtend && (
-        <div className="rounded-md border border-[#F0D69A] bg-warm-tint px-2.5 py-2 text-[11.5px] font-semibold leading-snug text-warm-ink">
-          {isOver ? `Your shift time was up at ${time12(session.ends)}.` : `Your shift finishes at ${time12(session.ends)}.`}{" "}
-          Still working? Tap &ldquo;Need to extend the shift time?&rdquo; below. If nothing is ticked for{" "}
-          {formatGrace(autocloseGraceMinutes)} after the finish time, the shift closes by itself.
-        </div>
+      {healthOpen && <HealthConcernDialog onClose={() => setHealthOpen(false)} />}
+      {endOfShiftTasks && (
+        <EndOfShiftDialog
+          tasks={endOfShiftTasks}
+          onClose={() => setEndOfShiftTasks(null)}
+          onSaved={() => {
+            setEndOfShiftTasks(null);
+            askVolunteers();
+          }}
+        />
       )}
-
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => {
-          // Finishing before the rostered end (beyond the grace period)
-          // asks for a reason first; the server enforces the same rule.
-          if (minutesToEnd > lateAfterMinutes) setEndEarlyOpen(true);
-          else run(() => endShift());
-        }}
-        className="h-[38px] rounded-[var(--radius)] border-[1.5px] border-danger text-[12.5px] font-extrabold text-danger disabled:opacity-50"
-      >
-        End shift
-      </button>
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => setExtendOpen(true)}
-        className={
-          nudgeToExtend
-            ? "h-[38px] rounded-[var(--radius)] border-[1.5px] border-[#C1800F] text-[12.5px] font-extrabold text-warm-ink disabled:opacity-50"
-            : "text-left text-[12px] font-bold text-brand-ink disabled:opacity-50"
-        }
-      >
-        {shift.extendedMinutes ? `Extended by ${shift.extendedMinutes} min, change` : "Need to extend the shift time?"}
-      </button>
-
+      {volunteersOpen && (
+        <VolunteersDialog
+          onClose={() => setVolunteersOpen(false)}
+          onSaved={() => {
+            setVolunteersOpen(false);
+            finish();
+          }}
+        />
+      )}
       {endEarlyOpen && (
         <EndEarlyDialog
           minutesEarly={Math.round(minutesToEnd)}
           onClose={() => setEndEarlyOpen(false)}
           onEnded={() => {
             setEndEarlyOpen(false);
-            onEnded();
+            router.refresh();
           }}
         />
       )}
+    </aside>
+  );
+}
+
+function ShiftCard({
+  person,
+  shift,
+  session,
+  alsoOn,
+  autocloseGraceMinutes,
+  minutesToEnd,
+  volunteerCount,
+  busy,
+  run,
+  onChanged,
+}: {
+  person: { id: string; name: string };
+  shift: OpenShift;
+  session: { starts: string; ends: string };
+  alsoOn: string[];
+  autocloseGraceMinutes: number;
+  minutesToEnd: number;
+  volunteerCount: number | null;
+  busy: boolean;
+  run: (fn: () => Promise<{ error?: string }>) => void;
+  onChanged: () => void;
+}) {
+  const [extendOpen, setExtendOpen] = useState(false);
+  const style = PART_STYLE[shift.part];
+  const isOver = minutesToEnd <= 0;
+  // Amber once over time, red once deep enough into overrun that
+  // auto-close would apply to a genuinely quiet shift.
+  const overColor = -minutesToEnd >= autocloseGraceMinutes ? "text-danger" : "text-warm-ink";
+  // From 15 minutes before the finish, and after it, until they extend: say
+  // plainly what happens next and point at the extend button.
+  const nudgeToExtend = !shift.extendedMinutes && minutesToEnd <= 15;
+
+  return (
+    <div className="flex flex-col gap-2 rounded-[var(--radius)] border-2 p-3.5" style={{ borderColor: style.accent, background: style.tint }}>
+      <div>
+        <div className="text-[17px] font-extrabold text-foreground" style={{ fontFamily: "var(--font-display)" }}>
+          {person.name.split(/\s+/)[0]}
+        </div>
+        <div className="text-[13px] font-extrabold tabular-nums tracking-[0.03em]" style={{ color: style.ink }}>
+          {PART_LABEL[shift.part].toUpperCase()} SHIFT {timeRange(session.starts, session.ends)}
+        </div>
+        {(alsoOn.length > 0 || !shift.rostered) && (
+          <div className="text-[11.5px] font-semibold text-ink-muted">
+            {alsoOn.length > 0 ? `Also on: ${alsoOn.join(", ")}` : ""}
+            {alsoOn.length > 0 && !shift.rostered ? ". " : ""}
+            {!shift.rostered ? "Covering, not on the roster" : ""}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div className="text-[11px] font-extrabold uppercase tracking-[0.04em] text-ink-muted">{isOver ? "Over by" : "Time left"}</div>
+        <div
+          suppressHydrationWarning
+          className={`text-[26px] font-extrabold leading-[1.25] tabular-nums ${isOver ? overColor : "text-foreground"}`}
+          style={{ fontFamily: "var(--font-display)" }}
+        >
+          {formatDuration(Math.abs(minutesToEnd))}
+        </div>
+        <div className="text-[11px] text-ink-muted">
+          signed in {clockTime(shift.startedAt)}
+          {shift.lateMinutes ? `, ${shift.lateMinutes} min late` : ""}
+        </div>
+      </div>
+
+      <VolunteerCounter count={volunteerCount} busy={busy} run={run} />
+
+      {nudgeToExtend && (
+        <div className="rounded-md border border-[#F0D69A] bg-warm-tint px-2.5 py-2 text-[11.5px] font-semibold leading-snug text-warm-ink">
+          {isOver ? `Your shift time was up at ${hhmm(session.ends)}.` : `Your shift finishes at ${hhmm(session.ends)}.`} Still working? Tap
+          &ldquo;Need to extend the shift time?&rdquo; below. If nothing is ticked for {formatGrace(autocloseGraceMinutes)} after the
+          finish time, the shift closes by itself.
+        </div>
+      )}
+
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => setExtendOpen(true)}
+        className={
+          nudgeToExtend
+            ? "h-[38px] rounded-[var(--radius)] border-[1.5px] border-[#C1800F] bg-card text-[12.5px] font-extrabold text-warm-ink disabled:opacity-50"
+            : "text-left text-[12px] font-bold text-brand-ink disabled:opacity-50"
+        }
+      >
+        {shift.extendedMinutes ? `Extended by ${shift.extendedMinutes} min, change` : "Need to extend the shift time?"}
+      </button>
+
       {extendOpen && (
         <ExtendShiftDialog
           onClose={() => setExtendOpen(false)}
           onSaved={() => {
             setExtendOpen(false);
-            onEnded();
+            onChanged();
           }}
         />
       )}
@@ -293,58 +348,122 @@ function ShiftStatus({
   );
 }
 
-/** The mockup's sign-in confirmation ("signed in, on site 40m from..."),
- *  kept on the shift card so it's there for the whole shift rather than
- *  vanishing the moment the checklist loads. */
-function GeoLine({ distanceM, radiusM }: { distanceM: number | null; radiusM: number }) {
-  if (distanceM == null) {
-    return <p className="m-0 text-[10.5px] text-ink-muted">Location wasn&rsquo;t shared when you signed in.</p>;
-  }
-  const near = distanceM <= radiusM;
-  const away = distanceM >= 1000 ? `${(distanceM / 1000).toFixed(1)} km` : `${distanceM} m`;
+/** "Number of volunteers this shift", minus and plus. One number for the
+ *  whole shift, saved straight away. */
+function VolunteerCounter({
+  count,
+  busy,
+  run,
+}: {
+  count: number | null;
+  busy: boolean;
+  run: (fn: () => Promise<{ error?: string }>) => void;
+}) {
+  const shown = count ?? 0;
+  const round =
+    "flex h-9 w-9 items-center justify-center rounded-full border-[1.5px] border-brand bg-card text-lg font-extrabold text-brand-ink disabled:opacity-40";
   return (
-    <p className={`m-0 flex items-start gap-1 text-[10.5px] font-semibold ${near ? "text-ok" : "text-warm-ink"}`}>
-      <svg className="mt-px shrink-0" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        {near ? <path d="M20 6 9 17l-5-5" /> : <path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />}
-      </svg>
-      <span>{near ? `On site, ${away} from the shelter` : `Signed in ${away} from the shelter, flagged in the shift email`}</span>
-    </p>
+    <div className="flex items-center justify-between gap-2 rounded-[10px] border border-line-cool bg-card px-2.5 py-2">
+      <div className="max-w-[12ch] text-[13px] font-extrabold leading-tight">Number of volunteers this shift</div>
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          aria-label="One fewer"
+          disabled={busy || shown === 0}
+          onClick={() => run(() => setVolunteerCount(shown - 1))}
+          className={round}
+        >
+          &minus;
+        </button>
+        <span className="min-w-[2ch] text-center text-[22px] font-extrabold tabular-nums">{count === null ? "-" : count}</span>
+        <button type="button" aria-label="One more" disabled={busy} onClick={() => run(() => setVolunteerCount(shown + 1))} className={round}>
+          +
+        </button>
+      </div>
+    </div>
   );
 }
 
-function HandoverBanner({ note }: { note: { personName: string; body: string; part: Part; date: string } }) {
-  const day = parseYmd(note.date).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" });
+/** Asked at End shift when nobody has entered the volunteer count. 0 is
+ *  fine and needs no reason. Doesn't close on a click outside. */
+function VolunteersDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [n, setN] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const round =
+    "flex h-11 w-11 items-center justify-center rounded-full border-[1.5px] border-brand bg-card text-xl font-extrabold text-brand-ink disabled:opacity-40";
   return (
-    <div className="flex flex-col gap-1.5 rounded-[var(--radius)] border border-[#F0D69A] bg-warm-tint px-3 py-2.5">
-      <div className="flex items-center gap-1.5 text-warm-ink">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M8 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3" />
-          <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z" />
-        </svg>
-        <span className="text-[10px] font-extrabold uppercase tracking-[0.05em]">Handover</span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(44,44,42,0.4)] p-6">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Volunteers this shift"
+        className="flex w-full max-w-[420px] flex-col gap-3 rounded-[14px] bg-background p-6 shadow-[0_20px_40px_rgba(0,0,0,0.25)]"
+      >
+        <h2 className="m-0 text-lg font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
+          How many volunteers came this shift?
+        </h2>
+        <p className="m-0 text-sm text-ink-muted">Put 0 if nobody came.</p>
+        <div className="flex items-center justify-center gap-5">
+          <button type="button" aria-label="One fewer" className={round} disabled={n === 0} onClick={() => setN((x) => Math.max(0, x - 1))}>
+            &minus;
+          </button>
+          <span className="min-w-[2ch] text-center text-3xl font-extrabold tabular-nums">{n}</span>
+          <button type="button" aria-label="One more" className={round} onClick={() => setN((x) => x + 1)}>
+            +
+          </button>
+        </div>
+        {error && <p className="m-0 text-sm font-semibold text-danger">{error}</p>}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() =>
+              startTransition(async () => {
+                const r = await setVolunteerCount(n);
+                if (r.error) setError(r.error);
+                else onSaved();
+              })
+            }
+            className="h-11 flex-1 rounded-[var(--radius)] bg-brand text-sm font-bold text-white disabled:opacity-50"
+          >
+            {isPending ? "Saving…" : "Save and end shift"}
+          </button>
+          <button type="button" onClick={onClose} className="h-11 rounded-[var(--radius)] border border-line px-4 text-sm font-bold text-ink-muted">
+            Back
+          </button>
+        </div>
       </div>
-      <p className="m-0 line-clamp-4 text-xs leading-[1.45] text-foreground">&quot;{note.body}&quot;</p>
-      <p className="m-0 text-[10.5px] font-semibold text-ink-muted">
-        {firstName(note.personName)} &middot; {note.part === "morning" ? "AM" : "PM"} shift, {day}
-      </p>
-      <Link href="/shift/handover" className="w-fit text-[13px] font-bold text-brand-ink">
-        View all &rarr;
-      </Link>
+    </div>
+  );
+}
+
+/** Today's vet appointments, bold so they aren't missed. */
+function VetToday({ appts }: { appts: VetAppointment[] }) {
+  return (
+    <div className="flex flex-col gap-1.5 rounded-[10px] border-2 px-3 py-2.5" style={{ borderColor: MEDS_STYLE.accent, background: MEDS_STYLE.tint }}>
+      <div className="text-[15px] font-extrabold uppercase tracking-[0.05em]" style={{ color: MEDS_STYLE.ink }}>
+        Vet today
+      </div>
+      {appts.map((a) => (
+        <div key={a.id} className="text-sm font-extrabold leading-snug text-foreground">
+          {a.dogName}: {a.time ? hhmm(a.time) : a.part} {a.kind === "other" ? "appointment" : a.kind}
+          {a.reason ? <div>{a.reason}</div> : null}
+          {a.instructions ? <div>{a.instructions}</div> : null}
+        </div>
+      ))}
     </div>
   );
 }
 
 const PART_ORDER: Part[] = ["morning", "afternoon"];
 
-/** The mockup's "Today's roster": who's on, session by session, with
- *  "unstaffed" spelled out rather than left as a gap. */
+/** Who's on today, session by session, with "unstaffed" spelled out. */
 function TodayRoster({ sessions }: { sessions: RosterDaySession[] }) {
   const byPart = new Map(sessions.map((s) => [s.part, s]));
   return (
     <div>
-      <h2 className="m-0 mb-1 text-[10.5px] font-extrabold uppercase tracking-[0.06em] text-ink-muted">
-        Today&rsquo;s roster
-      </h2>
+      <h2 className="m-0 mb-1 text-[10.5px] font-extrabold uppercase tracking-[0.06em] text-ink-muted">Today&rsquo;s roster</h2>
       <div>
         {PART_ORDER.map((part) => {
           const s = byPart.get(part);
@@ -370,8 +489,7 @@ function TodayRoster({ sessions }: { sessions: RosterDaySession[] }) {
   );
 }
 
-/** A leave decision, shown once: the first shift after Shayna decided. After
- *  that it only lives on the Roster tab. */
+/** A leave decision, shown once: the first shift after Shayna decided. */
 function LeaveNotice({
   notice,
 }: {

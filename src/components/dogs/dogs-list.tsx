@@ -16,7 +16,7 @@ import {
 import { DogActionButton } from "@/components/dogs/dog-action-button";
 import { ActionMenu } from "@/components/dogs/action-menu";
 
-type FilterKey = "available" | "out_now" | "mine";
+type FilterKey = "available" | "out_now";
 
 export function DogsList({
   dogs,
@@ -56,10 +56,9 @@ export function DogsList({
     return dogs.filter((dog) => {
       if (activeFilter === "available" && dog.status !== "available") return false;
       if (activeFilter === "out_now" && !statusByCode.get(dog.status)?.isOut) return false;
-      if (activeFilter === "mine" && dog.current?.personId !== currentPersonId) return false;
       return true;
     });
-  }, [dogs, activeFilter, statusByCode, currentPersonId]);
+  }, [dogs, activeFilter, statusByCode]);
 
   const groups = useMemo(() => {
     return statusMeta.map((status) => {
@@ -80,7 +79,6 @@ export function DogsList({
       <div className="flex gap-2 flex-wrap">
         <FilterChip label="Available" active={activeFilter === "available"} onClick={() => toggleFilter("available")} />
         <FilterChip label="Out now" active={activeFilter === "out_now"} onClick={() => toggleFilter("out_now")} />
-        <FilterChip label="My dogs" active={activeFilter === "mine"} onClick={() => toggleFilter("mine")} />
       </div>
 
       {groups.map(({ status, dogs: groupDogs }) =>
@@ -204,6 +202,7 @@ function DogCard({
             dogId={dog.id}
             mode="bring_in"
             label={endActionLabel(dog.status)}
+            overdue={!!dog.current.dueBack && new Date(dog.current.dueBack) < new Date()}
             canKiosk={canKiosk}
             currentPersonId={currentPersonId}
             currentPersonName={currentPersonName}
@@ -265,7 +264,7 @@ function CardLine({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSett
     }
     case "available":
       return (
-        <p className="text-xs truncate text-ink-muted">
+        <p className="text-xs truncate text-ink">
           {dog.lastWalkAt
             ? `Last walk: ${daysAgoLabel(dog.lastWalkAt)}, 4wk time: ${formatHoursMinutes(dog.fourWeekWalkMinutes)}`
             : "Never walked"}
@@ -274,7 +273,7 @@ function CardLine({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSett
     case "bed_rest":
       if (!c) return null;
       return (
-        <p className="text-xs text-ink-muted">
+        <p className="text-xs text-ink">
           {formatStartedLine("Start", c.startedAt)}
           {c.dueBack && <> · {formatStartedLine("Due End", c.dueBack)}</>}
           {c.dueBack && <OverdueFlag dueBack={c.dueBack} />}
@@ -285,11 +284,16 @@ function CardLine({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSett
     case "fostered":
       if (!c) return null;
       return (
-        <p className="text-xs text-ink-muted">
-          With: {c.personName ?? "someone"} · {formatStartedLine("Start", c.startedAt)}
-          {c.dueBack && <> · {formatStartedLine("Due End", c.dueBack)}</>}
-          {c.dueBack && <OverdueFlag dueBack={c.dueBack} />} · Time out: {formatDaysHoursOut(c.startedAt)}
-        </p>
+        <div className="text-xs text-ink">
+          <p>
+            With: {c.personName ?? "someone"} · Time out: {formatDaysHoursOut(c.startedAt)}
+          </p>
+          <p>
+            {formatStartedLine("Start", c.startedAt)}
+            {c.dueBack && <> · {formatStartedLine("Due End", c.dueBack)}</>}
+            {c.dueBack && <OverdueFlag dueBack={c.dueBack} />}
+          </p>
+        </div>
       );
     default:
       return null;

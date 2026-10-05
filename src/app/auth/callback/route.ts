@@ -1,6 +1,8 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { linkPersonToAuthUser } from "@/lib/link-person";
+import { CAFE_COOKIE, UNLOCK_COOKIE } from "@/lib/cafe";
 
 /**
  * Handles the redirect from a magic-link email or an OAuth provider.
@@ -26,16 +28,22 @@ export async function GET(request: Request) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error && data.user?.email) {
-      const isRegistered = await linkPersonToAuthUser(data.user.id, data.user.email);
+      const linked = await linkPersonToAuthUser(data.user.id, data.user.email);
 
-      if (!isRegistered) {
+      if (linked !== "ok") {
         // Google sign-in has no pre-check like magic link's shouldCreateUser
         // (that only applies to OTP) — this is where an unregistered Google
         // sign-in gets caught. Sign the session back out rather than leave
         // them authenticated with nothing behind it.
         await supabase.auth.signOut();
-        return NextResponse.redirect(`${origin}/login?error=not_registered`);
+        return NextResponse.redirect(`${origin}/login?error=${linked}`);
       }
+
+      // A fresh Google sign-in proves who you are, so it leaves volunteer mode
+      // on this device, same as the emailed-code path (see actions/auth.ts).
+      const jar = await cookies();
+      jar.delete(CAFE_COOKIE);
+      jar.delete(UNLOCK_COOKIE);
 
       return NextResponse.redirect(`${origin}${next}`);
     }

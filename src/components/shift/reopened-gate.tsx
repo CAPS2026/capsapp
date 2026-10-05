@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { PART_LABEL, firstName, time12, type Part } from "@/lib/shift";
+import { PART_LABEL, firstName, hhmm, type Part } from "@/lib/shift";
 import { extendShift, switchPerson } from "@/lib/actions/shift";
 
 const MORE_CHOICES = [15, 30, 45, 60, 120];
@@ -72,7 +72,7 @@ export function ReopenedGate({
           Welcome back, {firstName(personName)}
         </h2>
         <p className="m-0 text-sm leading-relaxed text-ink-muted">
-          Your {PART_LABEL[part].toLowerCase()} shift finished at {time12(ends)} and had closed by itself. It&rsquo;s open
+          Your {PART_LABEL[part].toLowerCase()} shift finished at {hhmm(ends)} and had closed by itself. It&rsquo;s open
           again. Please tell us roughly how much longer you will work, so your extra time is on record. This is
           required.
         </p>

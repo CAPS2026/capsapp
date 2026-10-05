@@ -10,8 +10,12 @@ import {
   ageFromDob,
   type RegisterResult,
 } from "@/lib/registration";
-import { sendEmail, siteUrl } from "@/lib/email";
-import { DEFAULT_ADMIN_EMAIL, adminNotificationEmail, applicantAckEmail } from "@/lib/homecare";
+import { sendEmail } from "@/lib/email";
+import type { homePayload } from "@/lib/homecare-form";
+import { parentConsentEmail } from "@/lib/consent-email";
+import { sendHomecareEmails } from "@/lib/homecare-notify";
+import { addAdoptionInterest, sendAdoptionEmails } from "@/lib/adoption-notify";
+import { savePersonPhotoFromDataUrl } from "@/lib/person-photo-upload";
 
 // Public, unauthenticated intake. Runs with the service-role client because
 // RLS on `people` is staff-only for insert (docs/schema.md §8) and an
@@ -42,11 +46,17 @@ export async function registerVolunteer(input: {
   parentName: string;
   parentPhone: string;
   parentEmail: string;
+  /** Typed full name of the parent/guardian giving consent. */
+  parentSignature: string;
   parentalConsent: boolean;
   over18: boolean;
   interests: string[];
   fosterInterest: boolean;
   jailBreakInterest: boolean;
+  /** Interested in adopting a CAPS dog or cat. */
+  adoptionInterest?: boolean;
+  /** Home / garden details, filled in when a homecare box is ticked. */
+  home?: ReturnType<typeof homePayload>;
   experienceLevel: string;
   experienceOther: string;
   medicalIssues: string;
@@ -55,6 +65,8 @@ export async function registerVolunteer(input: {
   imageConsent: boolean | null;
   agreeTerms: boolean;
   signatureName: string;
+  /** Optional photo, a small JPEG data URL shrunk in the browser. */
+  photoData?: string;
   /** Honeypot — real users never see or fill this. */
   website: string;
 }): Promise<RegisterResult> {
@@ -84,7 +96,7 @@ export async function registerVolunteer(input: {
   if (!experienceCode) return { error: "Please pick the option that best describes your experience." };
   if (experienceCode === "other" && !clean(input.experienceOther))
     return { error: "Please describe your experience." };
-  if (interests.length === 0 && !wantsHomecare)
+  if (interests.length === 0 && !wantsHomecare && !input.adoptionInterest)
     return { error: "Pick at least one thing you'd like to help with." };
   if (input.imageConsent === null)
     return { error: "Please answer the promotional-image consent question." };
@@ -100,6 +112,10 @@ export async function registerVolunteer(input: {
       return {
         error: "Because you're under 18, please give a parent or guardian's name and phone number.",
       };
+    if (!clean(input.parentEmail) || !/^[^@s]+@[^@s]+.[^@s]+$/.test(clean(input.parentEmail)))
+      return { error: "Please give the parent or guardian's email address — we send them a copy of their consent." };
+    if (!clean(input.parentSignature))
+      return { error: "The parent or guardian needs to type their full name to give consent." };
     if (!input.parentalConsent)
       return {
         error: "A parent or guardian needs to tick the consent box for an under-18 to volunteer.",
@@ -145,6 +161,7 @@ export async function registerVolunteer(input: {
     parent_email: minor ? clean(input.parentEmail) || null : null,
     parental_consent: minor,
     parental_consent_date: minor ? today : null,
+    parent_signature_name: minor ? clean(input.parentSignature) : null,
     image_consent: input.imageConsent,
   };
 
@@ -154,6 +171,7 @@ export async function registerVolunteer(input: {
   // been applied yet. Retry without it so registration still works.
   if (personRes.error?.code === "42703") {
     delete personFields.image_consent;
+    delete personFields.parent_signature_name;
     personRes = await supabase.from("people").insert(personFields).select("id").single();
   }
 
@@ -170,6 +188,9 @@ export async function registerVolunteer(input: {
     }
     return { error: personErr?.message ?? "Something went wrong saving your registration." };
   }
+
+  // Optional photo — best effort, never fails the registration.
+  await savePersonPhotoFromDataUrl(supabase, personRow.id, input.photoData, { onlyIfBlank: false });
 
   const experienceText = experienceLabel(experienceCode || null, input.experienceOther);
   const signature = clean(input.signatureName);
@@ -206,6 +227,9 @@ export async function registerVolunteer(input: {
   if (input.jailBreakInterest)
     roleRows.push({ person_id: personRow.id, role: "jailbreak_carer", status: "pending", granted_on: null });
 
+  if (input.adoptionInterest)
+    roleRows.push({ person_id: personRow.id, role: "adopter", status: "pending", granted_on: null });
+
   const { data: insertedRoles, error: roleErr } = await supabase
     .from("person_roles")
     .insert(roleRows)
@@ -217,6 +241,24 @@ export async function registerVolunteer(input: {
       person_id: personRow.id,
       over_18: input.over18,
       experience: experienceText,
+      ...(input.home
+        ? {
+            property_ownership: clean(input.home.propertyOwnership) || null,
+            fence_type: clean(input.home.fenceType) || null,
+            fence_height: clean(input.home.fenceHeight) || null,
+            people_at_home: Number.isFinite(parseInt(input.home.peopleAtHome, 10)) ? parseInt(input.home.peopleAtHome, 10) : null,
+            children_u16: Number.isFinite(parseInt(input.home.childrenU16, 10)) ? parseInt(input.home.childrenU16, 10) : null,
+            other_animals: clean(input.home.otherAnimals) || null,
+            animal_details: clean(input.home.animalDetails) || null,
+            vaccines_current: input.home.vaccinesCurrent,
+            jb_day: input.home.jbDay,
+            jb_weekend: input.home.jbWeekend,
+            jb_shift: input.home.jbShift,
+            jb_school: input.home.jbSchool,
+            foster_short: input.home.fosterShort,
+            foster_long: input.home.fosterLong,
+          }
+        : {}),
       agree_terms: true,
       signature_name: signature,
       signature_date: today,
@@ -241,64 +283,38 @@ export async function registerVolunteer(input: {
     });
   }
 
-  return { ok: true, status: minor ? "pending" : "active" };
-}
-
-async function sendHomecareEmails(opts: {
-  supabase: ReturnType<typeof createAdminClient>;
-  personId: string;
-  firstName: string;
-  name: string;
-  email: string;
-  phone: string;
-  address: string | null;
-  experience: string | null;
-  wantsFoster: boolean;
-  wantsJailBreak: boolean;
-  jailBreakRoleId: string | null;
-}) {
-  try {
-    const { data: settings } = await opts.supabase
-      .from("org_settings")
-      .select("admin_notification_email")
-      .maybeSingle();
-    const adminEmail =
-      (settings?.admin_notification_email as string | undefined)?.trim() || DEFAULT_ADMIN_EMAIL;
-
-    let jailBreakApproveUrl: string | null = null;
-    if (opts.wantsJailBreak && opts.jailBreakRoleId) {
-      const { data: tok } = await opts.supabase
-        .from("homecare_approval_tokens")
-        .insert({ person_role_id: opts.jailBreakRoleId })
-        .select("token")
-        .single();
-      if (tok?.token) jailBreakApproveUrl = `${siteUrl()}/approve/${tok.token}`;
-    }
-
-    const admin = adminNotificationEmail({
-      name: opts.name,
-      email: opts.email,
-      phone: opts.phone,
-      address: opts.address,
-      experience: opts.experience,
-      wantsFoster: opts.wantsFoster,
-      wantsJailBreak: opts.wantsJailBreak,
-      jailBreakApproveUrl,
-      personUrl: `${siteUrl()}/people/${opts.personId}`,
+  if (input.adoptionInterest) {
+    await sendAdoptionEmails(supabase, {
+      personId: personRow.id,
+      firstName,
+      name: `${firstName} ${surname}`,
+      email,
+      phone,
     });
-    const ack = applicantAckEmail({
-      firstName: opts.firstName,
-      wantsFoster: opts.wantsFoster,
-      wantsJailBreak: opts.wantsJailBreak,
-    });
-
-    const [r1, r2] = await Promise.all([
-      sendEmail({ to: adminEmail, subject: admin.subject, text: admin.text, html: admin.html }),
-      sendEmail({ to: opts.email, subject: ack.subject, text: ack.text, html: ack.html }),
-    ]);
-    if (!r1.ok) console.error("homecare admin email failed:", r1.error);
-    if (!r2.ok) console.error("homecare ack email failed:", r2.error);
-  } catch (e) {
-    console.error("sendHomecareEmails threw:", e);
   }
+
+  // Under-18: confirm to the parent/guardian what they've agreed to.
+  // Best-effort, never fails the registration.
+  if (minor) {
+    try {
+      const mail = parentConsentEmail({
+        parentName: clean(input.parentName),
+        parentSignature: clean(input.parentSignature),
+        parentPhone: clean(input.parentPhone),
+        childName: `${firstName} ${surname}`,
+        childDob: dob,
+        activities: interests,
+        wantsFoster: input.fosterInterest,
+        wantsJailBreak: input.jailBreakInterest,
+        imageConsent: input.imageConsent,
+        signedOn: today,
+      });
+      const r = await sendEmail({ to: clean(input.parentEmail), subject: mail.subject, text: mail.text, html: mail.html });
+      if (!r.ok) console.error("parent consent email failed:", r.error);
+    } catch (e) {
+      console.error("parent consent email threw:", e);
+    }
+  }
+
+  return { ok: true, status: minor ? "pending" : "active" };
 }

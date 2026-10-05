@@ -11,16 +11,17 @@
 
 import { sendEmail } from "@/lib/email";
 import { shiftDb } from "@/lib/shift-db";
+import { DOSE_REASON_LABEL, VET_KIND_LABEL, getDueDoses, getVetAppointments, getVolunteerCount } from "@/lib/care-data";
 import {
   PART_LABEL,
   CATEGORY_LABEL,
   SHELTER_TZ,
-  clock12,
+  clockTime,
   parseYmd,
   sessionInstant,
   shelterToday,
   shiftDay,
-  time12,
+  hhmm,
   type Part,
 } from "@/lib/shift";
 import {
@@ -62,14 +63,20 @@ export type EmailPreview = {
   outstanding: string[];
   handover: SessionHandoverRow[];
   health: SessionHealthConcern[];
+  /** How many volunteers came (null: not entered). */
+  volunteers: number | null;
+  /** Each dose due this shift: given, not given, or not recorded. */
+  meds: { text: string; problem: boolean }[];
+  /** This shift's vet appointments. */
+  vet: string[];
   /** False when nobody's configured to receive it (so preview still works). */
   hasRecipients: boolean;
 };
 
-type Built = Pick<EmailPreview, "people" | "outstanding" | "handover" | "health">;
+type Built = Pick<EmailPreview, "people" | "outstanding" | "handover" | "health" | "volunteers" | "meds" | "vet">;
 
 function timeLabel(iso: string) {
-  return clock12(iso);
+  return clockTime(iso);
 }
 
 function dayShort(date: string) {
@@ -85,7 +92,7 @@ function whenLabel(iso: string) {
     day: "numeric",
     month: "short",
   });
-  return `${day}, ${clock12(iso)}`;
+  return `${day}, ${clockTime(iso)}`;
 }
 
 /** The status lines for one person's shift: late or on time, full shift
@@ -164,11 +171,13 @@ function statusLines(s: SessionShiftRow, graceMin: number): string[] {
  *  ticked, so a morning task ticked at 3:49pm never reads as if it was done
  *  on time by the afternoon shift. */
 function doneLabel(t: SessionTasksRow, date: string, endsAtMs: number, graceMin: number): string {
-  const note = t.status === "not_required" && t.note ? `: ${t.note}` : "";
+  // Any note typed on the task shows beside it (Julie, 1 Oct: notes on
+  // ticked tasks, such as "Monthly meds given", were being left out).
+  const note = t.note ? `: ${t.note}` : "";
   if (!t.actionedAt) return `${t.title}${note}`;
   const sameDay =
     new Intl.DateTimeFormat("en-CA", { timeZone: SHELTER_TZ }).format(new Date(t.actionedAt)) === date;
-  const when = sameDay ? clock12(t.actionedAt) : whenLabel(t.actionedAt);
+  const when = sameDay ? clockTime(t.actionedAt) : whenLabel(t.actionedAt);
   if (t.carriedOver) {
     const origin = t.date === date ? `${t.part} task` : `${dayShort(t.date)} ${t.part} task`;
     return `${t.title} (${origin}, ticked at ${when})${note}`;
@@ -188,8 +197,13 @@ function buildBlocks(
   radiusM: number,
   graceMin: number,
   endsAtMs: number,
-): Built {
+): Pick<Built, "people" | "outstanding" | "handover" | "health"> {
   const people = new Map<string, PersonBlock>();
+  // Ticks carry the plain name from people; a guest's shift shows the name
+  // they typed. This sends "Guest" ticks to that guest's block.
+  const shownAs = new Map<string, string>();
+  for (const s of shifts) shownAs.set(s.personKey, s.personName);
+  const shown = (name: string) => shownAs.get(name) ?? name;
   for (const s of shifts) {
     const flags: string[] = [];
     if (!s.rostered) flags.push("Covering, not on the roster");
@@ -215,7 +229,8 @@ function buildBlocks(
     });
   }
 
-  const blockFor = (name: string): PersonBlock => {
+  const blockFor = (raw: string): PersonBlock => {
+    const name = shown(raw);
     let p = people.get(name);
     if (!p) {
       p = { name, startedAt: null, endedAt: null, status: [], flags: [], done: [], notNeeded: [], extraDone: [] };
@@ -237,7 +252,10 @@ function buildBlocks(
       blockFor(t.actionedByName).notNeeded.push(doneLabel(t, date, endsAtMs, graceMin));
     } else if (t.status === "open") {
       const from = t.carriedOver ? `, from ${t.date === date ? "this morning" : dayShort(t.date)}` : "";
-      const claim = t.claimedByName ? `, claimed by ${t.claimedByName}` : "";
+      // Any note shows. On an End of Shift task it is the reason it was not
+      // done (asked at END SHIFT).
+      const why = t.note ? (t.category === "end_of_day" ? `, not done because: ${t.note}` : `, note: ${t.note}`) : "";
+      const claim = `${t.claimedByName ? `, claimed by ${t.claimedByName}` : ""}${why}`;
       const detail = `${from}${claim}`.replace(/^, /, "");
       const label = t.category
         ? `${t.title} (${CATEGORY_LABEL[t.category]}${from}${claim})`
@@ -256,6 +274,20 @@ function buildBlocks(
 function textBody(date: string, part: Part, b: Built, updateNote?: string): string {
   const day = parseYmd(date).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" });
   const lines = [...(updateNote ? [updateNote, ""] : []), `${PART_LABEL[part]} shift, ${day}`, ""];
+
+  lines.push(`VOLUNTEERS THIS SHIFT: ${b.volunteers ?? "not entered"}`, "");
+
+  if (b.meds.length) {
+    lines.push("MEDICATIONS");
+    for (const m of b.meds) lines.push(`  ${m.problem ? "! " : ""}${m.text}`);
+    lines.push("");
+  }
+
+  if (b.vet.length) {
+    lines.push("VET");
+    for (const v of b.vet) lines.push(`  ${v}`);
+    lines.push("");
+  }
 
   if (b.health.length) {
     lines.push("HEALTH CONCERNS");
@@ -317,6 +349,22 @@ function htmlBody(date: string, part: Part, b: Built, updateNote?: string): stri
       </div>`
     : "";
 
+  const meds = b.meds.length
+    ? `<div style="border:1px solid #E9B8CF;background:#FBE9F1;border-radius:10px;padding:14px;margin-bottom:12px;">
+        <p style="margin:0 0 6px;font-weight:800;color:#7E1F4A;">Medications</p>
+        <ul style="margin:0;padding-left:20px;font-size:14px;line-height:1.6;">${b.meds
+          .map((m) => `<li${m.problem ? ' style="color:#B42318;font-weight:700;"' : ""}>${esc(m.text)}</li>`)
+          .join("")}</ul>
+      </div>`
+    : "";
+
+  const vet = b.vet.length
+    ? `<div style="border:1px solid #E9B8CF;border-radius:10px;padding:14px;margin-bottom:12px;">
+        <p style="margin:0 0 6px;font-weight:800;color:#7E1F4A;">Vet</p>
+        <ul style="margin:0;padding-left:20px;font-size:14px;line-height:1.6;">${b.vet.map((v) => `<li>${esc(v)}</li>`).join("")}</ul>
+      </div>`
+    : "";
+
   const taskList = (heading: string, items: string[]) =>
     items.length
       ? `<p style="margin:12px 0 4px;font-size:13px;font-weight:800;color:#2C2C2A;">${heading} (${items.length})</p>
@@ -348,7 +396,7 @@ function htmlBody(date: string, part: Part, b: Built, updateNote?: string): stri
     ? b.handover
         .map(
           (h) =>
-            `<p style="margin:4px 0;font-size:14px;"><b>${esc(h.personName)}</b> <span style="color:#6B6B68;font-size:12px;">${timeLabel(h.createdAt)}</span><br>${esc(h.body)}</p>`,
+            `<p style="margin:4px 0;font-size:14px;"><b>${esc(h.personName)}</b> <span style="color:#6B6B68;font-size:12px;">${timeLabel(h.createdAt)}</span><br><span style="white-space:pre-line;">${esc(h.body)}</span></p>`,
         )
         .join("")
     : `<p style="margin:0;font-size:14px;color:#6B6B68;">No handover notes this shift.</p>`;
@@ -357,6 +405,9 @@ function htmlBody(date: string, part: Part, b: Built, updateNote?: string): stri
     <div style="font-family:sans-serif;max-width:520px;">
       ${updateNote ? `<p style="margin:0 0 12px;padding:10px 12px;background:#FEF3DC;border:1px solid #F0D69A;border-radius:8px;font-size:14px;">${esc(updateNote)}</p>` : ""}
       <h2 style="font-family:sans-serif;color:#0F5A8F;">${PART_LABEL[part]} shift, ${day}</h2>
+      <p style="margin:0 0 12px;padding:10px 12px;border:1px solid #E0DDD6;border-radius:10px;font-size:15px;"><b>Volunteers this shift: ${b.volunteers ?? "not entered"}</b></p>
+      ${meds}
+      ${vet}
       ${health}
       ${b.people.map(person).join("")}
       ${h3(`Tasks not completed (${b.outstanding.length})`)}
@@ -374,16 +425,75 @@ function sessionEndMs(date: string, sessionEnds: string, shifts: SessionShiftRow
 }
 
 async function buildSession(date: string, part: Part): Promise<Built> {
-  const [session, shifts, tasks, handover, health, { radiusM, lateAfterMinutes }] = await Promise.all([
-    ensureRosterSession(date, part),
-    getSessionShifts(date, part),
-    getSessionTasks(date, part),
-    getSessionHandover(date, part),
-    getSessionHealthConcerns(date, part),
-    getShiftSettings(),
-  ]);
+  const [session, shifts, tasks, handover, health, { radiusM, lateAfterMinutes }, volunteers, doses, appts] =
+    await Promise.all([
+      ensureRosterSession(date, part),
+      getSessionShifts(date, part),
+      getSessionTasks(date, part),
+      getSessionHandover(date, part),
+      getSessionHealthConcerns(date, part),
+      getShiftSettings(),
+      getVolunteerCount(date, part),
+      getDueDoses(date, part),
+      getVetAppointments(date, date),
+    ]);
   const endsAtMs = sessionEndMs(date, session.ends, shifts);
-  return buildBlocks(date, shifts, tasks, handover, health, radiusM, lateAfterMinutes, endsAtMs);
+
+  // Every dose due this shift, and what happened to it. A dose nobody
+  // recorded is called out, not left out.
+  const meds = doses.map((d) => {
+    const what = `${d.medication.dogName}, ${d.medication.medicine}`;
+    if (d.status === "given") return { text: `${what}: given by ${d.byName ?? "someone"}, ${d.at ? timeLabel(d.at) : ""}`.trim(), problem: false };
+    if (d.status === "not_given") {
+      const why = d.reason ? DOSE_REASON_LABEL[d.reason] : "no reason";
+      return { text: `${what}: NOT GIVEN (${why}${d.note ? `, ${d.note}` : ""}), ${d.byName ?? ""}`.replace(/, $/, ""), problem: d.reason !== "away" };
+    }
+    return { text: `${what}: NOT RECORDED`, problem: true };
+  });
+  const vet = appts
+    .filter((a) => a.part === part)
+    .map((a) =>
+      [
+        `${a.dogName}, ${a.time ? hhmm(a.time) : a.part} ${VET_KIND_LABEL[a.kind].toLowerCase()}`,
+        a.reason ? `: ${a.reason}` : "",
+        a.instructions ? `. ${a.instructions}` : "",
+      ].join(""),
+    );
+
+  return {
+    ...buildBlocks(date, shifts, tasks, handover, health, radiusM, lateAfterMinutes, endsAtMs),
+    volunteers,
+    meds,
+    vet,
+  };
+}
+
+/** The immediate email when a dose is not given (not for a dog that is
+ *  away): to whoever gets health concerns (Shayna). Returns whether it went. */
+export async function sendMissedDoseEmail(opts: {
+  personName: string;
+  date: string;
+  part: Part;
+  dogName: string;
+  medicine: string;
+  why: string;
+}): Promise<boolean> {
+  const recipients = await getHealthConcernRecipients();
+  if (recipients.length === 0) return false;
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const day = parseYmd(opts.date).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" });
+  const line = `${opts.dogName}'s ${opts.medicine} was not given on the ${PART_LABEL[opts.part].toLowerCase()} shift, ${day}. Reason: ${opts.why}. Recorded by ${opts.personName}. The next shift has been told to check with you before giving it.`;
+  const result = await sendEmail({
+    to: recipients,
+    subject: `CAPS: medication not given (${opts.dogName})`,
+    text: line,
+    html: `<div style="font-family:sans-serif;max-width:520px;">
+      <h2 style="color:#7E1F4A;">Medication not given: ${esc(opts.dogName)}</h2>
+      <p style="font-size:14px;">${esc(line)}</p>
+    </div>`,
+  });
+  if (!result.ok) console.error("sendMissedDoseEmail: send failed", result.error);
+  return result.ok;
 }
 
 /** Sends the summary for (date, part) if, and only if, the session's
@@ -543,7 +653,7 @@ export async function sendNobodySignedInAlerts(): Promise<void> {
 
     const day = parseYmd(s.date).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" });
     const who = s.rostered.join(" and ");
-    const intro = `Nobody has signed in to the ${PART_LABEL[s.part].toLowerCase()} shift (${time12(s.starts)} to ${time12(s.ends)}), ${day}.`;
+    const intro = `Nobody has signed in to the ${PART_LABEL[s.part].toLowerCase()} shift (${hhmm(s.starts)} to ${hhmm(s.ends)}), ${day}.`;
     const detail = `Rostered: ${who}. It is now ${NOBODY_SIGNED_IN_AFTER_MINUTES} minutes past the start. Someone may be working without using the app, so please check.`;
     const result = await sendEmail({
       to: recipients,

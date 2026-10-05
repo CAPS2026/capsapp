@@ -1,0 +1,113 @@
+-- 38: the new checklist from Ashleigh's list (agreed with Julie 27 Sep).
+-- Old tasks are switched off (kept for history, never deleted). New ones
+-- start from :start_date (replace before running: the first day nobody has
+-- opened the checklist yet). Everything is "must be done" except the toys
+-- and Kongs task. The two bin tasks stay (bring in Mon and Wed mornings,
+-- take out Tue and Sun afternoons) and are only re-filed.
+-- APPLY ONLY AFTER the code that knows the "do_first" section is live.
+
+update task_template set active = false
+where active and title not in ('Bring bins in', 'Take bins out');
+
+update task_template set category = 'opening', sort_order = 3
+where title = 'Bring bins in' and part = 'morning';
+update task_template set category = 'end_of_day', sort_order = 7, skippable = false
+where title = 'Take bins out' and part = 'afternoon';
+update task_template set skippable = false where title = 'Bring bins in' and part = 'morning';
+
+insert into task_template (title, part, category, repeat, weekdays, sort_order, skippable, active, active_from)
+select v.title, v.part, v.category::task_category, 'daily', '{}', v.sort_order, v.skippable, true, :'start_date'::date
+from (values
+  ('Lights on, fans on', 'morning', 'do_first', 1, false),
+  ('Turn off slow cookers', 'morning', 'do_first', 2, false),
+  ('Unlock kennel gates', 'morning', 'do_first', 3, false),
+  ('Fire exits clear, extinguisher accessible', 'morning', 'opening', 1, false),
+  ('Check diary', 'morning', 'opening', 2, false),
+  ('Complete morning feed', 'morning', 'animal_health_welfare', 1, false),
+  ('Refill biscuit containers on feed trolley', 'morning', 'animal_health_welfare', 2, false),
+  ('Biscuit containers back in fridge', 'morning', 'animal_health_welfare', 3, false),
+  ('Clean trolley, wipe down', 'morning', 'animal_health_welfare', 4, false),
+  ('Wash food bowls, set aside to dry', 'morning', 'animal_health_welfare', 5, false),
+  ('Refill metal biscuit bins', 'morning', 'animal_health_welfare', 6, false),
+  ('Check Nova biscuits, tell Shayna before they run low', 'morning', 'animal_health_welfare', 7, false),
+  ('Assess meat/dinners', 'morning', 'animal_health_welfare', 8, false),
+  ('Prep dinner', 'morning', 'animal_health_welfare', 9, false),
+  ('Check Nova dinner, defrost if needed', 'morning', 'animal_health_welfare', 10, false),
+  ('Dogs out in exercise yards as per rotation', 'morning', 'exercise_enrichment', 1, false),
+  ('Check yard water buckets: empty, scrub, rinse, refill when needed', 'morning', 'exercise_enrichment', 2, false),
+  ('Tidy rubbish and poo in yards', 'morning', 'exercise_enrichment', 3, false),
+  ('Toys/enrichment rotated, Kongs cleaned & refilled', 'morning', 'exercise_enrichment', 4, true),
+  ('Scoop poop, remove feed bowls, soiled linen and pee mats', 'morning', 'kennel_housing_hygiene', 1, false),
+  ('Walkways and kennels blown', 'morning', 'kennel_housing_hygiene', 2, false),
+  ('Side one: chemical buckets down', 'morning', 'kennel_housing_hygiene', 3, false),
+  ('Side one: beds lifted', 'morning', 'kennel_housing_hygiene', 4, false),
+  ('Side one: hosed and disinfected', 'morning', 'kennel_housing_hygiene', 5, false),
+  ('Side one: water buckets refreshed or cleaned and refilled', 'morning', 'kennel_housing_hygiene', 6, false),
+  ('Side two: chemical buckets down', 'morning', 'kennel_housing_hygiene', 7, false),
+  ('Side two: beds lifted', 'morning', 'kennel_housing_hygiene', 8, false),
+  ('Side two: hosed and disinfected', 'morning', 'kennel_housing_hygiene', 9, false),
+  ('Side two: water buckets refreshed or cleaned and refilled', 'morning', 'kennel_housing_hygiene', 10, false),
+  ('Drains cleaned', 'morning', 'kennel_housing_hygiene', 11, false),
+  ('Replace linen for non-chewers', 'morning', 'kennel_housing_hygiene', 12, false),
+  ('Lift astro turf, disinfect, rotate & hang out', 'morning', 'kennel_housing_hygiene', 13, false),
+  ('Check washer and dryer, start a load', 'morning', 'kennel_housing_hygiene', 14, false),
+  ('Start washing linen', 'morning', 'kennel_housing_hygiene', 15, false),
+  ('Check washer and dryer, move the load on and start the next', 'morning', 'kennel_housing_hygiene', 16, false),
+  ('Remove rubbish from laundry', 'morning', 'kennel_housing_hygiene', 17, false),
+  ('Reline bin', 'morning', 'kennel_housing_hygiene', 18, false),
+  ('Sign in table tidy, tablet and app ready', 'morning', 'public_committee_areas', 1, false),
+  ('Check PPE, tell Shayna if items are needed', 'morning', 'public_committee_areas', 2, false),
+  ('Tools, working materials and mowers put away', 'morning', 'public_committee_areas', 3, false),
+  ('Bowls back on feed trolley ready for the next shift', 'morning', 'end_of_day', 1, false),
+  ('Bring in dogs from exercise yard', 'morning', 'end_of_day', 2, false),
+  ('All animals accounted for', 'morning', 'end_of_day', 3, false),
+  ('Lock kennel gates', 'morning', 'end_of_day', 4, false),
+  ('Start sprinklers', 'morning', 'end_of_day', 5, false),
+  ('Handover notes left', 'morning', 'end_of_day', 6, false),
+  ('Lights off', 'morning', 'end_of_day', 7, false),
+  ('Lights on, fans on', 'afternoon', 'do_first', 1, false),
+  ('Unlock kennel gates', 'afternoon', 'do_first', 2, false),
+  ('Swap dogs over in the exercise yards', 'afternoon', 'do_first', 3, false),
+  ('Fire exits clear, extinguisher accessible', 'afternoon', 'opening', 1, false),
+  ('Check diary', 'afternoon', 'opening', 2, false),
+  ('Complete afternoon feed', 'afternoon', 'animal_health_welfare', 1, false),
+  ('Refill biscuit containers on feed trolley', 'afternoon', 'animal_health_welfare', 2, false),
+  ('Biscuit containers back in fridge', 'afternoon', 'animal_health_welfare', 3, false),
+  ('Clean trolley, wipe down', 'afternoon', 'animal_health_welfare', 4, false),
+  ('Wash food bowls, set aside to dry', 'afternoon', 'animal_health_welfare', 5, false),
+  ('Refill metal biscuit bins', 'afternoon', 'animal_health_welfare', 6, false),
+  ('Check Nova biscuits, tell Shayna before they run low', 'afternoon', 'animal_health_welfare', 7, false),
+  ('Check yard water buckets: empty, scrub, rinse, refill when needed', 'afternoon', 'exercise_enrichment', 1, false),
+  ('Tidy rubbish and poo in yards', 'afternoon', 'exercise_enrichment', 2, false),
+  ('Toys/enrichment rotated, Kongs cleaned & refilled', 'afternoon', 'exercise_enrichment', 3, true),
+  ('Scoop poop, remove feed bowls, soiled linen and pee mats', 'afternoon', 'kennel_housing_hygiene', 1, false),
+  ('Walkways and kennels blown', 'afternoon', 'kennel_housing_hygiene', 2, false),
+  ('Side one: chemical buckets down', 'afternoon', 'kennel_housing_hygiene', 3, false),
+  ('Side one: beds lifted', 'afternoon', 'kennel_housing_hygiene', 4, false),
+  ('Side one: hosed and disinfected', 'afternoon', 'kennel_housing_hygiene', 5, false),
+  ('Side one: water buckets refreshed or cleaned and refilled', 'afternoon', 'kennel_housing_hygiene', 6, false),
+  ('Side two: chemical buckets down', 'afternoon', 'kennel_housing_hygiene', 7, false),
+  ('Side two: beds lifted', 'afternoon', 'kennel_housing_hygiene', 8, false),
+  ('Side two: hosed and disinfected', 'afternoon', 'kennel_housing_hygiene', 9, false),
+  ('Side two: water buckets refreshed or cleaned and refilled', 'afternoon', 'kennel_housing_hygiene', 10, false),
+  ('Drains cleaned', 'afternoon', 'kennel_housing_hygiene', 11, false),
+  ('Replace linen for non-chewers', 'afternoon', 'kennel_housing_hygiene', 12, false),
+  ('Lift astro turf, disinfect, rotate & hang out', 'afternoon', 'kennel_housing_hygiene', 13, false),
+  ('Check washer and dryer, start a load', 'afternoon', 'kennel_housing_hygiene', 14, false),
+  ('Start washing linen', 'afternoon', 'kennel_housing_hygiene', 15, false),
+  ('Check washer and dryer, move the load on and start the next', 'afternoon', 'kennel_housing_hygiene', 16, false),
+  ('Remove rubbish from laundry', 'afternoon', 'kennel_housing_hygiene', 17, false),
+  ('Reline bin', 'afternoon', 'kennel_housing_hygiene', 18, false),
+  ('Sign in table tidy, tablet and app ready', 'afternoon', 'public_committee_areas', 1, false),
+  ('Check PPE, tell Shayna if items are needed', 'afternoon', 'public_committee_areas', 2, false),
+  ('Tools, working materials and mowers put away', 'afternoon', 'public_committee_areas', 3, false),
+  ('Bowls back on feed trolley ready for the next shift', 'afternoon', 'end_of_day', 1, false),
+  ('Bring in dogs from exercise yard', 'afternoon', 'end_of_day', 2, false),
+  ('All animals accounted for', 'afternoon', 'end_of_day', 3, false),
+  ('Lock kennel gates', 'afternoon', 'end_of_day', 4, false),
+  ('Start sprinklers', 'afternoon', 'end_of_day', 5, false),
+  ('Handover notes left', 'afternoon', 'end_of_day', 6, false),
+  ('Site gates locked', 'afternoon', 'end_of_day', 8, false),
+  ('Lights off', 'afternoon', 'end_of_day', 9, false),
+  ('Outside light on', 'afternoon', 'end_of_day', 10, false)
+) as v(title, part, category, sort_order, skippable);

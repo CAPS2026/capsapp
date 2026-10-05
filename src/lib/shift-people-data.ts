@@ -53,17 +53,28 @@ export async function loginEmails(): Promise<Set<string>> {
   return out;
 }
 
+/** The Guest tile's person (org_settings.staff_guest_person_id), kept off
+ *  these screens so it can never be edited or removed by mistake (Julie,
+ *  2 Oct): removing it would take the Guest tile off the sign-in screen. */
+export async function guestPersonId(): Promise<string | null> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("org_settings").select("staff_guest_person_id").maybeSingle();
+  return (data?.staff_guest_person_id as string | null | undefined) ?? null;
+}
+
 /** Everyone who is currently a caretaker or an admin: the people the staff
- *  app manages. Removed people (all roles ended) drop off this list. */
+ *  app manages. Removed people (all roles ended) drop off this list. The
+ *  Guest tile's person is left out. */
 export async function listStaff(): Promise<StaffListRow[]> {
   const supabase = await createClient();
-  const [{ data, error }, logins] = await Promise.all([
+  const [{ data, error }, logins, guestId] = await Promise.all([
     supabase
       .from("person_roles")
       .select("role, person:people!person_roles_person_id_fkey(id, first_name, surname, email)")
       .in("role", ["staff", "admin"])
       .eq("status", "active"),
     loginEmails(),
+    guestPersonId(),
   ]);
   if (error) console.error("listStaff failed", error);
 
@@ -71,7 +82,7 @@ export async function listStaff(): Promise<StaffListRow[]> {
   for (const r of (data ?? []) as unknown as Array<{
     person: { id: string; first_name: string; surname: string; email: string | null } | null;
   }>) {
-    if (r.person) {
+    if (r.person && r.person.id !== guestId) {
       people.set(r.person.id, {
         id: r.person.id,
         name: `${r.person.first_name} ${r.person.surname}`.trim(),
@@ -101,8 +112,9 @@ export async function listStaff(): Promise<StaffListRow[]> {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** One person's details for the Edit screen. */
+/** One person's details for the Edit screen (never the Guest tile's). */
 export async function getStaffMember(id: string): Promise<StaffMember | null> {
+  if (id === (await guestPersonId())) return null;
   const supabase = await createClient();
   const { data: p } = await supabase
     .from("people")

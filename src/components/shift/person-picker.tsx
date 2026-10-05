@@ -3,7 +3,8 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { PART_LABEL, firstName, partForTime, timeRange, type Part, type ShiftPerson } from "@/lib/shift";
+import Link from "next/link";
+import { GUEST_NAME_MAX, PART_LABEL, firstName, partForTime, timeRange, type Part, type ShiftPerson } from "@/lib/shift";
 import { pickPerson } from "@/lib/actions/shift";
 import { PersonAvatar } from "@/components/shift/person-avatar";
 import { ForgottenShiftForm } from "@/components/shift/forgotten-shift-form";
@@ -33,10 +34,17 @@ export function PersonPicker({
   people,
   today,
   times,
+  isAdmin = false,
+  guestId = null,
 }: {
   people: ShiftPerson[];
   today: string;
   times: Record<Part, { starts: string; ends: string }>;
+  /** Signed in with an admin login (Julie, Shayna, Renee): shows "View as
+   *  admin". Never true on a caretaker login such as the tablet's. */
+  isAdmin?: boolean;
+  /** The Guest tile's person: tapping it asks for the person's name first. */
+  guestId?: string | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -49,9 +57,16 @@ export function PersonPicker({
   // session they are working. Unrostered for it means never marked late.
   const [covering, setCovering] = useState<ShiftPerson | null>(null);
 
+  // Guest: someone covering a one-off shift types their name, then signs in
+  // like anyone else. Guest always sits last, after the regular caretakers.
+  const [guestAsking, setGuestAsking] = useState<ShiftPerson | null>(null);
+  const [guestName, setGuestName] = useState("");
+  const tiles = [...people.filter((p) => p.id !== guestId), ...people.filter((p) => p.id === guestId)];
+  const regulars = people.filter((p) => p.id !== guestId);
+
   // Keep the screen current while it's left open, but never while someone
   // is part-way through choosing or filling something in.
-  const idle = !isPending && !covering && !forgotOpen;
+  const idle = !isPending && !covering && !forgotOpen && !guestAsking;
   useEffect(() => {
     if (!idle) return;
     const t = setInterval(() => router.refresh(), REFRESH_MS);
@@ -62,6 +77,16 @@ export function PersonPicker({
   // screen was loaded: rostered for the session it is now, sign straight in
   // to that; otherwise ask which one.
   function pick(person: ShiftPerson) {
+    if (person.id === guestId) {
+      setError(null);
+      setCovering(null);
+      setGuestAsking(person);
+      return;
+    }
+    carryOn(person);
+  }
+
+  function carryOn(person: ShiftPerson) {
     const nowPart = partForTime();
     if (person.sessions.some((s) => s.part === nowPart)) {
       signIn(person, nowPart);
@@ -76,10 +101,19 @@ export function PersonPicker({
     setBusyId(person.id);
     startTransition(async () => {
       const loc = await getLocation();
-      const r = await pickPerson(person.id, part, loc?.lat ?? null, loc?.lng ?? null);
+      const r = await pickPerson(
+        person.id,
+        part,
+        loc?.lat ?? null,
+        loc?.lng ?? null,
+        person.id === guestId ? guestName : null,
+      );
       setBusyId(null);
       if (r.error) setError(r.error);
-      else router.refresh();
+      else {
+        setGuestName("");
+        router.refresh();
+      }
     });
   }
 
@@ -104,14 +138,14 @@ export function PersonPicker({
             No caretakers are set up yet. An admin can add them from the Roster tab.
           </p>
         ) : (
-          <div className="flex flex-wrap gap-2.5">
-            {people.map((p) => (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-2.5">
+            {tiles.map((p) => (
               <button
                 key={p.id}
                 type="button"
                 disabled={isPending}
                 onClick={() => pick(p)}
-                className={`flex min-w-[120px] flex-1 flex-col items-center gap-1.5 rounded-[var(--radius)] border-[1.5px] bg-card px-1.5 pb-3 pt-3.5 disabled:cursor-wait ${
+                className={`flex flex-col items-center gap-1.5 rounded-[var(--radius)] border-[1.5px] bg-card px-1.5 pb-3 pt-3.5 disabled:cursor-wait ${
                   busyId === p.id ? "border-brand bg-brand-tint" : "border-line"
                 } ${p.part ? "" : "opacity-[0.55]"}`}
               >
@@ -122,17 +156,73 @@ export function PersonPicker({
                     ? "Signing in…"
                     : p.part && p.starts && p.ends
                       ? `${PART_LABEL[p.part]} · ${timeRange(p.starts, p.ends)}`
-                      : "Not rostered today"}
+                      : p.id === guestId
+                        ? "Covering a one-off shift"
+                        : "Not rostered today"}
                 </span>
               </button>
             ))}
           </div>
         )}
 
+        {guestAsking && (
+          <form
+            className="flex flex-col gap-2 rounded-[var(--radius)] border border-line-cool bg-brand-tint p-3.5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!guestName.trim()) {
+                setError("Please type your name first.");
+                return;
+              }
+              setError(null);
+              const person = guestAsking;
+              setGuestAsking(null);
+              carryOn(person);
+            }}
+          >
+            <label htmlFor="guest-name" className="m-0 text-sm font-extrabold text-foreground">
+              Signing in as a guest. What is your name?
+            </label>
+            <input
+              id="guest-name"
+              autoFocus
+              autoComplete="off"
+              maxLength={GUEST_NAME_MAX}
+              value={guestName}
+              onChange={(e) => {
+                setGuestName(e.target.value);
+                setError(null);
+              }}
+              placeholder="First name and surname"
+              className="h-11 rounded-[var(--radius)] border border-line bg-card px-3 text-base text-foreground"
+            />
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={isPending}
+                className="h-10 flex-1 rounded-[var(--radius)] bg-brand text-sm font-bold text-white disabled:opacity-50"
+              >
+                Continue
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setGuestAsking(null);
+                  setGuestName("");
+                  setError(null);
+                }}
+                className="h-10 rounded-[var(--radius)] border border-line px-3 text-sm font-bold text-ink-muted"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
         {covering && (
           <div className="flex flex-col gap-2 rounded-[var(--radius)] border border-line-cool bg-brand-tint p-3.5">
             <p className="m-0 text-sm font-extrabold text-foreground">
-              {firstName(covering.name)}, which shift are you working now?
+              {covering.id === guestId ? firstName(guestName) : firstName(covering.name)}, which shift are you working now?
             </p>
             <p className="m-0 text-xs text-ink-muted">
               {covering.sessions.length
@@ -167,7 +257,7 @@ export function PersonPicker({
 
         {people.length > 0 &&
           (forgotOpen ? (
-            <ForgottenShiftForm people={people} today={today} times={times} onClose={() => setForgotOpen(false)} />
+            <ForgottenShiftForm people={regulars} today={today} times={times} onClose={() => setForgotOpen(false)} />
           ) : (
             <button
               type="button"
@@ -180,6 +270,15 @@ export function PersonPicker({
               Forgot to sign in for an earlier shift?
             </button>
           ))}
+
+        {isAdmin && (
+          <Link
+            href="/shift/admin"
+            className="inline-flex h-10 items-center justify-center self-center rounded-[var(--radius)] border-[1.5px] border-brand px-5 text-sm font-bold text-brand-ink"
+          >
+            View as admin
+          </Link>
+        )}
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentPerson } from "@/lib/auth";
 import { markLeaveNoticesForShift } from "@/lib/leave-data";
+import { getAllDogNames, getMedication, medDueOn, type DoseReason } from "@/lib/care-data";
 import {
   getActiveShiftPerson,
   setActiveShiftPerson,
@@ -11,9 +12,9 @@ import {
 } from "@/lib/shift-identity";
 import {
   ensureRosterSession,
-  getDogNameSuggestions,
+  getGuestPersonId,
   getOpenShift,
-  getRosterablePeople,
+  getRegularPeople,
   getShiftSettings,
   resolvePart,
   touchShiftActivity,
@@ -22,9 +23,10 @@ import {
   getShiftEmailPreview,
   maybeSendShiftEmail,
   sendHealthConcernEmail,
+  sendMissedDoseEmail,
   type EmailPreview,
 } from "@/lib/shift-email";
-import { distanceMetres, minutesLate, sessionInstant, shelterToday, shiftDay, type Part } from "@/lib/shift";
+import { GUEST_NAME_MAX, distanceMetres, minutesLate, sessionInstant, shelterToday, shiftDay, type Part } from "@/lib/shift";
 
 type Result = { error: string } | { error?: undefined };
 
@@ -61,6 +63,8 @@ async function requireActingPerson() {
     late !== null && late.lateMinutes !== null && late.lateMinutes > settings.lateAfterMinutes && !late.lateReason;
   return { ...me, lateBlocked, hasOpenShift: late !== null };
 }
+
+const VOLUNTEERS_NEEDED = "How many volunteers came this shift? Enter the number first (0 is fine).";
 
 const NO_OPEN_SHIFT = "You don't have an open shift. Tap your name to sign in again.";
 
@@ -108,15 +112,32 @@ export async function pickPerson(
   rosteredPart: Part | null,
   lat: number | null,
   lng: number | null,
+  guestNameInput: string | null = null,
 ): Promise<Result> {
   if (!(await requireDeviceStaff())) return { error: "Staff only." };
 
   const supabase = await createClient();
-  const { data: person } = await supabase.from("people").select("id").eq("id", personId).maybeSingle();
+  const [{ data: person }, guestId] = await Promise.all([
+    supabase.from("people").select("id").eq("id", personId).maybeSingle(),
+    getGuestPersonId(),
+  ]);
   if (!person) return { error: "That person wasn't found." };
+
+  // The Guest tile: whoever taps it types their name, kept on the shift.
+  const isGuest = guestId !== null && personId === guestId;
+  const guestName = isGuest ? (guestNameInput ?? "").trim().replace(/\s+/g, " ") : null;
+  if (isGuest && !guestName) return { error: "Please type your name first." };
+  if (guestName && guestName.length > GUEST_NAME_MAX) return { error: `Please keep your name under ${GUEST_NAME_MAX} letters.` };
+  const sameGuest = (stored: string | null) => !isGuest || (stored ?? "").toLowerCase() === (guestName ?? "").toLowerCase();
 
   const existing = await getOpenShift(personId);
   if (existing) {
+    // Only one guest can be signed in at a time (one Guest tile).
+    if (!sameGuest(existing.guestName)) {
+      return {
+        error: `${existing.guestName ?? "Someone"} is still signed in as Guest. They need to press END SHIFT before anyone else can use Guest.`,
+      };
+    }
     await setActiveShiftPerson(personId);
     bust();
     return {};
@@ -136,7 +157,7 @@ export async function pickPerson(
   // after that, tapping a name is a genuinely new sign-in.
   const { data: autoClosed } = await supabase
     .from("shift_log")
-    .select("id, extended_minutes")
+    .select("id, extended_minutes, guest_name")
     .eq("person_id", personId)
     .eq("date", date)
     .eq("part", part)
@@ -144,7 +165,8 @@ export async function pickPerson(
     .order("signed_in_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (autoClosed) {
+  // A different guest on the same tile is a new sign-in, never a reopen.
+  if (autoClosed && sameGuest(autoClosed.guest_name)) {
     const endAt = sessionInstant(date, session.ends).getTime() + (autoClosed.extended_minutes ?? 0) * 60000;
     const windowMin = settings.autocloseGraceMinutes + REOPEN_MINUTES_AFTER_AUTOCLOSE;
     if (now.getTime() <= endAt + windowMin * 60000) {
@@ -191,6 +213,7 @@ export async function pickPerson(
     signed_in_lng: lng,
     signed_in_distance_m: distanceM,
     late_minutes: lateMinutes,
+    guest_name: guestName,
   });
   // 23505 = they already have an open shift (a near-simultaneous double
   // tap), fine, just proceed as a resume.
@@ -256,6 +279,14 @@ export async function endShift(earlyReason?: string): Promise<Result> {
   const early = earlyMin > settings.lateAfterMinutes;
   const reason = (earlyReason ?? "").trim();
   if (early && !reason) return { error: "Please give a reason for finishing early." };
+  // The volunteer count must be in before the shift can end (0 is fine).
+  // The screen asks for it first; this stops an end without it.
+  const { data: vc } = await supabase.from("roster_session").select("volunteer_count").eq("id", session.id).maybeSingle();
+  if (vc?.volunteer_count == null) return { error: VOLUNTEERS_NEEDED };
+  // Every End of Shift task must be ticked or have a reason (the screen
+  // asks first); this stops an end without them.
+  const left = await endOfShiftLeft(open.id, open.date, open.part);
+  if (left.some((t) => !t.reason)) return { error: END_OF_SHIFT_NEEDED };
 
   const { error } = await supabase
     .from("shift_log")
@@ -267,6 +298,82 @@ export async function endShift(earlyReason?: string): Promise<Result> {
   // maybeSendShiftEmail. Best-effort: a failed send here shouldn't stop
   // someone from actually ending their shift.
   await maybeSendShiftEmail(open.date, open.part).catch((e) => console.error("endShift: email failed", e));
+  bust();
+  return {};
+}
+
+const END_OF_SHIFT_NEEDED = "Tick each End of Shift task, or say why it wasn't done, before ending the shift.";
+
+export type EndOfShiftTask = { id: string; title: string; reason: string | null };
+
+/** The session's End of Shift tasks still unticked, with any reason already
+ *  given (kept in the task's note). Empty unless this is the last shift still
+ *  open on the session: lights off, gates locked and the rest are for whoever
+ *  leaves last, not someone finishing while a colleague carries on. */
+async function endOfShiftLeft(shiftId: string, date: string, part: Part): Promise<EndOfShiftTask[]> {
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("shift_log")
+    .select("id", { count: "exact", head: true })
+    .eq("date", date)
+    .eq("part", part)
+    .is("signed_out_at", null)
+    .neq("id", shiftId);
+  if ((count ?? 0) > 0) return [];
+  const { data, error } = await supabase
+    .from("task_instance")
+    .select("id, title, note")
+    .eq("date", date)
+    .eq("part", part)
+    .eq("category", "end_of_day")
+    .eq("status", "open")
+    .order("sort_order");
+  if (error) console.error("endOfShiftLeft failed", error);
+  return ((data ?? []) as Array<{ id: string; title: string; note: string | null }>).map((t) => ({
+    id: t.id,
+    title: t.title,
+    reason: t.note?.trim() || null,
+  }));
+}
+
+/** Asked when END SHIFT is pressed: the End of Shift tasks not ticked yet. */
+export async function getEndOfShiftLeft(): Promise<{ error: string } | { error?: undefined; tasks: EndOfShiftTask[] }> {
+  const me = await requireOnShift();
+  if (!me) return { error: NO_OPEN_SHIFT };
+  const open = await getOpenShift(me.id);
+  if (!open) return { error: "You don't have an open shift." };
+  return { tasks: await endOfShiftLeft(open.id, open.date, open.part) };
+}
+
+/** The End of Shift box: each unticked task is either ticked now or given a
+ *  reason (which goes in the shift email). All of them must be answered. */
+export async function saveEndOfShift(answers: { id: string; done: boolean; reason: string }[]): Promise<Result> {
+  const me = await requireOnShift();
+  if (!me) return { error: NO_OPEN_SHIFT };
+  if (me.lateBlocked) return { error: LATE_REASON_REQUIRED };
+  const open = await getOpenShift(me.id);
+  if (!open) return { error: "You don't have an open shift." };
+  const left = await endOfShiftLeft(open.id, open.date, open.part);
+  const byId = new Map(answers.map((a) => [a.id, a]));
+  for (const t of left) {
+    const a = byId.get(t.id);
+    if (!a || (!a.done && !a.reason.trim())) return { error: `"${t.title}": tick it, or say why it wasn't done.` };
+  }
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+  for (const t of left) {
+    const a = byId.get(t.id)!;
+    const { error } = await supabase
+      .from("task_instance")
+      .update(
+        a.done
+          ? { status: "done", note: null, actioned_by: me.id, actioned_at: now }
+          : { note: a.reason.trim() },
+      )
+      .eq("id", t.id)
+      .eq("status", "open");
+    if (error) return { error: error.message };
+  }
   bust();
   return {};
 }
@@ -564,7 +671,7 @@ export async function recordForgottenShift(input: {
 }): Promise<Result> {
   if (!(await requireDeviceStaff())) return { error: "Staff only." };
 
-  const people = await getRosterablePeople();
+  const people = await getRegularPeople();
   const person = people.find((p) => p.id === input.personId);
   if (!person) return { error: "Choose who worked the shift." };
 
@@ -654,5 +761,168 @@ export async function resolveHealthConcern(id: string, note: string): Promise<Re
 /** Dog names typed before, for the health concern pop-up's suggestions. */
 export async function dogNameSuggestions(): Promise<string[]> {
   if (!(await requireDeviceStaff())) return [];
-  return getDogNameSuggestions();
+  return getAllDogNames();
+}
+
+// ---------------------------------------------------------------------------
+// Medication doses
+// ---------------------------------------------------------------------------
+
+/** The dose of `medicationId` due on the caller's current shift, if it is due
+ *  (never trust a date or session from the screen). */
+async function dueDoseForShift(medicationId: string) {
+  const me = await requireOnShift();
+  if (!me) return { error: NO_OPEN_SHIFT } as const;
+  if (me.lateBlocked) return { error: LATE_REASON_REQUIRED } as const;
+  const open = await getOpenShift(me.id);
+  if (!open) return { error: NO_OPEN_SHIFT } as const;
+  const med = await getMedication(medicationId);
+  if (!med || !medDueOn(med, open.date, open.part)) return { error: "That dose isn't due on this shift." } as const;
+  return { me, open, med } as const;
+}
+
+/** Tick a dose as given. */
+export async function giveDose(medicationId: string): Promise<Result> {
+  const r = await dueDoseForShift(medicationId);
+  if ("error" in r) return { error: r.error as string };
+  const supabase = await createClient();
+  const { error } = await supabase.from("medication_dose").insert({
+    medication_id: medicationId,
+    date: r.open.date,
+    part: r.open.part,
+    status: "given",
+    actioned_by: r.me.id,
+  });
+  if (error) return { error: error.code === "23505" ? "That dose has already been recorded." : error.message };
+  bust();
+  return {};
+}
+
+/** Untick a dose ticked "given" by mistake. A "not given" is never undone
+ *  here: Shayna has already been told. */
+export async function undoDose(medicationId: string): Promise<Result> {
+  const r = await dueDoseForShift(medicationId);
+  if ("error" in r) return { error: r.error as string };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("medication_dose")
+    .delete()
+    .eq("medication_id", medicationId)
+    .eq("date", r.open.date)
+    .eq("part", r.open.part)
+    .eq("status", "given");
+  if (error) return { error: error.message };
+  bust();
+  return {};
+}
+
+/** A dose not given. The reason is required. Unless the dog is away, Shayna
+ *  is emailed straight away. Either way a note goes in the handover log, so
+ *  the next shift checks with Shayna before giving it. The dose is never put
+ *  back on a later shift's list (no double doses). */
+export async function doseNotGiven(
+  medicationId: string,
+  reason: DoseReason,
+  note: string,
+): Promise<{ error?: string; emailed?: boolean }> {
+  if (!["refused", "vomited", "away", "other"].includes(reason)) return { error: "Choose why it wasn't given." };
+  const clean = note.trim();
+  if (reason === "other" && !clean) return { error: "Say why it wasn't given." };
+  const r = await dueDoseForShift(medicationId);
+  if ("error" in r) return { error: r.error as string };
+  const supabase = await createClient();
+
+  const { data: dose, error } = await supabase
+    .from("medication_dose")
+    .insert({
+      medication_id: medicationId,
+      date: r.open.date,
+      part: r.open.part,
+      status: "not_given",
+      reason,
+      note: clean || null,
+      actioned_by: r.me.id,
+    })
+    .select("id")
+    .single();
+  if (error || !dose) return { error: error?.code === "23505" ? "That dose has already been recorded." : (error?.message ?? "Could not save.") };
+
+  const why = reason === "other" ? clean : `${DOSE_REASON_TEXT[reason]}${clean ? ` (${clean})` : ""}`;
+  const body =
+    reason === "away"
+      ? `${r.med.dogName} is away (vet, foster): ${r.med.medicine} not given${clean ? `. ${clean}` : ""}.`
+      : `Medication for ${r.med.dogName} (${r.med.medicine}) not given: ${why}. Check with Shayna before giving it.`;
+  await supabase.from("handover_note").insert({
+    person_id: r.me.id,
+    shift_log_id: r.open.id,
+    date: r.open.date,
+    part: r.open.part,
+    body,
+    is_auto: true,
+  });
+
+  let emailed = false;
+  if (reason !== "away") {
+    emailed = await sendMissedDoseEmail({
+      personName: r.me.name,
+      date: r.open.date,
+      part: r.open.part,
+      dogName: r.med.dogName,
+      medicine: r.med.medicine,
+      why,
+    }).catch((e) => {
+      console.error("doseNotGiven: email failed", e);
+      return false;
+    });
+    if (emailed) await supabase.from("medication_dose").update({ emailed_at: new Date().toISOString() }).eq("id", dose.id);
+  }
+  bust();
+  revalidatePath("/shift/handover");
+  return { emailed };
+}
+
+const DOSE_REASON_TEXT: Record<DoseReason, string> = {
+  refused: "refused",
+  vomited: "vomited it up",
+  away: "dog is away",
+  other: "other",
+};
+
+// ---------------------------------------------------------------------------
+// Volunteer count
+// ---------------------------------------------------------------------------
+
+/** How many volunteers came, one number for the whole shift (two
+ *  caretakers on together share it). 0 is fine. */
+export async function setVolunteerCount(count: number): Promise<Result> {
+  const n = Math.round(count);
+  if (!Number.isFinite(n) || n < 0 || n > 200) return { error: "Enter the number of volunteers." };
+  const me = await requireOnShift();
+  if (!me) return { error: NO_OPEN_SHIFT };
+  const open = await getOpenShift(me.id);
+  if (!open) return { error: NO_OPEN_SHIFT };
+  const session = await ensureRosterSession(open.date, open.part);
+  const supabase = await createClient();
+  const { error } = await supabase.from("roster_session").update({ volunteer_count: n }).eq("id", session.id);
+  if (error) return { error: error.message };
+  bust();
+  return {};
+}
+
+// ---------------------------------------------------------------------------
+// Handover notes: ticked off like checklist tasks
+// ---------------------------------------------------------------------------
+
+export async function tickHandoverNote(id: string, done: boolean): Promise<Result> {
+  const me = await requireActingPerson();
+  if (!me) return { error: "Pick who you are first." };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("handover_note")
+    .update(done ? { done_at: new Date().toISOString(), done_by_name: me.name } : { done_at: null, done_by_name: null })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/shift/handover");
+  bust();
+  return {};
 }

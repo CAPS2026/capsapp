@@ -7,7 +7,7 @@ import { deletePerson } from "@/lib/actions/people";
 import type { MergeCandidate } from "@/lib/people-data";
 import { PersonRoleActions } from "@/components/people/person-role-actions";
 import { PersonArchiveButton } from "@/components/people/person-archive-button";
-import { VolunteerPlusToggle } from "@/components/people/volunteer-plus-toggle";
+import { UpdateStatusMenu } from "@/components/people/update-status-menu";
 import { MergePersonDialog } from "@/components/people/merge-person-dialog";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { Field } from "@/components/detail-field";
@@ -49,15 +49,19 @@ export function PersonDetailView({
   person,
   mergeCandidates,
   viewerIsAdmin,
+  viewerCanApprove,
 }: {
   person: PersonDetail;
   mergeCandidates: MergeCandidate[];
   viewerIsAdmin: boolean;
+  viewerCanApprove: boolean;
 }) {
   const archived =
     person.roles.length > 0 &&
     !person.roles.some((r) => r.status === "active" || r.status === "pending");
   const ecMissing = !person.ec.name || !person.ec.phone;
+  // Staff live in the Staff app; see staffProtection() in actions/people.ts.
+  const isStaffPerson = person.roles.some((r) => r.role === "staff" || r.role === "admin");
 
   return (
     <div className="flex flex-col gap-4">
@@ -87,8 +91,8 @@ export function PersonDetailView({
           >
             Edit
           </Link>
-          <PersonArchiveButton personId={person.id} archived={archived} />
-          {viewerIsAdmin && (
+          {!isStaffPerson && <PersonArchiveButton personId={person.id} archived={archived} />}
+          {viewerIsAdmin && !isStaffPerson && (
             <>
               <MergePersonDialog
                 person={{ id: person.id, name: `${person.firstName} ${person.surname}`, hasAccount: person.hasAccount }}
@@ -106,6 +110,14 @@ export function PersonDetailView({
           )}
         </div>
       </div>
+
+      {isStaffPerson && (
+        <p className="text-sm bg-gray-tint rounded-[var(--radius)] p-3 text-ink">
+          This person is on the Staff app. They show here for reference, but staff, their roster and
+          their shift history are managed in the Staff app (Roster → Staff), so Archive, Merge and
+          Delete are turned off here.
+        </p>
+      )}
 
       <Section title="Roles">
         {person.roles.length === 0 && <p className="text-sm text-ink-muted">No roles.</p>}
@@ -125,7 +137,10 @@ export function PersonDetailView({
             )}
             {r.endedOn && <p className="text-xs text-ink-muted">Ended {formatDate(r.endedOn)}</p>}
             {r.note && <p className="text-xs text-ink-muted">{r.note}</p>}
-            {r.status === "pending" && (
+            {r.status === "pending" && !viewerCanApprove && (
+              <p className="text-xs text-ink mt-1">Needs Paul, Julie or Shayna to approve.</p>
+            )}
+            {r.status === "pending" && viewerCanApprove && (
               <PersonRoleActions
                 roleId={r.id}
                 personId={person.id}
@@ -147,19 +162,15 @@ export function PersonDetailView({
         ))}
       </Section>
 
-      {viewerIsAdmin &&
-        person.roles.some(
-          (r) => (r.role === "volunteer" || r.role === "volunteer_plus") && r.status === "active",
-        ) && (
-        <Section title="Kiosk access">
-          <VolunteerPlusToggle
-            personId={person.id}
-            firstName={person.firstName}
-            email={person.email}
-            isPlus={person.roles.some((r) => r.role === "volunteer_plus" && r.status === "active")}
-          />
-        </Section>
-      )}
+      <Section title="Status">
+        <UpdateStatusMenu
+          personId={person.id}
+          firstName={person.firstName}
+          email={person.email}
+          roles={person.roles.map((r) => ({ role: r.role, status: r.status }))}
+          viewerIsAdmin={viewerIsAdmin}
+        />
+      </Section>
 
       <Section title="Contact">
         <Field label="Email" value={person.email} />

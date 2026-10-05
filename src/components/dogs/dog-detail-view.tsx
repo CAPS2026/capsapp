@@ -130,6 +130,7 @@ export function DogDetailView({
               dogId={dog.id}
               mode="bring_in"
               label={endActionLabel(dog.status)}
+              overdue={!!currentActivity.dueBack && new Date(currentActivity.dueBack) < new Date()}
               canKiosk={canKiosk}
               currentPersonId={currentPersonId}
               currentPersonName={currentPersonName}
@@ -210,11 +211,11 @@ export function DogDetailView({
       </Section>
 
       <Section title="Notes">
-        {notes.length === 0 && <p className="text-sm text-ink-muted">No notes yet.</p>}
+        {notes.length === 0 && <p className="text-sm text-ink">No notes yet.</p>}
         {notes.map((n) => (
           <div key={n.id} className="text-sm border-b border-line last:border-0 pb-2 last:pb-0">
             <p>{n.body}</p>
-            <p className="text-xs text-ink-muted">
+            <p className="text-xs text-ink">
               {n.authorName ?? "Unknown"} · {formatDate(n.createdAt)}
             </p>
           </div>
@@ -243,28 +244,47 @@ export function DogDetailView({
 
 function CurrentStatusLine({ status, current }: { status: DogDetail["status"]; current: ActivityEntry }) {
   const overdue = current.dueBack ? new Date(current.dueBack) < new Date() : false;
-  const who = current.personName ? `With: ${current.personName} · ` : status === "yard" ? `${current.reason ?? "Yard"} · ` : "";
   const startLabel = status === "walking" || status === "yard" ? "Started" : "Start";
+  const overdueFlag = overdue && (
+    <span className="text-danger font-semibold" title="Overdue">
+      {" "}
+      ⏰ Overdue
+    </span>
+  );
+
+  // Jail Break / Foster: who + time out on one line, start + due end below
+  // (Paul, 2026-10-04) — same layout as the Dogs list card.
+  if (status === "jail_break" || status === "fostered") {
+    return (
+      <div className="text-sm text-ink mt-1">
+        <p>
+          With: {current.personName ?? "someone"} · Time out: {formatDaysHoursOut(current.startedAt)}
+        </p>
+        <p>
+          {formatStartedLine(startLabel, current.startedAt)}
+          {current.dueBack && <> · {formatStartedLine("Due End", current.dueBack)}</>}
+          {overdueFlag}
+        </p>
+      </div>
+    );
+  }
+
+  const who = current.personName ? `With: ${current.personName} · ` : status === "yard" ? `${current.reason ?? "Yard"} · ` : "";
   const timeOut =
     status === "walking"
       ? ` · Time Out ${formatMinutesOut(current.startedAt)}`
       : status === "yard"
         ? ` · Time in Yard ${formatMinutesOut(current.startedAt)}`
-        : status === "bed_rest" || status === "jail_break" || status === "fostered"
+        : status === "bed_rest"
           ? ` · Time out: ${formatDaysHoursOut(current.startedAt)}`
           : "";
   return (
-    <p className="text-sm text-ink-muted mt-1">
+    <p className="text-sm text-ink mt-1">
       {who}
       {formatStartedLine(startLabel, current.startedAt)}
       {current.dueBack && <> · {formatStartedLine("Due End", current.dueBack)}</>}
       {status === "bed_rest" && current.reason ? ` · ${current.reason}` : ""}
-      {overdue && (
-        <span className="text-danger font-semibold" title="Overdue">
-          {" "}
-          ⏰ Overdue
-        </span>
-      )}
+      {overdueFlag}
       {timeOut}
     </p>
   );

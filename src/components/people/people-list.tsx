@@ -4,31 +4,44 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { PersonListItem } from "@/lib/people-data";
 import { ROLE_BADGE_CLASS, ROLE_LABEL } from "@/lib/people";
+import { daysAgoLabel, formatHoursMinutes } from "@/lib/format";
 
-type Filter = "all" | "pending" | "volunteers" | "carers" | "staff";
+type Filter = "pending" | "volunteer" | "volunteer_plus" | "jail_break" | "foster" | "committee" | "staff";
 
+// Tap more than one to see people who match ANY of them (Paul, 2026-10-04).
+// Nothing selected = everyone.
 const FILTERS: { key: Filter; label: string }[] = [
-  { key: "all", label: "All" },
   { key: "pending", label: "Pending" },
-  { key: "volunteers", label: "Volunteers" },
-  { key: "carers", label: "Carers" },
+  { key: "volunteer", label: "Volunteers" },
+  { key: "volunteer_plus", label: "Volunteer +" },
+  { key: "jail_break", label: "Jail break" },
+  { key: "foster", label: "Foster" },
+  { key: "committee", label: "Committee" },
   { key: "staff", label: "Staff" },
 ];
 
 function matchesFilter(p: PersonListItem, f: Filter): boolean {
-  if (f === "all") return true;
   if (f === "pending") return p.hasPending;
   const active = p.roles.filter((r) => r.status === "active").map((r) => r.role);
-  if (f === "volunteers") return active.includes("volunteer");
-  if (f === "carers") return active.includes("jailbreak_carer") || active.includes("foster_carer");
-  if (f === "staff")
-    return active.includes("staff") || active.includes("committee") || active.includes("admin");
-  return true;
+  switch (f) {
+    case "volunteer":
+      return active.includes("volunteer");
+    case "volunteer_plus":
+      return active.includes("volunteer_plus");
+    case "jail_break":
+      return active.includes("jailbreak_carer");
+    case "foster":
+      return active.includes("foster_carer");
+    case "committee":
+      return active.includes("committee");
+    case "staff":
+      return active.includes("staff") || active.includes("admin");
+  }
 }
 
 export function PeopleList({ people }: { people: PersonListItem[] }) {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
+  const [selected, setSelected] = useState<Filter[]>([]);
   const [showArchived, setShowArchived] = useState(false);
 
   const { visible, archivedCount } = useMemo(() => {
@@ -41,12 +54,12 @@ export function PeopleList({ people }: { people: PersonListItem[] }) {
       }
       if (q && !p.name.toLowerCase().includes(q) && !(p.nickname ?? "").toLowerCase().includes(q))
         return false;
-      return matchesFilter(p, filter);
+      return selected.length === 0 || selected.some((f) => matchesFilter(p, f));
     });
     // Pending first, then by name (the list already comes name-sorted).
     visible.sort((a, b) => Number(b.hasPending) - Number(a.hasPending));
     return { visible, archivedCount };
-  }, [people, query, filter, showArchived]);
+  }, [people, query, selected, showArchived]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -63,9 +76,9 @@ export function PeopleList({ people }: { people: PersonListItem[] }) {
           <button
             key={f.key}
             type="button"
-            onClick={() => setFilter(f.key)}
+            onClick={() => setSelected((cur) => (cur.includes(f.key) ? cur.filter((k) => k !== f.key) : [...cur, f.key]))}
             className={`shrink-0 px-3 h-8 rounded-full text-sm font-semibold border ${
-              filter === f.key ? "bg-brand text-white border-brand" : "border-line-cool text-ink-muted"
+              selected.includes(f.key) ? "bg-brand text-white border-brand" : "border-line-cool text-ink"
             }`}
           >
             {f.label}
@@ -90,8 +103,13 @@ export function PeopleList({ people }: { people: PersonListItem[] }) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold truncate">
-                    {p.name}
-                    {p.nickname ? <span className="text-ink-muted font-normal"> ({p.nickname})</span> : null}
+                    {p.nickname ? (
+                      <>
+                        {p.nickname} <span className="text-ink font-normal">({p.name})</span>
+                      </>
+                    ) : (
+                      p.name
+                    )}
                   </span>
                   {p.isMinor && <span className="text-xs font-bold text-warm-ink">U18</span>}
                   {p.hasAccount && <span className="text-xs text-ink-muted" title="Has an app account">◧</span>}
@@ -112,6 +130,13 @@ export function PeopleList({ people }: { people: PersonListItem[] }) {
                     ))}
                   {p.archived && <span className="text-xs text-ink-muted">archived</span>}
                 </div>
+                {p.roles.some((r) => r.role === "volunteer" && r.status === "active") && (
+                  <p className="text-xs text-ink mt-1">
+                    {p.lastWalkAt
+                      ? `Last walk: ${daysAgoLabel(p.lastWalkAt)}, 4wk time: ${formatHoursMinutes(p.fourWeekWalkMinutes)}`
+                      : "No walks yet"}
+                  </p>
+                )}
               </div>
               {(p.missingEmergencyContact || p.noImageConsent) && (
                 <div className="flex flex-col items-end gap-0.5 shrink-0 text-xs font-semibold text-danger">
