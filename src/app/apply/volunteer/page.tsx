@@ -19,12 +19,12 @@ export default async function ApplyVolunteerPage({
         <div className="flex flex-col items-center gap-3 text-center">
           <Image src="/logo.jpg" alt="CAPS" width={72} height={72} className="rounded-full" priority />
           <h1 className="text-2xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
-            {homecareFirst ? "Foster or Jail Break with CAPS" : "Join CAPS"}
+            {homecareFirst ? "Foster or Jail Break with CAPS" : "Work with us"}
           </h1>
           <p className="text-sm text-ink max-w-sm">
             {homecareFirst
               ? "Give a dog a break from the shelter — for a day, a weekend, or longer. Applications are reviewed by CAPS before you can take a dog out."
-              : "Volunteer at the shelter, foster a dog, or take one out on a jail break — one short form covers it all. Adults can begin dog walking straight away; under-18s need a parent or guardian's consent first."}
+              : "There are many ways you can work with CAPS and support the animals in our care. Select your interests below. It's easy to change your mind and add more later."}
           </p>
         </div>
 

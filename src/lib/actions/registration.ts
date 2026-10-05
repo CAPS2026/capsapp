@@ -14,6 +14,7 @@ import { sendEmail } from "@/lib/email";
 import type { homePayload } from "@/lib/homecare-form";
 import { parentConsentEmail } from "@/lib/consent-email";
 import { sendHomecareEmails } from "@/lib/homecare-notify";
+import { addAdoptionInterest, sendAdoptionEmails } from "@/lib/adoption-notify";
 import { savePersonPhotoFromDataUrl } from "@/lib/person-photo-upload";
 
 // Public, unauthenticated intake. Runs with the service-role client because
@@ -52,6 +53,8 @@ export async function registerVolunteer(input: {
   interests: string[];
   fosterInterest: boolean;
   jailBreakInterest: boolean;
+  /** Interested in adopting a CAPS dog or cat. */
+  adoptionInterest?: boolean;
   /** Home / garden details, filled in when a homecare box is ticked. */
   home?: ReturnType<typeof homePayload>;
   experienceLevel: string;
@@ -93,7 +96,7 @@ export async function registerVolunteer(input: {
   if (!experienceCode) return { error: "Please pick the option that best describes your experience." };
   if (experienceCode === "other" && !clean(input.experienceOther))
     return { error: "Please describe your experience." };
-  if (interests.length === 0 && !wantsHomecare)
+  if (interests.length === 0 && !wantsHomecare && !input.adoptionInterest)
     return { error: "Pick at least one thing you'd like to help with." };
   if (input.imageConsent === null)
     return { error: "Please answer the promotional-image consent question." };
@@ -224,6 +227,9 @@ export async function registerVolunteer(input: {
   if (input.jailBreakInterest)
     roleRows.push({ person_id: personRow.id, role: "jailbreak_carer", status: "pending", granted_on: null });
 
+  if (input.adoptionInterest)
+    roleRows.push({ person_id: personRow.id, role: "adopter", status: "pending", granted_on: null });
+
   const { data: insertedRoles, error: roleErr } = await supabase
     .from("person_roles")
     .insert(roleRows)
@@ -274,6 +280,16 @@ export async function registerVolunteer(input: {
       wantsJailBreak: input.jailBreakInterest,
       jailBreakRoleId:
         (insertedRoles ?? []).find((r) => r.role === "jailbreak_carer")?.id ?? null,
+    });
+  }
+
+  if (input.adoptionInterest) {
+    await sendAdoptionEmails(supabase, {
+      personId: personRow.id,
+      firstName,
+      name: `${firstName} ${surname}`,
+      email,
+      phone,
     });
   }
 

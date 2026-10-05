@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { registerVolunteer } from "@/lib/actions/registration";
-import { applyForHomecarePublic, checkHomecareApplicant } from "@/lib/actions/homecare-public";
+import { applyForAdoptionPublic, applyForHomecarePublic, checkHomecareApplicant } from "@/lib/actions/homecare-public";
 import {
   ageFromDob,
   VOLUNTEER_INTERESTS,
@@ -104,7 +104,7 @@ function YesNo({
 type Step = "start" | "about" | "contact" | "dogs" | "homecare" | "finish";
 
 const STEP_TITLE: Record<Step, string> = {
-  start: "What would you like to do?",
+  start: "Your interests",
   about: "About you",
   contact: "Emergency contact",
   dogs: "You and dogs",
@@ -146,6 +146,7 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
   const [onSite, setOnSite] = useState(!homecareFirst);
   const [fosterInterest, setFosterInterest] = useState(false);
   const [jailBreakInterest, setJailBreakInterest] = useState(false);
+  const [adoptionInterest, setAdoptionInterest] = useState(false);
   const [over18, setOver18] = useState<"" | "yes" | "no">("");
   const [interests, setInterests] = useState<string[]>([]);
   const [home, setHome] = useState<HomeDetails>(EMPTY_HOME);
@@ -159,6 +160,7 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
   const [isPending, startTransition] = useTransition();
 
   const wantsHomecare = fosterInterest || jailBreakInterest;
+  const wantsAnything = onSite || wantsHomecare || adoptionInterest;
   const dobAge = form.dateOfBirth ? ageFromDob(form.dateOfBirth) : null;
   const isMinor = over18 === "no" || (dobAge !== null && dobAge < 18);
 
@@ -168,7 +170,7 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
 
   // The pages this person will see, in order.
   const steps: Step[] = registered
-    ? ["start", "homecare", "finish"]
+    ? ["start", ...(wantsHomecare ? (["homecare"] as Step[]) : []), "finish"]
     : ["start", "about", "contact", "dogs", ...(wantsHomecare ? (["homecare"] as Step[]) : []), "finish"];
   const idx = steps.indexOf(step);
   const isLast = idx === steps.length - 1;
@@ -183,16 +185,16 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
     setError(null);
 
     if (step === "start") {
-      if (!onSite && !wantsHomecare) return setError("Please tick at least one thing you're interested in.");
+      if (!wantsAnything) return setError("Please tick at least one thing you're interested in.");
       startTransition(async () => {
         const r = await checkHomecareApplicant({ email: form.email, surname: form.surname, website: form.website });
         if (r.registered) {
-          if (!wantsHomecare) {
+          if (!wantsHomecare && !adoptionInterest) {
             setError("You're already registered — you're good to go. Check in with a caretaker when you're at the shelter.");
             return;
           }
           setRegistered(true);
-          setStep("homecare");
+          setStep(wantsHomecare ? "homecare" : "finish");
         } else {
           setRegistered(false);
           setStep("about");
@@ -216,21 +218,32 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
 
     startTransition(async () => {
       if (registered) {
-        const r = await applyForHomecarePublic({
-          email: form.email,
-          surname: form.surname,
-          website: form.website,
-          application: {
-            jailBreak: jailBreakInterest,
-            foster: fosterInterest,
-            ...homePayload(home),
-            agreeTerms,
-            signatureName: form.signatureName,
-          },
-          photoData: photo || undefined,
-        });
-        if (r.error) setError(r.error);
-        else setDone("applied");
+        if (wantsHomecare) {
+          const r = await applyForHomecarePublic({
+            email: form.email,
+            surname: form.surname,
+            website: form.website,
+            application: {
+              jailBreak: jailBreakInterest,
+              foster: fosterInterest,
+              ...homePayload(home),
+              agreeTerms,
+              signatureName: form.signatureName,
+            },
+            photoData: photo || undefined,
+          });
+          if (r.error) return setError(r.error);
+        }
+        if (adoptionInterest) {
+          const r = await applyForAdoptionPublic({
+            email: form.email,
+            surname: form.surname,
+            website: form.website,
+            photoData: photo || undefined,
+          });
+          if (r.error) return setError(r.error);
+        }
+        setDone("applied");
         return;
       }
       const result: RegisterResult = await registerVolunteer({
@@ -239,6 +252,7 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
         interests: onSite ? interests : [],
         fosterInterest,
         jailBreakInterest,
+        adoptionInterest,
         home: wantsHomecare ? homePayload(home) : undefined,
         photoData: photo || undefined,
         imageConsent: imageConsent === "yes",
@@ -288,6 +302,10 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
           </>
         )}
 
+        {adoptionInterest && (
+          <p>You said you&apos;re interested in adoption — someone from CAPS will be in touch to chat about the next steps.</p>
+        )}
+
         <p className="text-ink">You can close this page now.</p>
       </div>
     );
@@ -309,12 +327,13 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
       {step === "start" && (
         <>
           <fieldset className="flex flex-col gap-2">
-            <legend className="text-sm font-bold">What are you interested in? Tick all that apply.</legend>
+            <legend className="text-sm font-bold">Select your interests below.</legend>
             {(
               [
-                [onSite, setOnSite, "Volunteering at the shelter", "walking dogs, feeding and cleaning, events and more."],
-                [fosterInterest, setFosterInterest, "Fostering", "having a dog live in my home for weeks or months."],
-                [jailBreakInterest, setJailBreakInterest, "Jail break", "taking a dog out for a day trip or overnight."],
+                [onSite, setOnSite, "Volunteer at the shelter", "includes becoming a member of our committee. Complete the form and start right away."],
+                [jailBreakInterest, setJailBreakInterest, "Jail break", "taking a dog out for the day, or to stay with me overnight. This needs a brief chat about your home setup."],
+                [fosterInterest, setFosterInterest, "Fostering", "having a dog live in my home. This needs an in-person yard check."],
+                [adoptionInterest, setAdoptionInterest, "Adoption", "becoming the permanent owner of a CAPS dog or cat."],
               ] as const
             ).map(([checked, setter, title, blurb]) => (
               <label
@@ -330,9 +349,6 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
               </label>
             ))}
           </fieldset>
-          <p className="text-xs text-ink">
-            Fostering and jail break each have their own approval — a chat for jail break, a home visit for fostering.
-          </p>
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Your email">
@@ -356,7 +372,7 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
               />
             </Field>
           </div>
-          <p className="text-xs text-ink">
+          <p className="text-base text-ink">
             If you&apos;re already registered with CAPS we&apos;ll recognise you and only ask what&apos;s new.
           </p>
         </>

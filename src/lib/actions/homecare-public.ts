@@ -1,6 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { addAdoptionInterest, sendAdoptionEmails } from "@/lib/adoption-notify";
 import { savePersonPhotoFromDataUrl } from "@/lib/person-photo-upload";
 import { submitHomecareApplication, type HomecareApplicationInput } from "@/lib/homecare-apply-core";
 
@@ -50,5 +51,35 @@ export async function applyForHomecarePublic(input: {
   });
   if (result.error) return { error: result.error };
   await savePersonPhotoFromDataUrl(createAdminClient(), person.id, input.photoData, { onlyIfBlank: true });
+  return { ok: true };
+}
+
+/** Registered people who tick Adoption: records the interest and tells CAPS. */
+export async function applyForAdoptionPublic(input: {
+  email: string;
+  surname: string;
+  website: string;
+  photoData?: string;
+}): Promise<{ error: string } | { ok: true; error?: undefined }> {
+  if (clean(input.website)) return { ok: true };
+  const person = await findPerson(input.email, input.surname);
+  if (!person) return { error: "We couldn't match that email and surname to a registered volunteer." };
+
+  const admin = createAdminClient();
+  const r = await addAdoptionInterest(admin, person.id);
+  if (r.error) return { error: r.error };
+  if (r.added) {
+    const { data: row } = await admin.from("people").select("first_name, surname, email, phone").eq("id", person.id).maybeSingle();
+    if (row?.email) {
+      await sendAdoptionEmails(admin, {
+        personId: person.id,
+        firstName: row.first_name as string,
+        name: `${row.first_name} ${row.surname}`.trim(),
+        email: row.email as string,
+        phone: (row.phone as string | null) ?? "",
+      });
+    }
+  }
+  await savePersonPhotoFromDataUrl(admin, person.id, input.photoData, { onlyIfBlank: true });
   return { ok: true };
 }
