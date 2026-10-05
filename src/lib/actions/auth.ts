@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { CAFE_COOKIE, UNLOCK_COOKIE } from "@/lib/cafe";
 import { linkPersonToAuthUser } from "@/lib/link-person";
 
-type Result = { ok: true } | { error: "not_registered" | "no_session" };
+type Result = { ok: true } | { error: "not_registered" | "no_access" | "no_session" };
 
 /**
  * The other half of the type-in-code sign-in path (src/app/login/page.tsx
@@ -22,10 +22,10 @@ export async function completeCodeSignIn(): Promise<Result> {
   } = await supabase.auth.getUser();
   if (!user?.email) return { error: "no_session" };
 
-  const isRegistered = await linkPersonToAuthUser(user.id, user.email);
-  if (!isRegistered) {
+  const linked = await linkPersonToAuthUser(user.id, user.email);
+  if (linked !== "ok") {
     await supabase.auth.signOut();
-    return { error: "not_registered" };
+    return { error: linked };
   }
   // Proving who you are with an emailed code is stronger than the shared PIN,
   // so a fresh sign-in leaves volunteer mode on this device. This is the
