@@ -1,5 +1,7 @@
 # CAPS App — setup & handover
 
+> **Start with [`handover-2026-10-05.md`](handover-2026-10-05.md)** — the current state, the Paul/Julie boundary and the open items. The rest of this file is the accounts / how-to-get-back-in reference, and its §5 "where things stand" is out of date.
+
 Everything needed to pick this project up from scratch, on a different machine
 or a different Claude account. Accounts/access (§1–4, §6–8) current as of
 **10 Sep 2026**. **§5 "where things stand" is behind** — People, Registration
