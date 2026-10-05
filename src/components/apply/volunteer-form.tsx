@@ -67,6 +67,12 @@ function YesNo({
   );
 }
 
+// Same rule the server applies: 8–15 digits once spaces, dashes and + are ignored.
+function phoneOk(p: string) {
+  const n = p.replace(/\D/g, "").length;
+  return n >= 8 && n <= 15;
+}
+
 type Step = "start" | "about" | "contact" | "dogs" | "homecare" | "finish";
 
 const STEP_TITLE: Record<Step, string> = {
@@ -246,7 +252,14 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
       });
       return;
     }
-    if (step === "about" && !over18) return setError("Please tell us whether you're 18 or over.");
+    if (step === "about") {
+      if (!phoneOk(form.phone)) return setError("Your phone number doesn't look right — please check it (include the area or mobile code).");
+      if (!over18) return setError("Please tell us whether you're 18 or over.");
+      if (isMinor && !phoneOk(form.parentPhone))
+        return setError("The parent / guardian's phone number doesn't look right — please check it.");
+    }
+    if (step === "contact" && !phoneOk(form.ecPhone))
+      return setError("The emergency contact's phone number doesn't look right — please check it.");
     if (step === "dogs") {
       if (!form.experienceLevel) return setError("Please pick the option that best describes your experience.");
       if (onSite && interests.length === 0) return setError("Pick at least one thing you'd like to help with.");
