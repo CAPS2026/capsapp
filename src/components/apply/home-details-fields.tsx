@@ -13,6 +13,42 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+const FENCE_TYPES = ["Colorbond / metal", "Timber / paling", "Brick / masonry", "Chain link / wire mesh", "Pool-style fence", "Picket", "Other", "No fence"];
+const FENCE_HEIGHTS = ["Under 1 m", "1 – 1.2 m", "1.2 – 1.5 m", "1.5 – 1.8 m", "Over 1.8 m"];
+const PEOPLE_AT_HOME: [string, string][] = [
+  ...Array.from({ length: 9 }, (_, i): [string, string] => [String(i + 1), String(i + 1)]),
+  ["10", "10 or more"],
+];
+const CHILDREN: [string, string][] = [
+  ...Array.from({ length: 5 }, (_, i): [string, string] => [String(i), i === 0 ? "None" : String(i)]),
+  ["6", "6 or more"],
+];
+
+// A dropdown that keeps any older free-text answer visible as its own option.
+function Pick({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: (string | [string, string])[];
+}) {
+  const pairs = options.map((o): [string, string] => (typeof o === "string" ? [o, o] : o));
+  const known = pairs.some(([v]) => v === value);
+  return (
+    <select className={inputClass} value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">Choose one…</option>
+      {pairs.map(([v, label]) => (
+        <option key={v} value={v}>
+          {label}
+        </option>
+      ))}
+      {value && !known && <option value={value}>{value}</option>}
+    </select>
+  );
+}
+
 function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <label className="flex items-center gap-2 text-sm">
@@ -69,18 +105,18 @@ export function HomeDetailsFields({
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Fence type">
-            <input className={inputClass} value={value.fenceType} onChange={(e) => set("fenceType", e.target.value)} />
+            <Pick value={value.fenceType} onChange={(v) => set("fenceType", v)} options={FENCE_TYPES} />
           </Field>
           <Field label="Fence height">
-            <input className={inputClass} value={value.fenceHeight} onChange={(e) => set("fenceHeight", e.target.value)} />
+            <Pick value={value.fenceHeight} onChange={(v) => set("fenceHeight", v)} options={FENCE_HEIGHTS} />
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="People at home">
-            <input inputMode="numeric" className={inputClass} value={value.peopleAtHome} onChange={(e) => set("peopleAtHome", e.target.value)} />
+            <Pick value={value.peopleAtHome} onChange={(v) => set("peopleAtHome", v)} options={PEOPLE_AT_HOME} />
           </Field>
           <Field label="Children under 16">
-            <input inputMode="numeric" className={inputClass} value={value.childrenU16} onChange={(e) => set("childrenU16", e.target.value)} />
+            <Pick value={value.childrenU16} onChange={(v) => set("childrenU16", v)} options={CHILDREN} />
           </Field>
         </div>
         <Field label="Other animals">
