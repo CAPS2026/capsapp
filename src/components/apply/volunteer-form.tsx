@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { Children, isValidElement, useEffect, useRef, useState, useTransition } from "react";
 import { registerVolunteer } from "@/lib/actions/registration";
 import { applyForAdoptionPublic, applyForHomecarePublic, checkHomecareApplicant } from "@/lib/actions/homecare-public";
 import {
@@ -19,10 +19,24 @@ const inputClass =
   "h-11 px-3 rounded-[var(--radius)] border border-line-cool bg-white text-base w-full";
 const areaClass = "px-3 py-2 rounded-[var(--radius)] border border-line-cool bg-white text-base w-full";
 
+// A red * after the label when the input inside is `required`.
+function Star() {
+  return (
+    <span className="text-danger" aria-hidden="true">
+      {" "}
+      *
+    </span>
+  );
+}
+
 function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
+  const required = Children.toArray(children).some((c) => isValidElement(c) && (c.props as { required?: boolean }).required);
   return (
     <label className="flex flex-col gap-1 text-sm">
-      <span className="font-semibold">{label}</span>
+      <span className="font-semibold">
+        {label}
+        {required && <Star />}
+      </span>
       {children}
       {hint && <span className="text-xs text-ink">{hint}</span>}
     </label>
@@ -44,7 +58,10 @@ function YesNo({
 }) {
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="text-sm font-bold">{legend}</legend>
+      <legend className="text-sm font-bold">
+        {legend}
+        <Star />
+      </legend>
       <div className="flex gap-2">
         {(
           [
@@ -381,6 +398,9 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
         </span>
         <span className="text-2xl font-extrabold text-ink" style={{ fontFamily: "var(--font-display)" }}>{STEP_TITLE[step]}</span>
       </div>
+      <p className="text-xs text-ink -mt-3">
+        <span className="text-danger">*</span> means the question must be answered.
+      </p>
       <div className="h-1.5 rounded-full bg-gray-tint overflow-hidden" aria-hidden="true">
         <div className="h-full bg-brand" style={{ width: `${((idx + 1) / steps.length) * 100}%` }} />
       </div>
@@ -389,7 +409,10 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
       {step === "start" && (
         <>
           <fieldset className="flex flex-col gap-2">
-            <legend className="text-sm font-bold">Select your interests below.</legend>
+            <legend className="text-sm font-bold">
+              Select your interests below.
+              <Star />
+            </legend>
             {(
               [
                 [onSite, setOnSite, "Volunteer at the shelter", "includes becoming a member of our committee. Complete the form and start right away."],
@@ -631,7 +654,10 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
 
           {onSite && (
             <fieldset className="flex flex-col gap-2">
-              <legend className="text-sm font-bold">Which activities at the shelter are you interested in? Tick all that apply.</legend>
+              <legend className="text-sm font-bold">
+                Which activities at the shelter are you interested in? Tick all that apply.
+                <Star />
+              </legend>
               <div className="grid grid-cols-2 gap-2">
                 {VOLUNTEER_INTERESTS.map((i) => (
                   <label
@@ -711,7 +737,10 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
             </div>
             <label className="flex items-start gap-2 text-sm">
               <input type="checkbox" className="mt-1" checked={agreeTerms} onChange={(e) => setAgreeTerms(e.target.checked)} />
-              <span>I have read and agree to the above terms.</span>
+              <span>
+                I have read and agree to the above terms.
+                <Star />
+              </span>
             </label>
           </fieldset>
 
