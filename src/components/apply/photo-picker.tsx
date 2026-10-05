@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const MAX_SIDE = 640;
 
@@ -35,7 +35,45 @@ export function PhotoPicker({
 }) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const libraryRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [camOn, setCamOn] = useState(false);
+
+  function stopCamera() {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setCamOn(false);
+  }
+  useEffect(() => () => streamRef.current?.getTracks().forEach((t) => t.stop()), []);
+  useEffect(() => {
+    if (camOn && videoRef.current && streamRef.current) videoRef.current.srcObject = streamRef.current;
+  }, [camOn]);
+
+  // Live camera in the page (works on computers too). If the browser won't give
+  // us one, fall back to the phone's own camera picker.
+  async function startCamera() {
+    setError(null);
+    if (!navigator.mediaDevices?.getUserMedia) return cameraRef.current?.click();
+    try {
+      streamRef.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+      setCamOn(true);
+    } catch {
+      cameraRef.current?.click();
+    }
+  }
+
+  function snap() {
+    const v = videoRef.current;
+    if (!v || !v.videoWidth) return;
+    const scale = Math.min(1, MAX_SIDE / Math.max(v.videoWidth, v.videoHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(v.videoWidth * scale);
+    canvas.height = Math.round(v.videoHeight * scale);
+    canvas.getContext("2d")?.drawImage(v, 0, 0, canvas.width, canvas.height);
+    onChange(canvas.toDataURL("image/jpeg", 0.82));
+    stopCamera();
+  }
 
   async function pick(file: File | undefined) {
     setError(null);
@@ -68,7 +106,7 @@ export function PhotoPicker({
         )}
         <div className="flex flex-col gap-2">
           <div className="flex gap-2 flex-wrap">
-            <button type="button" className={btn} onClick={() => cameraRef.current?.click()}>
+            <button type="button" className={btn} onClick={() => void startCamera()}>
               Take a photo
             </button>
             <button type="button" className={btn} onClick={() => libraryRef.current?.click()}>
@@ -82,6 +120,19 @@ export function PhotoPicker({
           </div>
         </div>
       </div>
+      {camOn && (
+        <div className="flex flex-col gap-2">
+          <video ref={videoRef} autoPlay playsInline muted className="w-full max-w-sm rounded-[var(--radius)] bg-black" />
+          <div className="flex gap-2">
+            <button type="button" className={btn} onClick={snap}>
+              Take photo
+            </button>
+            <button type="button" className="h-10 px-3 text-sm font-semibold text-ink underline" onClick={stopCamera}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       {/* capture="user" asks a phone for the front camera; the other input lets
           people pick an existing photo (or use their device's own camera chooser). */}
       <input
