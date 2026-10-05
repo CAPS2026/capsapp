@@ -19,7 +19,7 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   { href: "/dogs", label: "Dogs", Icon: PawIcon },
   { href: "/site", label: "Site Visitors", Icon: SignInIcon },
-  { href: "/staff", label: "Staff", Icon: ClipboardIcon, staffOnly: true },
+  { href: "/shift", label: "Shift", Icon: ClipboardIcon, staffOnly: true },
   { href: "/people", label: "People", Icon: PeopleIcon, staffOnly: true },
   { href: "/logs", label: "Logs", Icon: LogsIcon, staffOnly: true },
   { href: "/reports", label: "Reports", Icon: ReportsIcon, staffOnly: true },
