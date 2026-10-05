@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { registerVolunteer } from "@/lib/actions/registration";
 import { applyForAdoptionPublic, applyForHomecarePublic, checkHomecareApplicant } from "@/lib/actions/homecare-public";
 import {
@@ -154,7 +154,15 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
   const [imageConsent, setImageConsent] = useState<"" | "yes" | "no">("");
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [registered, setRegistered] = useState(false); // already on file
-  const [step, setStep] = useState<Step>("start");
+  const [step, setStepRaw] = useState<Step>("start");
+  const restored = useRef(false);
+
+  // Every page change is a browser-history entry, so the phone's Back / Forward
+  // buttons move between pages instead of leaving the form.
+  const goStep = (next: Step) => {
+    setStepRaw(next);
+    window.history.pushState({ step: next }, "", `#${next}`);
+  };
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<"active" | "pending" | "applied" | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -175,9 +183,72 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
   const idx = steps.indexOf(step);
   const isLast = idx === steps.length - 1;
 
+  // Keep what's been typed if the page is reloaded or the browser wanders off
+  // (Paul lost his progress twice, 2026-10-05). Stored only in this tab's
+  // session storage, cleared when the form is submitted.
+  const STORE = "caps-join-form-v1";
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem(STORE);
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d.form) setForm((f) => ({ ...f, ...d.form, website: "" }));
+        if (typeof d.onSite === "boolean") setOnSite(d.onSite);
+        setFosterInterest(!!d.fosterInterest);
+        setJailBreakInterest(!!d.jailBreakInterest);
+        setAdoptionInterest(!!d.adoptionInterest);
+        if (d.over18) setOver18(d.over18);
+        if (Array.isArray(d.interests)) setInterests(d.interests);
+        if (d.home) setHome({ ...EMPTY_HOME, ...d.home });
+        if (typeof d.photo === "string") setPhoto(d.photo);
+        if (d.imageConsent) setImageConsent(d.imageConsent);
+        setRegistered(!!d.registered);
+        if (d.step) setStepRaw(d.step);
+        window.history.replaceState({ step: d.step ?? "start" }, "", `#${d.step ?? "start"}`);
+      } else {
+        window.history.replaceState({ step: "start" }, "", "#start");
+      }
+    } catch {
+      /* storage blocked or corrupt: start fresh */
+    }
+    restored.current = true;
+    const onPop = (e: PopStateEvent) => setStepRaw((e.state?.step as Step | undefined) ?? "start");
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  useEffect(() => {
+    if (!restored.current) return;
+    try {
+      if (done) {
+        window.sessionStorage.removeItem(STORE);
+        return;
+      }
+      window.sessionStorage.setItem(
+        STORE,
+        JSON.stringify({
+          form: { ...form, signatureName: "", parentalConsent: false },
+          onSite,
+          fosterInterest,
+          jailBreakInterest,
+          adoptionInterest,
+          over18,
+          interests,
+          home,
+          photo,
+          imageConsent,
+          registered,
+          step,
+        }),
+      );
+    } catch {
+      /* quota or blocked: ignore */
+    }
+  }, [form, onSite, fosterInterest, jailBreakInterest, adoptionInterest, over18, interests, home, photo, imageConsent, registered, step, done]);
+
   function back() {
     setError(null);
-    if (idx > 0) setStep(steps[idx - 1]);
+    if (idx > 0) goStep(steps[idx - 1]);
   }
 
   function submit(e: React.FormEvent) {
@@ -194,10 +265,10 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
             return;
           }
           setRegistered(true);
-          setStep(wantsHomecare ? "homecare" : "finish");
+          goStep(wantsHomecare ? "homecare" : "finish");
         } else {
           setRegistered(false);
-          setStep("about");
+          goStep("about");
         }
       });
       return;
@@ -208,7 +279,7 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
       if (onSite && interests.length === 0) return setError("Pick at least one thing you'd like to help with.");
     }
     if (!isLast) {
-      setStep(steps[idx + 1]);
+      goStep(steps[idx + 1]);
       return;
     }
 

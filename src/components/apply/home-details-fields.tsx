@@ -50,18 +50,22 @@ export function HomeDetailsFields({
         </fieldset>
       )}
 
-      {foster && (
-        <fieldset className="flex flex-col gap-2">
-          <legend className="text-sm font-bold">Foster length</legend>
-          <Check label="Short term" checked={value.fosterShort} onChange={(v) => set("fosterShort", v)} />
-          <Check label="Long term" checked={value.fosterLong} onChange={(v) => set("fosterLong", v)} />
-        </fieldset>
-      )}
-
       <fieldset className="flex flex-col gap-3 border border-line rounded-[var(--radius)] p-4">
         <legend className="text-sm font-bold px-1">Your home and garden</legend>
-        <Field label="Own or rent?">
-          <input className={inputClass} value={value.propertyOwnership} onChange={(e) => set("propertyOwnership", e.target.value)} />
+        <Field label="Do you own or rent your property?">
+          <select className={inputClass} value={value.propertyOwnership} onChange={(e) => set("propertyOwnership", e.target.value)}>
+            <option value="">Choose one…</option>
+            <option value="Own">Own</option>
+            <option value="Rent">Rent</option>
+            {value.propertyOwnership && !["Own", "Rent"].includes(value.propertyOwnership) && (
+              <option value={value.propertyOwnership}>{value.propertyOwnership}</option>
+            )}
+          </select>
+          {value.propertyOwnership.toLowerCase().startsWith("rent") && (
+            <span className="text-sm text-warm-ink bg-warm-tint rounded-[var(--radius)] p-2">
+              If you rent, we&apos;ll need a letter from your landlord confirming that pets are allowed.
+            </span>
+          )}
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Fence type">
