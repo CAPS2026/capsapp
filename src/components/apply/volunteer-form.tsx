@@ -543,6 +543,26 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
       {step === "contact" && (
         <fieldset className="flex flex-col gap-3">
           <p className="text-sm text-ink">Someone we can call if there&apos;s a problem while you&apos;re out with a dog.</p>
+          {isMinor && form.parentName.trim() && (
+            <button
+              type="button"
+              className="self-start text-sm font-bold px-3 py-2 rounded-[var(--radius)] border border-line-cool bg-white"
+              onClick={() => {
+                const parts = form.parentName.trim().split(/\s+/);
+                const last = parts.length > 1 ? parts.pop()! : "";
+                setForm((f) => ({
+                  ...f,
+                  ecName: parts.join(" "),
+                  ecSurname: last,
+                  ecPhone: f.parentPhone,
+                  ecEmail: f.parentEmail,
+                  ecRelationship: "Parent / guardian",
+                }));
+              }}
+            >
+              Same as my parent / guardian
+            </button>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <Field label="First name">
               <input className={inputClass} required value={form.ecName} onChange={(e) => set("ecName", e.target.value)} />
