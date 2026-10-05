@@ -1,17 +1,33 @@
 "use client";
 
-import type { HomeDetails } from "@/lib/homecare-form";
+import { EMPTY_PET, type HomeDetails, type Pet, type YesNo } from "@/lib/homecare-form";
 
 const inputClass = "h-11 px-3 rounded-[var(--radius)] border border-line-cool bg-white text-base w-full";
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, required }: { label: string; children: React.ReactNode; required?: boolean }) {
   return (
     <label className="flex flex-col gap-1 text-sm">
-      <span className="font-semibold">{label}</span>
+      <span className="font-semibold">
+        {label}
+        {required && (
+          <span className="text-danger" aria-hidden="true">
+            {" "}
+            *
+          </span>
+        )}
+      </span>
       {children}
     </label>
   );
 }
+
+const PET_TYPES = ["Dog", "Cat", "Horse", "Bird", "Rabbit / guinea pig", "Reptile", "Farm animal", "Other"];
+const TEMPERAMENTS = ["Friendly with other animals", "Gentle but shy", "Playful / energetic", "Dominant / bossy", "Can be aggressive", "Not sure"];
+const YES_NO: [string, string][] = [
+  ["yes", "Yes"],
+  ["no", "No"],
+];
+const CHILD_AGES = Array.from({ length: 16 }, (_, i): [string, string] => [String(i), i === 0 ? "Under 1" : String(i)]);
 
 const FENCE_TYPES = ["Colorbond / metal", "Timber / paling", "Brick / masonry", "Chain link / wire mesh", "Pool-style fence", "Picket", "Other", "No fence"];
 const FENCE_HEIGHTS = ["Under 1 m", "1 – 1.2 m", "1.2 – 1.5 m", "1.5 – 1.8 m", "Over 1.8 m"];
@@ -72,6 +88,10 @@ export function HomeDetailsFields({
   jailBreak: boolean;
   foster: boolean;
 }) {
+  const childCount = (h: HomeDetails) => {
+    const n = parseInt(h.childrenU16, 10);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  };
   const set = <K extends keyof HomeDetails>(k: K, v: HomeDetails[K]) => onChange({ ...value, [k]: v });
 
   return (
@@ -88,7 +108,7 @@ export function HomeDetailsFields({
 
       <fieldset className="flex flex-col gap-3 border border-line rounded-[var(--radius)] p-4">
         <legend className="text-sm font-bold px-1">Your home and garden</legend>
-        <Field label="Do you own or rent your property?">
+        <Field label="Do you own or rent your property?" required>
           <select className={inputClass} value={value.propertyOwnership} onChange={(e) => set("propertyOwnership", e.target.value)}>
             <option value="">Choose one…</option>
             <option value="Own">Own</option>
@@ -104,34 +124,99 @@ export function HomeDetailsFields({
           )}
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Fence type">
+          <Field label="Fence type" required>
             <Pick value={value.fenceType} onChange={(v) => set("fenceType", v)} options={FENCE_TYPES} />
           </Field>
-          <Field label="Fence height">
+          <Field label="Fence height" required>
             <Pick value={value.fenceHeight} onChange={(v) => set("fenceHeight", v)} options={FENCE_HEIGHTS} />
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="People at home">
+          <Field label="People at home" required>
             <Pick value={value.peopleAtHome} onChange={(v) => set("peopleAtHome", v)} options={PEOPLE_AT_HOME} />
           </Field>
-          <Field label="Children under 16">
+          <Field label="Children under 16" required>
             <Pick value={value.childrenU16} onChange={(v) => set("childrenU16", v)} options={CHILDREN} />
           </Field>
         </div>
-        <Field label="Other animals">
-          <input className={inputClass} value={value.otherAnimals} onChange={(e) => set("otherAnimals", e.target.value)} />
+        {childCount(value) > 0 && (
+          <div className="grid grid-cols-2 gap-3">
+            {Array.from({ length: childCount(value) }, (_, i) => (
+              <Field key={i} label={`Age of child ${i + 1}`} required>
+                <Pick
+                  value={value.childAges[i] ?? ""}
+                  onChange={(v) => {
+                    const next = [...value.childAges];
+                    while (next.length <= i) next.push("");
+                    next[i] = v;
+                    set("childAges", next);
+                  }}
+                  options={CHILD_AGES}
+                />
+              </Field>
+            ))}
+          </div>
+        )}
+        <Field label="Do you have any other animals at home?" required>
+          <Pick
+            value={value.otherAnimals}
+            onChange={(v) => onChange({ ...value, otherAnimals: v, pets: v === "Yes" && value.pets.length === 0 ? [{ ...EMPTY_PET }] : value.pets })}
+            options={["Yes", "No"]}
+          />
         </Field>
-        <Field label="Animal details (vaccinated, desexed…)">
-          <input className={inputClass} value={value.animalDetails} onChange={(e) => set("animalDetails", e.target.value)} />
-        </Field>
-        <Field label="Other animals' vaccinations up to date?">
-          <select className={inputClass} value={value.vaccines} onChange={(e) => set("vaccines", e.target.value as HomeDetails["vaccines"])}>
-            <option value="">Not sure / none</option>
-            <option value="yes">Yes</option>
-            <option value="no">No</option>
-          </select>
-        </Field>
+        {value.otherAnimals === "Yes" && (
+          <>
+            {value.pets.map((p, i) => {
+              const setPet = <K extends keyof Pet>(k: K, v: Pet[K]) =>
+                set("pets", value.pets.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
+              return (
+                <fieldset key={i} className="flex flex-col gap-3 border border-line rounded-[var(--radius)] p-3">
+                  <legend className="text-sm font-bold px-1">Animal {i + 1}</legend>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Type of animal" required>
+                      <Pick value={p.type} onChange={(v) => setPet("type", v)} options={PET_TYPES} />
+                    </Field>
+                    <Field label="Breed" required>
+                      <input className={inputClass} required value={p.breed} onChange={(e) => setPet("breed", e.target.value)} />
+                    </Field>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Age" required>
+                      <input className={inputClass} required placeholder="e.g. 3 years" value={p.age} onChange={(e) => setPet("age", e.target.value)} />
+                    </Field>
+                    <Field label="Temperament" required>
+                      <Pick value={p.temperament} onChange={(v) => setPet("temperament", v)} options={TEMPERAMENTS} />
+                    </Field>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Desexed?" required>
+                      <Pick value={p.desexed} onChange={(v) => setPet("desexed", v as YesNo)} options={YES_NO} />
+                    </Field>
+                    <Field label="Vaccinations and prevention up to date?" required>
+                      <Pick value={p.vaccinated} onChange={(v) => setPet("vaccinated", v as YesNo)} options={YES_NO} />
+                    </Field>
+                  </div>
+                  {value.pets.length > 1 && (
+                    <button
+                      type="button"
+                      className="self-start text-sm font-semibold text-ink underline"
+                      onClick={() => set("pets", value.pets.filter((_, j) => j !== i))}
+                    >
+                      Remove animal {i + 1}
+                    </button>
+                  )}
+                </fieldset>
+              );
+            })}
+            <button
+              type="button"
+              className="self-start h-10 px-3 rounded-[var(--radius)] border border-line-cool bg-white text-sm font-semibold"
+              onClick={() => set("pets", [...value.pets, { ...EMPTY_PET }])}
+            >
+              + Add another animal
+            </button>
+          </>
+        )}
       </fieldset>
     </>
   );

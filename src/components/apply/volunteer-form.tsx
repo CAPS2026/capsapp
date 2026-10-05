@@ -11,7 +11,7 @@ import {
   type RegisterResult,
 } from "@/lib/registration";
 import { VOLUNTEER_TERMS } from "@/lib/terms";
-import { EMPTY_HOME, homePayload, type HomeDetails } from "@/lib/homecare-form";
+import { EMPTY_HOME, homeDetailsError, homePayload, type HomeDetails } from "@/lib/homecare-form";
 import { HomeDetailsFields } from "@/components/apply/home-details-fields";
 import { PhotoPicker } from "@/components/apply/photo-picker";
 
@@ -289,6 +289,10 @@ export function VolunteerForm({ homecareFirst = false, onDone }: { homecareFirst
       return setError("The emergency contact's phone number doesn't look right — please check it.");
     if (step === "contact" && form.ecEmail.trim() && !emailOk(form.ecEmail))
       return setError("The emergency contact's email address doesn't look right — please check it.");
+    if (step === "homecare") {
+      const homeErr = homeDetailsError(home);
+      if (homeErr) return setError(homeErr);
+    }
     if (step === "dogs") {
       if (!form.experienceLevel) return setError("Please pick the option that best describes your experience.");
       if (onSite && interests.length === 0) return setError("Pick at least one thing you'd like to help with.");
