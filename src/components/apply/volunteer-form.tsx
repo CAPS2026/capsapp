@@ -452,6 +452,10 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
       {/* ---------------- 2. about you */}
       {step === "about" && (
         <>
+          <p className="text-sm text-ink bg-gray-tint rounded-[var(--radius)] p-3">
+            We couldn&apos;t find a registration for that email and surname. If you&apos;ve registered before, tap{" "}
+            <strong>Back</strong> and try the email you used then. Otherwise, carry on and we&apos;ll set you up as new.
+          </p>
           <div className="grid grid-cols-2 gap-3">
             <Field label="First name">
               <input
