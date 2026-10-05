@@ -29,40 +29,6 @@ function Field({ label, children, hint }: { label: string; children: React.React
   );
 }
 
-// A stacked radio group rendered as tappable rows.
-function RadioRows({
-  legend,
-  options,
-  value,
-  onChange,
-  name,
-}: {
-  legend: string;
-  options: { code: string; label: string }[];
-  value: string;
-  onChange: (code: string) => void;
-  name: string;
-}) {
-  return (
-    <fieldset className="flex flex-col gap-2">
-      <legend className="text-sm font-bold">{legend}</legend>
-      <div className="flex flex-col gap-1.5">
-        {options.map((o) => (
-          <label
-            key={o.code}
-            className={`flex items-start gap-2 text-sm px-3 py-2 rounded-[var(--radius)] border cursor-pointer ${
-              value === o.code ? "border-brand bg-brand-tint" : "border-line-cool"
-            }`}
-          >
-            <input type="radio" name={name} className="mt-0.5" checked={value === o.code} onChange={() => onChange(o.code)} />
-            {o.label}
-          </label>
-        ))}
-      </div>
-    </fieldset>
-  );
-}
-
 function YesNo({
   legend,
   name,
@@ -127,6 +93,7 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
     dateOfBirth: "",
     address: "",
     ecName: "",
+    ecSurname: "",
     ecPhone: "",
     ecRelationship: "",
     ecEmail: "",
@@ -258,7 +225,13 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
     if (step === "start") {
       if (!wantsAnything) return setError("Please tick at least one thing you're interested in.");
       startTransition(async () => {
-        const r = await checkHomecareApplicant({ email: form.email, surname: form.surname, website: form.website });
+        const r = await checkHomecareApplicant({
+          email: form.email,
+          surname: form.surname,
+          firstName: form.firstName,
+          dateOfBirth: form.dateOfBirth,
+          website: form.website,
+        });
         if (r.registered) {
           if (!wantsHomecare && !adoptionInterest) {
             setError("You're already registered — you're good to go. Check in with a caretaker when you're at the shelter.");
@@ -293,6 +266,8 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
           const r = await applyForHomecarePublic({
             email: form.email,
             surname: form.surname,
+            firstName: form.firstName,
+            dateOfBirth: form.dateOfBirth,
             website: form.website,
             application: {
               jailBreak: jailBreakInterest,
@@ -309,6 +284,8 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
           const r = await applyForAdoptionPublic({
             email: form.email,
             surname: form.surname,
+            firstName: form.firstName,
+            dateOfBirth: form.dateOfBirth,
             website: form.website,
             photoData: photo || undefined,
           });
@@ -319,6 +296,7 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
       }
       const result: RegisterResult = await registerVolunteer({
         ...form,
+        ecName: `${form.ecName.trim()} ${form.ecSurname.trim()}`.trim(),
         over18: over18 === "yes",
         interests: onSite ? interests : [],
         fosterInterest,
@@ -388,7 +366,7 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
         <span>
           Step {idx + 1} of {steps.length}
         </span>
-        <span className="font-bold">{STEP_TITLE[step]}</span>
+        <span className="text-2xl font-extrabold text-ink" style={{ fontFamily: "var(--font-display)" }}>{STEP_TITLE[step]}</span>
       </div>
       <div className="h-1.5 rounded-full bg-gray-tint overflow-hidden" aria-hidden="true">
         <div className="h-full bg-brand" style={{ width: `${((idx + 1) / steps.length) * 100}%` }} />
@@ -422,7 +400,27 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
           </fieldset>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Your email">
+            <Field label="First name">
+              <input
+                className={inputClass}
+                required
+                autoComplete="given-name"
+                value={form.firstName}
+                onChange={(e) => set("firstName", e.target.value)}
+              />
+            </Field>
+            <Field label="Surname">
+              <input
+                className={inputClass}
+                required
+                autoComplete="family-name"
+                value={form.surname}
+                onChange={(e) => set("surname", e.target.value)}
+              />
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Email">
               <input
                 type="email"
                 inputMode="email"
@@ -433,18 +431,19 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
                 onChange={(e) => set("email", e.target.value)}
               />
             </Field>
-            <Field label="Your surname">
+            <Field label="Date of birth">
               <input
+                type="date"
+                autoComplete="bday"
                 className={inputClass}
                 required
-                autoComplete="family-name"
-                value={form.surname}
-                onChange={(e) => set("surname", e.target.value)}
+                value={form.dateOfBirth}
+                onChange={(e) => set("dateOfBirth", e.target.value)}
               />
             </Field>
           </div>
           <p className="text-base text-ink">
-            If you&apos;re already registered with CAPS we&apos;ll recognise you and only ask what&apos;s new.
+            If you&apos;re already registered with CAPS we&apos;ll recognise you (by email, or by name and date of birth) and only ask what&apos;s new.
           </p>
         </>
       )}
@@ -453,28 +452,17 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
       {step === "about" && (
         <>
           <p className="text-sm text-ink bg-gray-tint rounded-[var(--radius)] p-3">
-            We couldn&apos;t find a registration for that email and surname. If you&apos;ve registered before, tap{" "}
-            <strong>Back</strong> and try the email you used then. Otherwise, carry on and we&apos;ll set you up as new.
+            We couldn&apos;t find a registration for those details. If you&apos;ve registered before, tap{" "}
+            <strong>Back</strong> and check your name, date of birth and the email you used then. Otherwise, carry on and we&apos;ll set you up as new.
           </p>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="First name">
-              <input
-                className={inputClass}
-                required
-                autoComplete="given-name"
-                value={form.firstName}
-                onChange={(e) => set("firstName", e.target.value)}
-              />
-            </Field>
-            <Field label="Nickname" hint="Optional.">
-              <input
-                className={inputClass}
-                autoComplete="nickname"
-                value={form.nickname}
-                onChange={(e) => set("nickname", e.target.value)}
-              />
-            </Field>
-          </div>
+          <Field label="What should we call you (nickname)?" hint="Optional.">
+            <input
+              className={inputClass}
+              autoComplete="nickname"
+              value={form.nickname}
+              onChange={(e) => set("nickname", e.target.value)}
+            />
+          </Field>
 
           <Field label="Phone" hint="e.g. 0400 123 456">
             <input
@@ -489,16 +477,6 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Date of birth">
-              <input
-                type="date"
-                autoComplete="bday"
-                className={inputClass}
-                required
-                value={form.dateOfBirth}
-                onChange={(e) => set("dateOfBirth", e.target.value)}
-              />
-            </Field>
             <Field label="Address" hint="Optional.">
               <input
                 className={inputClass}
@@ -566,9 +544,14 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
         <fieldset className="flex flex-col gap-3">
           <p className="text-sm text-ink">Someone we can call if there&apos;s a problem while you&apos;re out with a dog.</p>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Name">
+            <Field label="First name">
               <input className={inputClass} required value={form.ecName} onChange={(e) => set("ecName", e.target.value)} />
             </Field>
+            <Field label="Surname">
+              <input className={inputClass} required value={form.ecSurname} onChange={(e) => set("ecSurname", e.target.value)} />
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <Field label="Phone">
               <input
                 type="tel"
@@ -594,13 +577,21 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
       {/* ---------------- 4. you and dogs */}
       {step === "dogs" && (
         <>
-          <RadioRows
-            legend="Briefly describe your experience and confidence in handling dogs"
-            name="experience"
-            options={EXPERIENCE_OPTIONS}
-            value={form.experienceLevel}
-            onChange={(code) => set("experienceLevel", code)}
-          />
+          <Field label="Briefly describe your experience and confidence in handling dogs">
+            <select
+              className={inputClass}
+              required
+              value={form.experienceLevel}
+              onChange={(e) => set("experienceLevel", e.target.value)}
+            >
+              <option value="">Choose one…</option>
+              {EXPERIENCE_OPTIONS.map((o) => (
+                <option key={o.code} value={o.code}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </Field>
           {form.experienceLevel === "other" && (
             <Field label="Tell us more">
               <input className={inputClass} value={form.experienceOther} onChange={(e) => set("experienceOther", e.target.value)} />
