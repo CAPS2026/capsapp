@@ -120,7 +120,7 @@ export async function registerVolunteer(input: {
       return {
         error: "Because you're under 18, please give a parent or guardian's name and phone number.",
       };
-    if (!clean(input.parentEmail) || !/^[^@s]+@[^@s]+.[^@s]+$/.test(clean(input.parentEmail)))
+    if (!clean(input.parentEmail) || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(clean(input.parentEmail)))
       return { error: "Please give the parent or guardian's email address — we send them a copy of their consent." };
     if (!clean(input.parentSignature))
       return { error: "The parent or guardian needs to type their full name to give consent." };

@@ -90,6 +90,10 @@ function phoneOk(p: string) {
   return n >= 8 && n <= 15;
 }
 
+function emailOk(e: string) {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e.trim());
+}
+
 type Step = "start" | "about" | "contact" | "dogs" | "homecare" | "finish";
 
 const STEP_TITLE: Record<Step, string> = {
@@ -247,6 +251,7 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
 
     if (step === "start") {
       if (!wantsAnything) return setError("Please tick at least one thing you're interested in.");
+      if (!emailOk(form.email)) return setError("Your email address doesn't look right — please check it.");
       startTransition(async () => {
         const r = await checkHomecareApplicant({
           email: form.email,
@@ -274,9 +279,13 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
       if (!over18) return setError("Please tell us whether you're 18 or over.");
       if (isMinor && !phoneOk(form.parentPhone))
         return setError("The parent / guardian's phone number doesn't look right — please check it.");
+      if (isMinor && !emailOk(form.parentEmail))
+        return setError("The parent / guardian's email address doesn't look right — please check it.");
     }
     if (step === "contact" && !phoneOk(form.ecPhone))
       return setError("The emergency contact's phone number doesn't look right — please check it.");
+    if (step === "contact" && form.ecEmail.trim() && !emailOk(form.ecEmail))
+      return setError("The emergency contact's email address doesn't look right — please check it.");
     if (step === "dogs") {
       if (!form.experienceLevel) return setError("Please pick the option that best describes your experience.");
       if (onSite && interests.length === 0) return setError("Pick at least one thing you'd like to help with.");
