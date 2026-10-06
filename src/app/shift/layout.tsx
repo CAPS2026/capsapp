@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { getCurrentPerson } from "@/lib/auth";
 import { getActiveShiftPerson } from "@/lib/shift-identity";
 import { getLeaveNoticesForShift } from "@/lib/leave-data";
-import { ensureRosterSession, getOpenShift, getRosterDayDetail, getShiftSettings } from "@/lib/shift-data";
+import { ensureRosterSession, getHealthWatch, getOpenShift, getRosterDayDetail, getShiftSettings } from "@/lib/shift-data";
 import { getOpenHandoverCount, getVetAppointments, getVolunteerCount } from "@/lib/care-data";
 import { sessionInstant, shelterToday } from "@/lib/shift";
 import { LateReasonGate } from "@/components/shift/late-reason-gate";
@@ -47,10 +47,11 @@ export default async function ShiftLayout({ children }: { children: React.ReactN
     getRosterDayDetail(today),
     getVetAppointments(today, today),
   ]);
-  const [session, leaveNotices, volunteerCount] = await Promise.all([
+  const [session, leaveNotices, volunteerCount, healthWatch] = await Promise.all([
     openShift ? ensureRosterSession(openShift.date, openShift.part) : Promise.resolve(null),
     openShift ? getLeaveNoticesForShift(openShift.id) : Promise.resolve([]),
     openShift ? getVolunteerCount(openShift.date, openShift.part) : Promise.resolve(null),
+    openShift ? getHealthWatch({ date: openShift.date, part: openShift.part }) : Promise.resolve([]),
   ]);
 
   // Anyone else rostered on the same session as the person signed in.
@@ -107,6 +108,7 @@ export default async function ShiftLayout({ children }: { children: React.ReactN
           lateAfterMinutes={settings.lateAfterMinutes}
           volunteerCount={volunteerCount}
           vetToday={vetToday}
+          healthWatch={healthWatch}
           openHandoverCount={openHandoverCount}
           todayRoster={todayRoster}
           leaveNotices={leaveNotices}

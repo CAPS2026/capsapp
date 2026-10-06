@@ -9,7 +9,8 @@
 // and any health concerns raised. (Health concerns are also emailed the
 // moment they are raised, see sendHealthConcernEmail.)
 
-import { sendEmail } from "@/lib/email";
+import { sendEmail, siteUrl } from "@/lib/email";
+import { HEALTH_LINK_DAYS } from "@/lib/health-link";
 import { shiftDb } from "@/lib/shift-db";
 import { DOSE_REASON_LABEL, VET_KIND_LABEL, getDueDoses, getVetAppointments, getVolunteerCount } from "@/lib/care-data";
 import {
@@ -590,21 +591,37 @@ export async function sendHealthConcernEmail(opts: {
   const subject = `${opts.urgent ? "URGENT " : ""}CAPS health concern${who}`;
   const intro = `${opts.personName} raised a health concern on the ${PART_LABEL[opts.part].toLowerCase()} shift, ${day}.`;
 
+  // The link that marks it as dealt with, the same way the leave email's
+  // link works. Without the token (e.g. the column is missing) the email
+  // still goes, just without the link.
+  const supabase = await shiftDb();
+  const { data: tokenRow } = await supabase.from("health_concern").select("token").eq("id", opts.concernId).maybeSingle();
+  const token = (tokenRow as { token?: string } | null)?.token;
+  const link = token ? `${siteUrl()}/approve/health/${token}` : null;
+  const linkNote = `This link works for ${HEALTH_LINK_DAYS} days. After that, mark it as dealt with on the Handover log tab in the staff app.`;
+
   const result = await sendEmail({
     to: recipients,
     subject,
-    text: `${intro}\n\n${opts.urgent ? "Marked urgent.\n" : ""}${opts.dogName ? `Dog: ${opts.dogName}\n` : ""}${opts.body}`,
+    text: `${intro}\n\n${opts.urgent ? "Marked urgent.\n" : ""}${opts.dogName ? `Dog: ${opts.dogName}\n` : ""}${opts.body}${
+      link ? `\n\nOnce it has been dealt with, mark it here (opening the link changes nothing until you press the button):\n${link}\n(${linkNote})` : ""
+    }`,
     html: `<div style="font-family:sans-serif;max-width:520px;">
       <h2 style="color:#9A3A26;">${opts.urgent ? "URGENT: " : ""}Health concern${esc(who)}</h2>
       <p style="font-size:14px;">${esc(intro)}</p>
-      <div style="border:1px solid #E2725B;background:#FCEDE8;border-radius:10px;padding:14px;font-size:14px;">${esc(opts.body)}</div>
+      <div style="border:1px solid #E2725B;background:#FCEDE8;border-radius:10px;padding:14px;font-size:14px;">${esc(opts.body)}</div>${
+        link
+          ? `
+      <p style="margin:18px 0 8px;"><a href="${link}" style="display:inline-block;background:#1A7ABF;color:#ffffff;font-weight:bold;font-size:15px;text-decoration:none;padding:12px 20px;border-radius:8px;">Mark as dealt with</a></p>
+      <p style="margin:0;font-size:12px;color:#6B6B68;">Opening the link changes nothing until you press the button on the page. ${linkNote}</p>`
+          : ""
+      }
     </div>`,
   });
   if (!result.ok) {
     console.error("sendHealthConcernEmail: send failed", result.error);
     return false;
   }
-  const supabase = await shiftDb();
   await supabase.from("health_concern").update({ emailed_at: new Date().toISOString() }).eq("id", opts.concernId);
   return true;
 }

@@ -174,6 +174,8 @@ export type ShiftTaskRow = {
   carriedOver: boolean;
   /** Made from a vet appointment ("Take Zeke to the vet"), shown with a VET tag. */
   isVet: boolean;
+  /** Made from a health concern ("Keep an eye on Zeke"), shown with a HEALTH tag. */
+  isHealth: boolean;
 };
 
 export type OpenShift = {
