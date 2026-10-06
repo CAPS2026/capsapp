@@ -7,6 +7,24 @@ import { HEALTH_LINK_DAYS, healthLinkExpired } from "@/lib/health-link";
 
 type Result = { error?: string };
 
+/** Who pressed the link. It is only ever sent to the health concern
+ *  recipients, so when there is exactly one (Shayna) it was her. With
+ *  several, or no matching person, nobody can be named, so it says "the email
+ *  link" rather than guess. */
+async function emailRecipientName(admin: SupabaseClient): Promise<string> {
+  const fallback = "the email link";
+  const { data: settings } = await admin.from("org_settings").select("health_concern_email_recipients").maybeSingle();
+  const recipients = (settings?.health_concern_email_recipients ?? []) as string[];
+  if (recipients.length !== 1) return fallback;
+  const { data: person } = await admin
+    .from("people")
+    .select("first_name, surname")
+    .ilike("email", recipients[0])
+    .limit(2);
+  if (!person || person.length !== 1) return fallback;
+  return `${person[0].first_name} ${person[0].surname}`.trim() || fallback;
+}
+
 /** Mark a health concern as dealt with from the link in its email. The
  *  person is not logged in, so this uses the service-role client and the
  *  unguessable token is the only key. Nothing happens on opening the link,
@@ -31,7 +49,7 @@ export async function resolveHealthConcernByToken(token: string, note: string): 
     .from("health_concern")
     .update({
       resolved_at: new Date().toISOString(),
-      resolved_by_name: "the email link",
+      resolved_by_name: await emailRecipientName(admin),
       resolved_note: note.trim() || null,
     })
     .eq("token", token)
