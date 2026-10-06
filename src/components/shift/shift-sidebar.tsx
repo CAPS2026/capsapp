@@ -16,7 +16,7 @@ import {
   type Part,
 } from "@/lib/shift";
 import { endShift, getEndOfShiftLeft, setVolunteerCount, switchPerson, type EndOfShiftTask } from "@/lib/actions/shift";
-import type { RosterDaySession } from "@/lib/shift-data";
+import type { HealthWatchItem, RosterDaySession } from "@/lib/shift-data";
 import type { VetAppointment } from "@/lib/care-data";
 import { formatLeaveDates } from "@/lib/leave";
 import { EmailPreviewLink } from "@/components/shift/email-preview";
@@ -63,6 +63,7 @@ export function ShiftSidebar({
   leaveNotices,
   volunteerCount,
   vetToday,
+  healthWatch,
   openHandoverCount,
 }: {
   person: { id: string; name: string };
@@ -81,6 +82,8 @@ export function ShiftSidebar({
   volunteerCount: number | null;
   /** Today's vet appointments. */
   vetToday: VetAppointment[];
+  /** Health concerns to show on this shift (own, previous shift's, still open). */
+  healthWatch: HealthWatchItem[];
   /** Handover notes not ticked off yet. */
   openHandoverCount: number;
 }) {
@@ -159,6 +162,8 @@ export function ShiftSidebar({
         run={run}
         onChanged={() => router.refresh()}
       />
+
+      <HealthWatchBoxes items={healthWatch} />
 
       {vetToday.length > 0 && <VetToday appts={vetToday} />}
 
@@ -452,6 +457,73 @@ function VetToday({ appts }: { appts: VetAppointment[] }) {
           {a.instructions ? <div>{a.instructions}</div> : null}
         </div>
       ))}
+    </div>
+  );
+}
+
+// Colours agreed with Julie: orange (the same family as the "Flag a health
+// concern" button) while it needs watching, green once dealt with.
+const WATCH_ORANGE = { bg: "#FDEBDD", border: "#F26B1D", label: "#8A3A0A", ink: "#5A2606" };
+const WATCH_GREEN = { bg: "#E3F3E6", border: "#2E8B3E", label: "#1B5E27", ink: "#103D18" };
+
+/** "Raised by Wayne, 7:31" on the same shift, otherwise "Raised by Wayne, Tue morning". */
+function raisedLine(h: HealthWatchItem): string {
+  if (h.state === "open" || h.state === "dealt") return `Raised by ${h.personName}, ${clockTime(h.createdAt)}.`;
+  const day = new Date(`${h.date}T12:00:00Z`).toLocaleDateString("en-AU", { timeZone: "UTC", weekday: "short" });
+  return `Raised by ${h.personName}, ${day} ${PART_LABEL[h.part].toLowerCase()}.`;
+}
+
+/** "Dealt with: note" (and who, when it was a named admin in the app). */
+function dealtLine(h: HealthWatchItem): string {
+  const by = h.resolvedByName && h.resolvedByName !== "the email link" ? ` by ${h.resolvedByName}` : "";
+  return `Dealt with${by}${h.resolvedNote ? `: ${h.resolvedNote}` : "."}`;
+}
+
+/** A health concern, for the shift it was raised on and the shift after it
+ *  ("keep an eye on" the dog). Refreshes now and then, so "dealt with" shows
+ *  up without anyone touching the tablet. */
+function HealthWatchBoxes({ items }: { items: HealthWatchItem[] }) {
+  const router = useRouter();
+  useEffect(() => {
+    if (items.length === 0) return;
+    const id = setInterval(() => router.refresh(), 120000);
+    return () => clearInterval(id);
+  }, [router, items.length]);
+  return (
+    <>
+      {items.map((h) => (
+        <HealthWatchBox key={h.id} item={h} />
+      ))}
+    </>
+  );
+}
+
+function HealthWatchBox({ item }: { item: HealthWatchItem }) {
+  const c = item.state === "dealt" ? WATCH_GREEN : WATCH_ORANGE;
+  const label = item.state === "open" ? "HEALTH CONCERN" : item.state === "dealt" ? "DEALT WITH" : "KEEP AN EYE ON";
+  const dog = item.dogName ?? "Dog not named";
+  return (
+    <div className="flex flex-col gap-1 rounded-[10px] border-2 px-3 py-2.5" style={{ background: c.bg, borderColor: c.border, color: c.ink }}>
+      <div className="text-xs font-extrabold tracking-[0.05em]" style={{ color: c.label }}>
+        {item.urgent && item.state !== "dealt" ? "URGENT " : ""}
+        {label}
+      </div>
+      <div className="text-[17px] font-extrabold leading-tight">{dog}</div>
+      {item.state === "dealt" ? (
+        <>
+          <div className="text-[13px] font-semibold leading-snug">{dealtLine(item)}</div>
+          <div className="text-xs font-semibold" style={{ color: c.label }}>
+            Still keep an eye on {item.dogName ?? "the dog"}.
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="whitespace-pre-wrap text-[13px] font-semibold leading-snug">{item.body}</div>
+          <div className="text-xs font-semibold" style={{ color: c.label }}>
+            {raisedLine(item)} {item.resolvedAt ? dealtLine(item) : item.state === "open" ? "Waiting for Shayna." : "Not yet dealt with."}
+          </div>
+        </>
+      )}
     </div>
   );
 }
