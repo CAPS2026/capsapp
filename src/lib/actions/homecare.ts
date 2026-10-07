@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentPerson } from "@/lib/auth";
 import { sendEmail } from "@/lib/email";
-import { approvedEmail, improvementsEmail } from "@/lib/homecare";
+import { approvedEmail, homeCheckEmail } from "@/lib/homecare";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -147,8 +147,8 @@ export async function recordHomeCheck(input: {
   animalDetails: string;
   vaccinesCurrent: boolean | null;
   notes: string;
-  /** Only for improvements_needed — the edited email body. Omit / empty to
-   *  record without emailing. */
+  /** The edited email body (either outcome). Omit / empty to record without
+   *  emailing. */
   emailBody?: string;
 }): Promise<ApproveResult> {
   const me = await getCurrentPerson();
@@ -186,14 +186,14 @@ export async function recordHomeCheck(input: {
   }
   if (res.error) return { error: res.error.message };
 
-  if (!passed && input.emailBody?.trim()) {
+  if (input.emailBody?.trim()) {
     const { data: person } = await supabase
       .from("people")
       .select("email")
       .eq("id", input.personId)
       .maybeSingle();
     if (person?.email) {
-      const mail = improvementsEmail(input.emailBody.trim());
+      const mail = homeCheckEmail(input.emailBody.trim(), input.outcome);
       const r = await sendEmail({
         to: person.email as string,
         subject: mail.subject,
