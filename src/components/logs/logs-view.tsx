@@ -108,7 +108,7 @@ export function LogsView({
     // apply to Medical, dog doesn't apply to Visitors, registers take
     // neither, and the activity-only ones (type, status, flags, notes) only
     // apply to the activity tabs.
-    if (t === "medical" || REGISTER_TABS.includes(t)) next.delete("person");
+    if (REGISTER_TABS.includes(t)) next.delete("person");
     if (t === "site" || REGISTER_TABS.includes(t)) next.delete("dog");
     if (!ACTIVITY_TABS.includes(t)) for (const k of ["status", "flag", "q"]) next.delete(k);
     if (t !== "activity") next.delete("types");
@@ -125,6 +125,14 @@ export function LogsView({
   }
 
   function toggleType(key: string) {
+    // The type chips only filter activity. From any other tab, tapping one jumps to All activity with it on.
+    if (tab !== "activity") {
+      const jump = new URLSearchParams(params.toString());
+      jump.set("tab", "activity");
+      jump.set("types", key);
+      router.replace(`${pathname}?${jump.toString()}`);
+      return;
+    }
     const next = types.includes(key) ? types.filter((t) => t !== key) : [...types, key];
     setParam("types", next.join(","));
   }
@@ -145,7 +153,7 @@ export function LogsView({
   const isRegister = REGISTER_TABS.includes(tab);
   const isActivity = ACTIVITY_TABS.includes(tab);
   const showDog = !isRegister && tab !== "site";
-  const showPerson = !isRegister && tab !== "medical";
+  const showPerson = !isRegister;
   const anyFilter = from || to || dogId || personId || status || flag || q || types.length > 0;
 
   return (
@@ -165,24 +173,22 @@ export function LogsView({
         ))}
       </div>
 
-      {tab === "activity" && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-ink mr-1">Show:</span>
-          {ACTIVITY_TYPES.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => toggleType(t.key)}
-              className={`px-3 h-8 rounded-full text-sm font-semibold border ${
-                types.includes(t.key) ? "bg-brand text-white border-brand" : "border-line-cool text-ink"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-          <span className="text-xs text-ink">{types.length === 0 ? "(all types)" : ""}</span>
-        </div>
-      )}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-xs text-ink mr-1">Show:</span>
+        {ACTIVITY_TYPES.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => toggleType(t.key)}
+            className={`px-3 h-8 rounded-full text-sm font-semibold border ${
+              tab === "activity" && types.includes(t.key) ? "bg-brand text-white border-brand" : "border-line-cool text-ink"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+        <span className="text-xs text-ink">{tab === "activity" && types.length === 0 ? "(all types)" : ""}</span>
+      </div>
 
       {true ? (
         <div className="flex flex-wrap items-center gap-1.5">

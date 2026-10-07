@@ -110,42 +110,6 @@ async function activityLog(f: LogFilters): Promise<LogTable> {
   return { columns, rows, capped, summary };
 }
 
-async function medicalLog(f: LogFilters): Promise<LogTable> {
-  const supabase = await createClient();
-  let q = supabase
-    .from("medical_events")
-    .select("id, event_date, type, detail, vet, dog:dogs!medical_events_dog_id_fkey(name)")
-    .order("event_date", { ascending: false })
-    .limit(LIMIT + 1);
-
-  if (f.from) q = q.gte("event_date", f.from);
-  if (f.to) q = q.lte("event_date", f.to);
-  if (f.dogId) q = q.eq("dog_id", f.dogId);
-
-  const { data, error } = await q;
-  if (error) console.error("logs-data query failed", error);
-  const raw = (data ?? []) as unknown as Array<{
-    id: string;
-    event_date: string;
-    type: string;
-    detail: string;
-    vet: string | null;
-    dog: { name: string } | null;
-  }>;
-
-  return {
-    columns: ["Dog", "Date", "Type", "Detail", "Vet"],
-    rows: raw.slice(0, LIMIT).map((r) => ({
-      Dog: r.dog?.name ?? "",
-      Date: r.event_date,
-      Type: r.type,
-      Detail: r.detail,
-      Vet: r.vet ?? "",
-    })),
-    capped: raw.length > LIMIT,
-  };
-}
-
 async function siteLog(f: LogFilters): Promise<LogTable> {
   const supabase = await createClient();
   let q = supabase
@@ -271,7 +235,6 @@ async function peopleLog(f: LogFilters): Promise<LogTable> {
 }
 
 export async function getLog(tab: LogTab, filters: LogFilters): Promise<LogTable> {
-  if (tab === "medical") return medicalLog(filters);
   if (tab === "site") return siteLog(filters);
   if (tab === "dogs") return dogsLog(filters);
   if (tab === "people") return peopleLog(filters);

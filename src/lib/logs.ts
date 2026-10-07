@@ -1,10 +1,9 @@
 // Client-safe types + helpers for the Logs screen (docs/ui-flows.md §10).
 
-export type LogTab = "activity" | "medical" | "site" | "dogs" | "people";
+export type LogTab = "activity" | "site" | "dogs" | "people";
 
 export const LOG_TABS: { key: LogTab; label: string }[] = [
   { key: "activity", label: "All activity" },
-  { key: "medical", label: "Medical" },
   { key: "site", label: "Visitors" },
   { key: "dogs", label: "Dogs" },
   { key: "people", label: "People" },
