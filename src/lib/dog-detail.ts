@@ -38,10 +38,38 @@ export type DogDetail = {
   binSourceNumber: string | null;
   savourlifeId: number | null;
   listedOnSavourlife: boolean;
+  markings: string | null;
+  coatLength: string | null;
+  indoorOnly: boolean | null;
+  fosterCareRequired: boolean | null;
+  specialNeeds: string | null;
+  bondedPair: boolean | null;
+  bondedPairName: string | null;
+  slSuburb: string | null;
+  slState: string | null;
+  slPostcode: string | null;
   photos: { path: string; url: string; isPrimary: boolean; caption: string | null }[];
 };
 
+export type DogIntake = {
+  intakeDate: string;
+  surrenderedBy: string | null;
+  reason: string | null;
+  condition: string | null;
+  visibleInjuries: string | null;
+  parasitesObserved: boolean | null;
+  vaccinationGiven: boolean | null;
+  vaccinationType: string | null;
+  fleaTickWormGiven: boolean | null;
+  behaviourAssessment: string[];
+  behaviourOther: string | null;
+  notes: string | null;
+  officerName: string | null;
+  signedName: string | null;
+};
+
 export type DogConfidential = {
+  slContactEmail: string | null;
   behaviourNotes: string | null;
   adoptionHistory: string | null;
   medicalSummaryInternal: string | null;
@@ -111,6 +139,8 @@ export async function getDogDetail(dogId: string, isStaff: boolean) {
     { data: noteRows, error: noteErr },
     { data: confidentialRow },
     { data: medicalRows },
+    { data: intakeRow },
+    { data: contactRow },
   ] = await Promise.all([
     supabase
       .from("dog_media")
@@ -140,6 +170,13 @@ export async function getDogDetail(dogId: string, isStaff: boolean) {
           .eq("dog_id", dogId)
           .order("event_date", { ascending: false })
       : Promise.resolve({ data: [] as MedicalEventRow[] }),
+    // Read separately and tolerantly: until migration 45 is applied these just come back empty.
+    isStaff
+      ? supabase.from("dog_intake").select("*").eq("dog_id", dogId).maybeSingle()
+      : Promise.resolve({ data: null }),
+    isStaff
+      ? supabase.from("dog_confidential").select("sl_contact_email").eq("dog_id", dogId).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
   if (activityErr) console.error("getDogDetail: activity read failed", activityErr);
   if (noteErr) console.error("getDogDetail: notes read failed", noteErr);
@@ -186,6 +223,16 @@ export async function getDogDetail(dogId: string, isStaff: boolean) {
     binSourceNumber: dogRow.bin_source_number,
     savourlifeId: dogRow.savourlife_id,
     listedOnSavourlife: dogRow.listed_on_savourlife,
+    markings: dogRow.markings ?? null,
+    coatLength: dogRow.coat_length ?? null,
+    indoorOnly: dogRow.indoor_only ?? null,
+    fosterCareRequired: dogRow.foster_care_required ?? null,
+    specialNeeds: dogRow.special_needs ?? null,
+    bondedPair: dogRow.bonded_pair ?? null,
+    bondedPairName: dogRow.bonded_pair_name ?? null,
+    slSuburb: dogRow.sl_suburb ?? null,
+    slState: dogRow.sl_state ?? null,
+    slPostcode: dogRow.sl_postcode ?? null,
     photos,
   };
 
@@ -195,12 +242,33 @@ export async function getDogDetail(dogId: string, isStaff: boolean) {
     medical_summary_internal: string | null;
     restrictions: string | null;
   } | null;
-  const confidential: DogConfidential | null = c
+  const slContactEmail = (contactRow as { sl_contact_email?: string | null } | null)?.sl_contact_email ?? null;
+  const ir = intakeRow as Record<string, unknown> | null;
+  const intake: DogIntake | null = ir
     ? {
-        behaviourNotes: c.behaviour_notes,
-        adoptionHistory: c.adoption_history,
-        medicalSummaryInternal: c.medical_summary_internal,
-        restrictions: c.restrictions,
+        intakeDate: ir.intake_date as string,
+        surrenderedBy: (ir.surrendered_by as string | null) ?? null,
+        reason: (ir.reason as string | null) ?? null,
+        condition: (ir.condition as string | null) ?? null,
+        visibleInjuries: (ir.visible_injuries as string | null) ?? null,
+        parasitesObserved: (ir.parasites_observed as boolean | null) ?? null,
+        vaccinationGiven: (ir.vaccination_given as boolean | null) ?? null,
+        vaccinationType: (ir.vaccination_type as string | null) ?? null,
+        fleaTickWormGiven: (ir.flea_tick_worm_given as boolean | null) ?? null,
+        behaviourAssessment: (ir.behaviour_assessment as string[] | null) ?? [],
+        behaviourOther: (ir.behaviour_other as string | null) ?? null,
+        notes: (ir.notes as string | null) ?? null,
+        officerName: (ir.intake_officer_name as string | null) ?? null,
+        signedName: (ir.signed_name as string | null) ?? null,
+      }
+    : null;
+  const confidential: DogConfidential | null = c || slContactEmail
+    ? {
+        slContactEmail,
+        behaviourNotes: c?.behaviour_notes ?? null,
+        adoptionHistory: c?.adoption_history ?? null,
+        medicalSummaryInternal: c?.medical_summary_internal ?? null,
+        restrictions: c?.restrictions ?? null,
       }
     : null;
 
@@ -256,5 +324,5 @@ export async function getDogDetail(dogId: string, isStaff: boolean) {
     authorName: n.author ? `${n.author.first_name} ${n.author.surname}` : null,
   }));
 
-  return { dog, confidential, medicalEvents, activityLog: allActivities, currentActivity, latestOfEachType, notes };
+  return { dog, confidential, intake, medicalEvents, activityLog: allActivities, currentActivity, latestOfEachType, notes };
 }

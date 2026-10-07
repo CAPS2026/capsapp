@@ -1,4 +1,4 @@
-import type { DogConfidential, DogDetail, MedicalEvent, ActivityEntry, NoteEntry } from "@/lib/dog-detail";
+import type { DogConfidential, DogDetail, DogIntake, MedicalEvent, ActivityEntry, NoteEntry } from "@/lib/dog-detail";
 import { STATUS_COLOR_VAR, endActionLabel } from "@/lib/dogs";
 import {
   formatDate,
@@ -36,6 +36,7 @@ function goodWithLabel(v: "yes" | "no" | "untested" | null): string | null {
 export function DogDetailView({
   dog,
   confidential,
+  intake,
   medicalEvents,
   activityLog,
   currentActivity,
@@ -49,6 +50,7 @@ export function DogDetailView({
 }: {
   dog: DogDetail;
   confidential: DogConfidential | null;
+  intake: DogIntake | null;
   medicalEvents: MedicalEvent[];
   activityLog: ActivityEntry[];
   currentActivity: ActivityEntry | null;
@@ -173,6 +175,47 @@ export function DogDetailView({
           <Field label="BIN / source no." value={dog.binSourceNumber} />
           <Field label="SavourLife ID" value={dog.savourlifeId} />
           <Field label="Listed on SavourLife" value={yesNo(dog.listedOnSavourlife)} />
+          <Field label="Coat length" value={dog.coatLength} />
+          <Field label="Indoor only" value={yesNo(dog.indoorOnly)} />
+          <Field label="Foster carer required" value={yesNo(dog.fosterCareRequired)} />
+          <Field label="Special needs" value={dog.specialNeeds} block />
+          <Field
+            label="Bonded pair"
+            value={dog.bondedPair ? `Yes${dog.bondedPairName ? ` - with ${dog.bondedPairName}` : ""}` : yesNo(dog.bondedPair)}
+          />
+          <Field
+            label="Listing location"
+            value={[dog.slSuburb, dog.slState, dog.slPostcode].filter(Boolean).join(" ") || null}
+          />
+          <Field label="Foster / case manager email" value={confidential?.slContactEmail ?? null} />
+        </Section>
+      )}
+
+      {isStaff && intake && (
+        <Section title="Intake record">
+          <Field label="Date of intake" value={formatDate(intake.intakeDate)} />
+          <Field label="Colour / markings" value={[dog.colour, dog.markings].filter(Boolean).join(" - ") || null} />
+          <Field label="Surrendered by" value={intake.surrenderedBy} />
+          <Field label="Reason for intake" value={intake.reason} block />
+          <Field label="Condition" value={intake.condition ? intake.condition[0].toUpperCase() + intake.condition.slice(1) : null} />
+          <Field label="Visible injuries / illness" value={intake.visibleInjuries} block />
+          <Field label="Parasites observed" value={yesNo(intake.parasitesObserved)} />
+          <Field
+            label="Vaccination given"
+            value={intake.vaccinationGiven ? `Yes${intake.vaccinationType ? ` (${intake.vaccinationType})` : ""}` : yesNo(intake.vaccinationGiven)}
+          />
+          <Field label="Flea / tick / worm treatment" value={yesNo(intake.fleaTickWormGiven)} />
+          <Field
+            label="Behaviour assessment"
+            value={
+              intake.behaviourAssessment
+                .map((b) => (b === "other" ? (intake.behaviourOther ?? "Other") : b[0].toUpperCase() + b.slice(1)))
+                .join(", ") || null
+            }
+          />
+          <Field label="Notes" value={intake.notes} block />
+          <Field label="Intake officer" value={intake.officerName} />
+          <Field label="Signed" value={intake.signedName} />
         </Section>
       )}
 
