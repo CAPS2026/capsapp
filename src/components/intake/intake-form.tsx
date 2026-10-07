@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createDogIntake } from "@/lib/actions/intake";
+import { createDogIntake, updateDogDetails } from "@/lib/actions/intake";
 import {
   AGE_BANDS,
   AU_STATES,
@@ -16,6 +16,8 @@ import {
   INTAKE_REASONS,
   INTAKE_SOURCES,
   intakeError,
+  profileError,
+  recordError,
   SEX_OPTIONS,
   SIZE_OPTIONS,
   SOURCES_WITH_PERSON,
@@ -90,9 +92,18 @@ function Section({ title, note, children }: { title: string; note?: string; chil
   );
 }
 
-export function IntakeForm({ officerName, today }: { officerName: string; today: string }) {
-  // The sign-off is filled from whoever is signed in (an admin); they can still edit it before saving.
-  const start: IntakeInput = { ...EMPTY_INTAKE, intakeDate: today, officerName, signedName: officerName };
+export function IntakeForm({
+  officerName,
+  today,
+  edit,
+}: {
+  officerName: string;
+  today: string;
+  /** Present when editing an existing dog: its saved values, and which parts this person may change. */
+  edit?: { dogId: string; initial: IntakeInput; showRecord: boolean };
+}) {
+  // New intake: the sign-off is filled from whoever is signed in (an admin); they can still edit it before saving.
+  const start: IntakeInput = edit?.initial ?? { ...EMPTY_INTAKE, intakeDate: today, officerName, signedName: officerName };
   const [f, setF] = useState<IntakeInput>(start);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<{ dogId: string; ref: string; name: string } | null>(null);
@@ -115,6 +126,18 @@ export function IntakeForm({ officerName, today }: { officerName: string; today:
   function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (edit) {
+      // Editing: the profile always; the paper record only when this person can change it. No sign-off.
+      const problem = profileError(f) ?? (edit.showRecord ? recordError(f) : null);
+      if (problem) return setError(problem);
+      startTransition(async () => {
+        const r = await updateDogDetails(edit.dogId, f);
+        if (!("ok" in r)) return setError(r.error);
+        router.push(`/dogs/${edit.dogId}`);
+        router.refresh();
+      });
+      return;
+    }
     const problem = intakeError(f);
     if (problem) return setError(problem);
     startTransition(async () => {
@@ -357,6 +380,7 @@ export function IntakeForm({ officerName, today }: { officerName: string; today:
         </div>
       </Section>
 
+      {(!edit || edit.showRecord) && (
       <Section title="CAPS intake record" note="From the paper Animal Intake Record. Only staff and admin see this.">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <Field label="Date of intake" required>
@@ -467,16 +491,20 @@ export function IntakeForm({ officerName, today }: { officerName: string; today:
           />
           Experienced handlers only (volunteers will see this on the dog)
         </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={f.startOnBedRest} onChange={(e) => set("startOnBedRest", e.target.checked)} />
-          Start on bed rest (not ready for walks yet)
-        </label>
+        {!edit && (
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={f.startOnBedRest} onChange={(e) => set("startOnBedRest", e.target.checked)} />
+            Start on bed rest (not ready for walks yet)
+          </label>
+        )}
 
         <Field label="Notes">
           <textarea rows={3} className={areaClass} value={f.notes} onChange={(e) => set("notes", e.target.value)} />
         </Field>
       </Section>
+      )}
 
+      {!edit && (
       <Section
         title="Sign-off"
         note="Completed by an admin. Filled in from your sign-in; change it only if someone else did the intake."
@@ -490,6 +518,7 @@ export function IntakeForm({ officerName, today }: { officerName: string; today:
           </Field>
         </div>
       </Section>
+      )}
 
       {error && <p className="text-sm text-danger">{error}</p>}
 
@@ -498,7 +527,7 @@ export function IntakeForm({ officerName, today }: { officerName: string; today:
         disabled={isPending}
         className="h-12 rounded-[var(--radius)] bg-brand text-white font-bold disabled:opacity-60"
       >
-        {isPending ? "Saving…" : "Save intake"}
+        {isPending ? "Saving…" : edit ? "Save changes" : "Save intake"}
       </button>
     </form>
   );

@@ -239,8 +239,8 @@ export const EMPTY_INTAKE: IntakeInput = {
   startOnBedRest: false,
 };
 
-/** The first thing missing on the form, or null. Mirrors the server check so the message appears on the page. */
-export function intakeError(f: IntakeInput): string | null {
+/** SavourLife profile checks (staff can edit these any time). Returns the first thing missing, or null. */
+export function profileError(f: IntakeInput): string | null {
   if (!f.name.trim()) return "Please give the dog a name (or 'Unknown' with the date, e.g. Unknown 7 Oct).";
   if (!f.breed.trim()) return "Please enter a breed (or 'Unknown').";
   if (!f.dateOfBirth && !f.ageBand) return "Please give a date of birth, or pick an approximate age.";
@@ -252,6 +252,11 @@ export function intakeError(f: IntakeInput): string | null {
     return "Please enter the adoption fee (SavourLife needs one, even if it is $0).";
   if (f.contactEmail.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.contactEmail.trim()))
     return "The foster / case manager email doesn't look right — please check it.";
+  return null;
+}
+
+/** The paper intake record's required answers (admin). */
+export function recordError(f: IntakeInput): string | null {
   if (!f.intakeDate) return "Please set the date of intake.";
   if (!f.source) return "Please choose where the dog came from.";
   if (!f.reason) return "Please choose the reason for intake.";
@@ -262,8 +267,17 @@ export function intakeError(f: IntakeInput): string | null {
   if (!f.fleaTickWormGiven) return "Please say whether flea, tick or worm treatment was given.";
   if (f.behaviour.length === 0) return "Please pick at least one initial behaviour assessment.";
   if (f.behaviour.includes("other") && !f.behaviourOther.trim()) return "Please say what the other behaviour is.";
+  return null;
+}
+
+export function signoffError(f: IntakeInput): string | null {
   if (!f.signedName.trim()) return "Please type your name to sign the intake record.";
   return null;
+}
+
+/** Everything a new intake needs. Mirrors the server check so the message appears on the page. */
+export function intakeError(f: IntakeInput): string | null {
+  return profileError(f) ?? recordError(f) ?? signoffError(f);
 }
 
 /** Estimated date of birth from an age band (midpoint), as YYYY-MM-DD. */
