@@ -29,8 +29,13 @@ import {
 import { YES_NO } from "@/lib/home-options";
 import { Pick, PickOther } from "@/components/apply/pick";
 
-const inputClass = "h-11 px-3 rounded-[var(--radius)] border border-line-cool bg-white text-base w-full";
-const areaClass = "px-3 py-2 rounded-[var(--radius)] border border-line-cool bg-white text-base w-full";
+// Compact on purpose: this screen has a lot of questions, and tablets need room for each one.
+const inputClass = "h-10 px-3 rounded-[var(--radius)] border border-line-cool bg-white text-sm w-full";
+const areaClass = "px-3 py-2 rounded-[var(--radius)] border border-line-cool bg-white text-sm w-full";
+
+// Dropdowns sized to match this screen's compact text boxes.
+const P = (props: React.ComponentProps<typeof Pick>) => <Pick className={inputClass} {...props} />;
+const PO = (props: React.ComponentProps<typeof PickOther>) => <PickOther className={inputClass} {...props} />;
 
 function Star() {
   return (
@@ -82,7 +87,7 @@ function Field({
 
 function Section({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
   return (
-    <fieldset className="flex flex-col gap-3 border border-line rounded-[var(--radius)] bg-card p-4">
+    <fieldset className="flex flex-col gap-4 border border-line rounded-[var(--radius)] bg-card p-5">
       <legend className="text-base font-extrabold px-1" style={{ fontFamily: "var(--font-display)" }}>
         {title}
       </legend>
@@ -144,6 +149,7 @@ export function IntakeForm({
       const r = await createDogIntake(f);
       if (!("ok" in r)) return setError(r.error);
       setSaved({ dogId: r.dogId, ref: r.ref, name: f.name.trim() });
+      window.scrollTo({ top: 0 });
     });
   }
 
@@ -198,7 +204,7 @@ export function IntakeForm({
         title="SavourLife profile"
         note="Everything in this box is captured for the SavourLife listing, in their order."
       >
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <Field label="Name" required sl hint="Match the microchip. Use 'Unknown' plus the date if there isn't one.">
             <input className={inputClass} value={f.name} onChange={(e) => set("name", e.target.value)} />
           </Field>
@@ -216,11 +222,11 @@ export function IntakeForm({
             </datalist>
           </Field>
           <Field label="Sex" required sl>
-            <Pick value={f.sex} onChange={(v) => set("sex", v)} options={SEX_OPTIONS} />
+            <P value={f.sex} onChange={(v) => set("sex", v)} options={SEX_OPTIONS} />
           </Field>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <Field label="Date of birth" required sl hint="Leave blank and pick an approximate age if unknown.">
             <input
               type="date"
@@ -237,13 +243,13 @@ export function IntakeForm({
             />
           </Field>
           <Field label="Size when adult" sl>
-            <Pick value={f.sizeWhenAdult} onChange={(v) => set("sizeWhenAdult", v)} options={SIZE_OPTIONS} />
+            <P value={f.sizeWhenAdult} onChange={(v) => set("sizeWhenAdult", v)} options={SIZE_OPTIONS} />
           </Field>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <Field label="Coat length" sl>
-            <Pick value={f.coatLength} onChange={(v) => set("coatLength", v)} options={COAT_LENGTHS} />
+            <P value={f.coatLength} onChange={(v) => set("coatLength", v)} options={COAT_LENGTHS} />
           </Field>
           <Field label="Microchip number" sl>
             <input
@@ -277,21 +283,21 @@ export function IntakeForm({
             Can they be re-homed with…
             <SL />
           </legend>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <Field label="Kids under 5">
-              <Pick value={f.goodWithKidsU5} onChange={(v) => set("goodWithKidsU5", v)} options={YES_NO_UNTESTED} />
+              <P value={f.goodWithKidsU5} onChange={(v) => set("goodWithKidsU5", v)} options={YES_NO_UNTESTED} />
             </Field>
             <Field label="Kids 5 to 12">
-              <Pick value={f.goodWithKids5to12} onChange={(v) => set("goodWithKids5to12", v)} options={YES_NO_UNTESTED} />
+              <P value={f.goodWithKids5to12} onChange={(v) => set("goodWithKids5to12", v)} options={YES_NO_UNTESTED} />
             </Field>
             <Field label="Other cats">
-              <Pick value={f.goodWithCats} onChange={(v) => set("goodWithCats", v)} options={YES_NO_UNTESTED} />
+              <P value={f.goodWithCats} onChange={(v) => set("goodWithCats", v)} options={YES_NO_UNTESTED} />
             </Field>
             <Field label="Other dogs">
-              <Pick value={f.goodWithDogs} onChange={(v) => set("goodWithDogs", v)} options={YES_NO_UNTESTED} />
+              <P value={f.goodWithDogs} onChange={(v) => set("goodWithDogs", v)} options={YES_NO_UNTESTED} />
             </Field>
             <Field label="Other animals">
-              <Pick value={f.goodWithOther} onChange={(v) => set("goodWithOther", v)} options={YES_NO_UNTESTED} />
+              <P value={f.goodWithOther} onChange={(v) => set("goodWithOther", v)} options={YES_NO_UNTESTED} />
             </Field>
           </div>
         </fieldset>
@@ -301,23 +307,23 @@ export function IntakeForm({
             Medical — tick what will be true at the time of adoption
             <SL />
           </legend>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Field label="Desexed" required>
-              <Pick value={f.desexed} onChange={(v) => set("desexed", v as YN)} options={YES_NO} />
+              <P value={f.desexed} onChange={(v) => set("desexed", v as YN)} options={YES_NO} />
             </Field>
             <Field label="Vaccinated">
-              <Pick value={f.vaccinated} onChange={(v) => set("vaccinated", v as YN)} options={YES_NO} />
+              <P value={f.vaccinated} onChange={(v) => set("vaccinated", v as YN)} options={YES_NO} />
             </Field>
             <Field label="Wormed">
-              <Pick value={f.wormed} onChange={(v) => set("wormed", v as YN)} options={YES_NO} />
+              <P value={f.wormed} onChange={(v) => set("wormed", v as YN)} options={YES_NO} />
             </Field>
             <Field label="Heart wormed">
-              <Pick value={f.heartworm} onChange={(v) => set("heartworm", v as YN)} options={YES_NO} />
+              <P value={f.heartworm} onChange={(v) => set("heartworm", v as YN)} options={YES_NO} />
             </Field>
           </div>
         </fieldset>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Medical issues" sl hint="Anything an adopter should know. Leave blank if none.">
             <input className={inputClass} value={f.medicalIssues} onChange={(e) => set("medicalIssues", e.target.value)} />
           </Field>
@@ -326,12 +332,12 @@ export function IntakeForm({
           </Field>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <Field label="Indoor only?" sl>
-            <Pick value={f.indoorOnly} onChange={(v) => set("indoorOnly", v as YN)} options={YES_NO} />
+            <P value={f.indoorOnly} onChange={(v) => set("indoorOnly", v as YN)} options={YES_NO} />
           </Field>
           <Field label="Bonded pair?" sl>
-            <Pick value={f.bondedPair} onChange={(v) => set("bondedPair", v as YN)} options={YES_NO} />
+            <P value={f.bondedPair} onChange={(v) => set("bondedPair", v as YN)} options={YES_NO} />
           </Field>
           {f.bondedPair === "yes" && (
             <Field label="Bonded with" required sl>
@@ -345,12 +351,12 @@ export function IntakeForm({
             Location
             <SL />
           </legend>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Suburb">
               <input className={inputClass} value={f.suburb} onChange={(e) => set("suburb", e.target.value)} />
             </Field>
             <Field label="State">
-              <Pick value={f.state} onChange={(v) => set("state", v)} options={AU_STATES} />
+              <P value={f.state} onChange={(v) => set("state", v)} options={AU_STATES} />
             </Field>
             <Field label="Postcode" required>
               <input
@@ -361,12 +367,12 @@ export function IntakeForm({
               />
             </Field>
             <Field label="Distance restriction">
-              <Pick value={f.distance} onChange={(v) => set("distance", v)} options={DISTANCE_OPTIONS} />
+              <P value={f.distance} onChange={(v) => set("distance", v)} options={DISTANCE_OPTIONS} />
             </Field>
           </div>
         </fieldset>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <Field label="Adoption fee ($)" required sl hint="SavourLife needs one — enter 0 if none.">
             <input
               type="number"
@@ -379,22 +385,22 @@ export function IntakeForm({
             />
           </Field>
           <Field label="Interstate adoption available?" sl>
-            <Pick value={f.interstate} onChange={(v) => set("interstate", v as YN)} options={YES_NO} />
+            <P value={f.interstate} onChange={(v) => set("interstate", v as YN)} options={YES_NO} />
           </Field>
           <Field label="Foster carer required?" sl>
-            <Pick value={f.fosterRequired} onChange={(v) => set("fosterRequired", v as YN)} options={YES_NO} />
+            <P value={f.fosterRequired} onChange={(v) => set("fosterRequired", v as YN)} options={YES_NO} />
           </Field>
         </div>
       </Section>
 
       {(!edit || edit.showRecord) && (
       <Section title="CAPS intake record" note="From the paper Animal Intake Record. Only staff and admin see this.">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Date of intake" required>
             <input type="date" className={inputClass} value={f.intakeDate} onChange={(e) => set("intakeDate", e.target.value)} />
           </Field>
           <Field label="Colour">
-            <PickOther value={f.colour} onChange={(v) => set("colour", v)} options={COLOURS} />
+            <PO value={f.colour} onChange={(v) => set("colour", v)} options={COLOURS} />
           </Field>
           <Field label="Markings">
             <input
@@ -417,9 +423,9 @@ export function IntakeForm({
           </Field>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Source of intake" required>
-            <Pick value={f.source} onChange={(v) => set("source", v)} options={INTAKE_SOURCES} />
+            <P value={f.source} onChange={(v) => set("source", v)} options={INTAKE_SOURCES} />
           </Field>
           {SOURCES_WITH_PERSON.includes(f.source) && (
             <Field label="Surrendered by">
@@ -432,7 +438,7 @@ export function IntakeForm({
             </Field>
           )}
           <Field label="Reason for intake" required>
-            <Pick value={f.reason} onChange={(v) => set("reason", v)} options={INTAKE_REASONS} />
+            <P value={f.reason} onChange={(v) => set("reason", v)} options={INTAKE_REASONS} />
           </Field>
           <Field label="More about the reason" hint="Optional.">
             <input className={inputClass} value={f.reasonNote} onChange={(e) => set("reasonNote", e.target.value)} />
@@ -440,12 +446,12 @@ export function IntakeForm({
         </div>
 
         <h3 className="text-sm font-extrabold pt-1">Initial health check</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <Field label="Condition" required>
-            <Pick value={f.condition} onChange={(v) => set("condition", v)} options={CONDITIONS} />
+            <P value={f.condition} onChange={(v) => set("condition", v)} options={CONDITIONS} />
           </Field>
           <Field label="Parasites observed?" required>
-            <Pick value={f.parasites} onChange={(v) => set("parasites", v as YN)} options={YES_NO} />
+            <P value={f.parasites} onChange={(v) => set("parasites", v as YN)} options={YES_NO} />
           </Field>
           <Field label="Visible injuries or illness" hint="Leave blank if none.">
             <input
@@ -455,15 +461,15 @@ export function IntakeForm({
             />
           </Field>
           <Field label="Vaccination given at intake?" required>
-            <Pick value={f.vaccinationGiven} onChange={(v) => set("vaccinationGiven", v as YN)} options={YES_NO} />
+            <P value={f.vaccinationGiven} onChange={(v) => set("vaccinationGiven", v as YN)} options={YES_NO} />
           </Field>
           {f.vaccinationGiven === "yes" && (
             <Field label="Vaccination type" required>
-              <Pick value={f.vaccinationType} onChange={(v) => set("vaccinationType", v)} options={VACCINE_TYPES} />
+              <P value={f.vaccinationType} onChange={(v) => set("vaccinationType", v)} options={VACCINE_TYPES} />
             </Field>
           )}
           <Field label="Flea / tick / worm treatment given?" required>
-            <Pick value={f.fleaTickWormGiven} onChange={(v) => set("fleaTickWormGiven", v as YN)} options={YES_NO} />
+            <P value={f.fleaTickWormGiven} onChange={(v) => set("fleaTickWormGiven", v as YN)} options={YES_NO} />
           </Field>
         </div>
 
@@ -516,7 +522,7 @@ export function IntakeForm({
         title="Sign-off"
         note="Completed by an admin. Filled in from your sign-in; change it only if someone else did the intake."
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Intake officer">
             <input className={inputClass} value={f.officerName} onChange={(e) => set("officerName", e.target.value)} />
           </Field>
@@ -529,13 +535,32 @@ export function IntakeForm({
 
       {error && <p className="text-sm text-danger">{error}</p>}
 
-      <button
-        type="submit"
-        disabled={isPending}
-        className="h-12 rounded-[var(--radius)] bg-brand text-white font-bold disabled:opacity-60"
-      >
-        {isPending ? "Saving…" : edit ? "Save changes" : "Save intake"}
-      </button>
+      {/* The same buttons again at the end, so nobody scrolls back up after filling the long form. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="submit"
+          disabled={isPending}
+          className="h-12 px-8 rounded-[var(--radius)] bg-brand text-white font-bold disabled:opacity-60"
+        >
+          {isPending ? "Saving…" : edit ? "Save changes" : "Save intake"}
+        </button>
+        {edit && (
+          <button
+            type="button"
+            onClick={() => router.push(`/dogs/${edit.dogId}`)}
+            className="h-12 px-6 rounded-[var(--radius)] border border-line-cool font-semibold"
+          >
+            Cancel
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className="h-12 px-4 text-sm font-semibold text-brand-ink underline ml-auto"
+        >
+          ↑ Back to top{edit ? " (photos)" : ""}
+        </button>
+      </div>
     </form>
   );
 }
