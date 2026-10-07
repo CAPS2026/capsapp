@@ -2,11 +2,12 @@ import { redirect } from "next/navigation";
 import { getCurrentPerson } from "@/lib/auth";
 import { IntakeForm } from "@/components/intake/intake-form";
 
-// Staff-only dog intake (the paper "Animal Intake Record"). Volunteers and
-// anyone in volunteer mode are sent back to the dog list.
+// Dog intake (the paper "Animal Intake Record"), completed by an admin because it
+// carries their sign-off. Everyone else is sent back to the dog list; staff and
+// admin can read the result on the dog's page.
 export default async function IntakePage() {
   const me = await getCurrentPerson();
-  if (!me?.isStaff) redirect("/dogs");
+  if (!me?.isAdmin) redirect("/dogs");
 
   // Weipa time (UTC+10), so an evening intake isn't dated the day before.
   const today = new Date(Date.now() + 10 * 3600 * 1000).toISOString().slice(0, 10);

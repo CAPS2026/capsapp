@@ -8,14 +8,25 @@ insert into arrival_type (code, label, sort_order) values
   ('other',    'Other',    7)
 on conflict (code) do nothing;
 
--- 2. SavourLife fields that were missing on dogs.
+-- 2. SavourLife fields that were missing on dogs. Marked SL on the intake screen.
+--    (Already on dogs: breed, date_of_birth, sex, size_when_adult, microchip_no, desexed,
+--    vaccinated, wormed, heartworm_treated, good_with_*, adoption_fee, interstate_adoption,
+--    adoption_available_within, public_description, public_medical_summary.)
 alter table dogs
   add column if not exists coat_length          text check (coat_length in ('Short','Medium','Long')),
   add column if not exists indoor_only          boolean,
   add column if not exists foster_care_required boolean,
   add column if not exists special_needs        text,
-  add column if not exists bonded_pair_with     uuid references dogs(id) on delete set null,
+  add column if not exists bonded_pair          boolean,
+  add column if not exists bonded_pair_name     text,
+  add column if not exists sl_suburb            text,
+  add column if not exists sl_state             text,
+  add column if not exists sl_postcode          text,
   add column if not exists markings             text;
+
+-- Foster / case manager email for SavourLife enquiries: never public, so it lives
+-- in the staff-only confidential table, not on dogs (every signed-in user can read dogs).
+alter table dog_confidential add column if not exists sl_contact_email text;
 
 -- 3. The intake record itself: one row per dog, staff only (same boundary as
 --    dog_confidential — volunteers can't read it at all).

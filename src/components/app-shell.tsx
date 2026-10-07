@@ -14,12 +14,13 @@ type NavItem = {
   label: string;
   Icon: (p: { className?: string }) => React.ReactElement;
   staffOnly?: boolean;
+  adminOnly?: boolean;
 };
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/dogs", label: "Dogs", Icon: PawIcon },
   { href: "/site", label: "Site Visitors", Icon: SignInIcon },
-  { href: "/intake", label: "Intake", Icon: IntakeIcon, staffOnly: true },
+  { href: "/intake", label: "Intake", Icon: IntakeIcon, staffOnly: true, adminOnly: true },
   { href: "/people", label: "People", Icon: PeopleIcon, staffOnly: true },
   { href: "/logs", label: "Logs", Icon: LogsIcon, staffOnly: true },
   { href: "/reports", label: "Reports", Icon: ReportsIcon, staffOnly: true },
@@ -36,7 +37,9 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const visibleItems = NAV_ITEMS.filter((item) => !item.staffOnly || person.isStaff);
+  const visibleItems = NAV_ITEMS.filter(
+    (item) => (!item.staffOnly || person.isStaff) && (!item.adminOnly || person.isAdmin),
+  );
 
   // Phone-first: the operational screens (Dogs, Site, take-out flows) stay
   // a single ~phone-width column even on a laptop — stretching phone-shaped

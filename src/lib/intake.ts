@@ -118,24 +118,56 @@ export const BREED_SUGGESTIONS = [
   "Unknown",
 ];
 
+/** SavourLife's distance restriction choices. */
+export const DISTANCE_OPTIONS = ["Unrestricted", "20 km", "40 km", "60 km", "100 km", "200 km", "500 km"];
+
+export const AU_STATES = ["QLD", "NSW", "VIC", "SA", "WA", "TAS", "NT", "ACT"];
+
+/** CAPS's own location, the default for every listing (20 Kerr Point Drive, Evans Landing). */
+export const CAPS_LOCATION = { suburb: "Weipa", state: "QLD", postcode: "4874" };
+
 export type IntakeInput = {
+  // ---- SavourLife profile (SL) — in the order SavourLife's form asks ----
   name: string;
-  intakeDate: string;
-  source: string;
-  surrenderedBy: string;
-  reason: string;
-  reasonNote: string;
   breed: string;
   dateOfBirth: string;
   ageBand: string;
   sex: string;
+  sizeWhenAdult: string;
+  coatLength: string;
+  microchip: string;
+  description: string;
+  contactEmail: string;
+  goodWithKidsU5: string;
+  goodWithKids5to12: string;
+  goodWithCats: string;
+  goodWithDogs: string;
+  goodWithOther: string;
   desexed: YN;
+  vaccinated: YN;
+  wormed: YN;
+  heartworm: YN;
+  medicalIssues: string;
+  specialNeeds: string;
+  indoorOnly: YN;
+  bondedPair: YN;
+  bondedPairName: string;
+  suburb: string;
+  state: string;
+  postcode: string;
+  interstate: YN;
+  distance: string;
+  adoptionFee: string;
+  fosterRequired: YN;
+  // ---- CAPS intake record (from the paper form) ----
+  intakeDate: string;
   colour: string;
   markings: string;
-  coatLength: string;
-  sizeWhenAdult: string;
   weightKg: string;
-  microchip: string;
+  source: string;
+  surrenderedBy: string;
+  reason: string;
+  reasonNote: string;
   condition: string;
   visibleInjuries: string;
   parasites: YN;
@@ -145,10 +177,6 @@ export type IntakeInput = {
   behaviour: string[];
   behaviourOther: string;
   experiencedOnly: boolean;
-  goodWithKidsU5: string;
-  goodWithKids5to12: string;
-  goodWithCats: string;
-  goodWithDogs: string;
   notes: string;
   officerName: string;
   signedName: string;
@@ -158,22 +186,44 @@ export type IntakeInput = {
 
 export const EMPTY_INTAKE: IntakeInput = {
   name: "",
-  intakeDate: "",
-  source: "",
-  surrenderedBy: "",
-  reason: "",
-  reasonNote: "",
   breed: "",
   dateOfBirth: "",
   ageBand: "",
   sex: "",
+  sizeWhenAdult: "",
+  coatLength: "",
+  microchip: "",
+  description: "",
+  contactEmail: "",
+  goodWithKidsU5: "untested",
+  goodWithKids5to12: "untested",
+  goodWithCats: "untested",
+  goodWithDogs: "untested",
+  goodWithOther: "untested",
   desexed: "",
+  vaccinated: "",
+  wormed: "",
+  heartworm: "",
+  medicalIssues: "",
+  specialNeeds: "",
+  indoorOnly: "",
+  bondedPair: "no",
+  bondedPairName: "",
+  suburb: CAPS_LOCATION.suburb,
+  state: CAPS_LOCATION.state,
+  postcode: CAPS_LOCATION.postcode,
+  interstate: "",
+  distance: "Unrestricted",
+  adoptionFee: "",
+  fosterRequired: "",
+  intakeDate: "",
   colour: "",
   markings: "",
-  coatLength: "",
-  sizeWhenAdult: "",
   weightKg: "",
-  microchip: "",
+  source: "",
+  surrenderedBy: "",
+  reason: "",
+  reasonNote: "",
   condition: "",
   visibleInjuries: "",
   parasites: "",
@@ -183,10 +233,6 @@ export const EMPTY_INTAKE: IntakeInput = {
   behaviour: [],
   behaviourOther: "",
   experiencedOnly: false,
-  goodWithKidsU5: "untested",
-  goodWithKids5to12: "untested",
-  goodWithCats: "untested",
-  goodWithDogs: "untested",
   notes: "",
   officerName: "",
   signedName: "",
@@ -196,13 +242,19 @@ export const EMPTY_INTAKE: IntakeInput = {
 /** The first thing missing on the form, or null. Mirrors the server check so the message appears on the page. */
 export function intakeError(f: IntakeInput): string | null {
   if (!f.name.trim()) return "Please give the dog a name (or 'Unknown' with the date, e.g. Unknown 7 Oct).";
-  if (!f.intakeDate) return "Please set the date of intake.";
-  if (!f.source) return "Please choose where the dog came from.";
-  if (!f.reason) return "Please choose the reason for intake.";
   if (!f.breed.trim()) return "Please enter a breed (or 'Unknown').";
   if (!f.dateOfBirth && !f.ageBand) return "Please give a date of birth, or pick an approximate age.";
   if (!f.sex) return "Please choose male or female.";
   if (!f.desexed) return "Please say whether the dog is desexed.";
+  if (f.bondedPair === "yes" && !f.bondedPairName.trim()) return "Please say who the dog is bonded with.";
+  if (!f.postcode.trim()) return "Please enter the postcode for the listing.";
+  if (!f.adoptionFee.trim() || !Number.isFinite(parseFloat(f.adoptionFee)))
+    return "Please enter the adoption fee (SavourLife needs one, even if it is $0).";
+  if (f.contactEmail.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.contactEmail.trim()))
+    return "The foster / case manager email doesn't look right — please check it.";
+  if (!f.intakeDate) return "Please set the date of intake.";
+  if (!f.source) return "Please choose where the dog came from.";
+  if (!f.reason) return "Please choose the reason for intake.";
   if (!f.condition) return "Please record the dog's condition.";
   if (!f.parasites) return "Please say whether parasites were seen.";
   if (!f.vaccinationGiven) return "Please say whether a vaccination was given.";

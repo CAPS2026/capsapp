@@ -23,10 +23,11 @@ async function nextRef(supabase: Awaited<ReturnType<typeof createClient>>): Prom
   return `D${String(max + 1).padStart(3, "0")}`;
 }
 
-/** Record a new dog from the intake screen. Staff only. Creates the dog and its intake record together. */
+/** Record a new dog from the intake screen. Admin only. Creates the dog and its intake record together. */
 export async function createDogIntake(input: IntakeInput): Promise<Result> {
   const me = await getCurrentPerson();
-  if (!me?.isStaff || !me.id) return { error: "Staff only." };
+  // Intake is completed by an admin (Shayna, Paul, Julie) — it carries their sign-off.
+  if (!me?.isAdmin || !me.id) return { error: "Only an admin can complete a dog intake." };
 
   const problem = intakeError(input);
   if (problem) return { error: problem };
@@ -78,20 +79,40 @@ export async function createDogIntake(input: IntakeInput): Promise<Result> {
       weight_kg: Number.isFinite(weight) ? weight : null,
       microchip_no: orNull(input.microchip),
       desexed: yn(input.desexed),
-      vaccinated: input.vaccinationGiven === "yes" ? true : null,
-      wormed: input.fleaTickWormGiven === "yes" ? true : null,
+      vaccinated: yn(input.vaccinated),
+      wormed: yn(input.wormed),
+      heartworm_treated: yn(input.heartworm),
+      public_description: orNull(input.description),
+      public_medical_summary: orNull(input.medicalIssues),
+      special_needs: orNull(input.specialNeeds),
+      indoor_only: yn(input.indoorOnly),
+      bonded_pair: yn(input.bondedPair),
+      bonded_pair_name: input.bondedPair === "yes" ? orNull(input.bondedPairName) : null,
+      foster_care_required: yn(input.fosterRequired),
+      sl_suburb: orNull(input.suburb),
+      sl_state: orNull(input.state),
+      sl_postcode: orNull(input.postcode),
+      interstate_adoption: yn(input.interstate),
+      adoption_available_within: orNull(input.distance),
+      adoption_fee: parseFloat(input.adoptionFee),
       experienced_handler_only: input.experiencedOnly,
       handling_notes: behaviourText ? `Intake assessment: ${behaviourText}.` : null,
       good_with_kids_u5: untested(input.goodWithKidsU5),
       good_with_kids_5_12: untested(input.goodWithKids5to12),
       good_with_cats: untested(input.goodWithCats),
       good_with_dogs: untested(input.goodWithDogs),
+      good_with_other: untested(input.goodWithOther),
     })
     .select("id")
     .single();
   if (dogErr || !dog) {
     const missing = dogErr?.code === "42703" || /column/i.test(dogErr?.message ?? "");
     return { error: missing ? "Couldn't save the dog - has migration 45 been applied in Supabase?" : (dogErr?.message ?? "Couldn't save the dog.") };
+  }
+
+  // Foster / case manager email for SavourLife enquiries: staff-only table, never public.
+  if (input.contactEmail.trim()) {
+    await supabase.from("dog_confidential").upsert({ dog_id: dog.id, sl_contact_email: clean(input.contactEmail) });
   }
 
   const { error: intakeErr } = await supabase.from("dog_intake").insert({
