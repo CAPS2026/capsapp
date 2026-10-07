@@ -21,15 +21,7 @@ function dayEnd(d?: string) {
   return d ? `${d}T23:59:59.999+10:00` : null;
 }
 
-const ACTIVITY_TYPE: Record<string, string[]> = {
-  activity: ["walk", "yard", "bed_rest", "jail_break", "foster"],
-  walks: ["walk"],
-  jail_break: ["jail_break"],
-  foster: ["foster"],
-  homecare: ["jail_break", "foster"],
-  yard: ["yard"],
-  bed_rest: ["bed_rest"],
-};
+const ACTIVITY_TYPES = ["walk", "yard", "bed_rest", "jail_break", "foster"];
 
 const TYPE_LABEL: Record<string, string> = {
   walk: "Walk",
@@ -39,13 +31,11 @@ const TYPE_LABEL: Record<string, string> = {
   foster: "Foster",
 };
 
-async function activityLog(tab: keyof typeof ACTIVITY_TYPE, f: LogFilters): Promise<LogTable> {
+async function activityLog(f: LogFilters): Promise<LogTable> {
   const supabase = await createClient();
-  // On the All activity tab the type chips narrow it; the other tabs are fixed.
-  const types =
-    tab === "activity" && f.types && f.types.length > 0
-      ? f.types.filter((t) => ACTIVITY_TYPE.activity.includes(t))
-      : ACTIVITY_TYPE[tab];
+  // The type chips narrow the list; with none ticked it shows every type.
+  const picked = (f.types ?? []).filter((t) => ACTIVITY_TYPES.includes(t));
+  const types = picked.length > 0 ? picked : ACTIVITY_TYPES;
 
   let q = supabase
     .from("dog_activity")
@@ -87,8 +77,7 @@ async function activityLog(tab: keyof typeof ACTIVITY_TYPE, f: LogFilters): Prom
 
   const capped = raw.length > LIMIT;
   const showType = types.length > 1;
-  const personLabel =
-    tab === "walks" ? "Walker" : tab === "jail_break" || tab === "foster" || tab === "homecare" ? "Carer" : "Person";
+  const personLabel = types.length === 1 && types[0] === "walk" ? "Walker" : types.every((t) => t === "jail_break" || t === "foster") ? "Carer" : "Person";
   const columns = ["Dog", ...(showType ? ["Type"] : []), personLabel, "Out", "In", "Duration", "Notes", "Flags"];
 
   const kept = raw.slice(0, LIMIT);
@@ -286,7 +275,7 @@ export async function getLog(tab: LogTab, filters: LogFilters): Promise<LogTable
   if (tab === "site") return siteLog(filters);
   if (tab === "dogs") return dogsLog(filters);
   if (tab === "people") return peopleLog(filters);
-  return activityLog(tab as keyof typeof ACTIVITY_TYPE, filters);
+  return activityLog(filters);
 }
 
 export async function getLogFilterOptions(): Promise<{
