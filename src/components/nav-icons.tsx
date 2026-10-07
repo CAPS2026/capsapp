@@ -101,3 +101,14 @@ export function HelpIcon(p: IconProps) {
     </Svg>
   );
 }
+
+/** Clipboard with a plus — Intake (taking a new dog in). */
+export function IntakeIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="5" y="4.5" width="14" height="16.5" rx="2" />
+      <path d="M9 4.5V3.5h6v1" />
+      <path d="M12 10v6M9 13h6" />
+    </Svg>
+  );
+}
