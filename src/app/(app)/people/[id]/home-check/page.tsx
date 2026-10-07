@@ -13,6 +13,12 @@ export default async function HomeCheckPage({ params }: { params: Promise<{ id: 
   if (!person) notFound();
 
   const hp = person.homecareProfile;
+  // What they applied for (pending or already granted) fills the "approved for ___" email line.
+  const programs = [
+    person.roles.some((r) => r.role === "foster_carer" && (r.status === "pending" || r.status === "active")) && "foster",
+    person.roles.some((r) => r.role === "jailbreak_carer" && (r.status === "pending" || r.status === "active")) &&
+      "jail_break",
+  ].filter(Boolean) as ("foster" | "jail_break")[];
 
   return (
     <div className="flex flex-col gap-4 p-4 pb-8">
@@ -26,7 +32,9 @@ export default async function HomeCheckPage({ params }: { params: Promise<{ id: 
         personId={id}
         personName={`${person.firstName} ${person.surname}`}
         firstName={person.firstName}
+        programs={programs}
         initial={{
+          address: person.address,
           propertyOwnership: hp?.propertyOwnership ?? null,
           fenceType: hp?.fenceType ?? null,
           fenceHeight: hp?.fenceHeight ?? null,

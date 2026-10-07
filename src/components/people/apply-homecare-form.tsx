@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { applyForHomecare } from "@/lib/actions/homecare-apply";
 import { homePayload, type HomeDetails } from "@/lib/homecare-form";
+import { homecareTerms } from "@/lib/terms";
 import { HomeDetailsFields } from "@/components/apply/home-details-fields";
 
 const inputClass = "h-11 px-3 rounded-[var(--radius)] border border-line-cool bg-white text-base w-full";
@@ -106,6 +107,9 @@ export function ApplyHomecareForm({
 
       <HomeDetailsFields value={home} onChange={setHome} jailBreak={jailBreak} foster={foster} />
 
+      <div className="max-h-52 overflow-y-auto whitespace-pre-wrap text-sm text-ink border border-line rounded-[var(--radius)] p-3">
+        {homecareTerms({ foster, jailBreak })}
+      </div>
       <label className="flex items-start gap-2 text-sm">
         <input type="checkbox" className="mt-1" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
         <span>The applicant has read and agrees to the CAPS homecare terms.</span>

@@ -96,7 +96,41 @@ function animalSummary(h: HomeDetails) {
       `Animal ${i + 1}: ${p.type}; breed: ${p.breed.trim()}; age: ${p.age.trim()}; temperament: ${p.temperament}; desexed: ${yn(p.desexed)}; vaccinations up to date: ${yn(p.vaccinated)}`,
     ),
   );
+  // Anything typed in the old free-text box (or by the assessor) is kept, not replaced.
+  if (lines.length && h.animalDetails.trim()) lines.push(`Notes: ${h.animalDetails.trim()}`);
   return lines;
+}
+
+/** The reverse of animalSummary: read structured answers back out of the stored text.
+ *  Lines that aren't in that format come back as `extra` so nothing is lost. */
+export function parseHomeText(text: string | null | undefined): { childAges: string[]; pets: Pet[]; extra: string } {
+  const childAges: string[] = [];
+  const pets: Pet[] = [];
+  const extra: string[] = [];
+  const back = (v: string): YesNo => (v === "yes" ? "yes" : v === "no" ? "no" : "");
+  for (const raw of (text ?? "").split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith("Children under 16 — ages:")) {
+      for (const a of line.slice(line.indexOf(":") + 1).split(",")) childAges.push(a.trim() === "?" ? "" : a.trim());
+    } else if (/^Animal \d+:/.test(line)) {
+      const parts = line.replace(/^Animal \d+:\s*/, "").split(";").map((p) => p.trim());
+      const get = (k: string) => parts.find((p) => p.startsWith(`${k}:`))?.slice(k.length + 1).trim() ?? "";
+      pets.push({
+        type: parts[0] ?? "",
+        breed: get("breed"),
+        age: get("age"),
+        temperament: get("temperament"),
+        desexed: back(get("desexed")),
+        vaccinated: back(get("vaccinations up to date")),
+      });
+    } else if (line.startsWith("Notes:")) {
+      extra.push(line.slice(6).trim());
+    } else {
+      extra.push(line);
+    }
+  }
+  return { childAges, pets, extra: extra.join("\n") };
 }
 
 /** What the server actions take: the form's home details, flattened. */

@@ -10,7 +10,7 @@ import {
   HOW_HEARD_OPTIONS,
   type RegisterResult,
 } from "@/lib/registration";
-import { VOLUNTEER_TERMS } from "@/lib/terms";
+import { homecareTerms, VOLUNTEER_TERMS } from "@/lib/terms";
 import { EMPTY_HOME, homeDetailsError, homePayload, type HomeDetails } from "@/lib/homecare-form";
 import { HomeDetailsFields } from "@/components/apply/home-details-fields";
 import { PhotoPicker } from "@/components/apply/photo-picker";
@@ -166,6 +166,16 @@ export function VolunteerForm({ homecareFirst = false, onDone }: { homecareFirst
 
   const wantsHomecare = fosterInterest || jailBreakInterest;
   const wantsAnything = onSite || wantsHomecare || adoptionInterest;
+  // Volunteer terms for anyone registering (or helping on site); the foster /
+  // jail break agreement as well when they're taking a dog home.
+  const termsText = [
+    !registered || onSite ? (wantsHomecare ? `VOLUNTEER TERMS\n\n${VOLUNTEER_TERMS}` : VOLUNTEER_TERMS) : null,
+    wantsHomecare
+      ? `FOSTER CARE & JAIL BREAK TERMS\n\n${homecareTerms({ foster: fosterInterest, jailBreak: jailBreakInterest })}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   const dobAge = form.dateOfBirth ? ageFromDob(form.dateOfBirth) : null;
   const isMinor = over18 === "no" || (dobAge !== null && dobAge < 18);
 
@@ -758,7 +768,7 @@ export function VolunteerForm({ homecareFirst = false, onDone }: { homecareFirst
           <fieldset className="flex flex-col gap-2">
             <legend className="text-sm font-bold">Terms and conditions</legend>
             <div className="max-h-52 overflow-y-auto whitespace-pre-wrap text-sm text-ink border border-line rounded-[var(--radius)] p-3">
-              {VOLUNTEER_TERMS}
+              {termsText}
             </div>
             <label className="flex items-start gap-2 text-sm">
               <input type="checkbox" className="mt-1" checked={agreeTerms} onChange={(e) => setAgreeTerms(e.target.checked)} />

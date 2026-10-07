@@ -154,33 +154,56 @@ ${SPAM_NOTE_HTML}`,
 
 /** The starting draft for the "improvements needed after a home check"
  *  email. Staff edit this before it sends. */
+/** Draft for a home check that passed. `programs` reads like "fostering" or "fostering and jail break". */
+export function approvedDraft(opts: { firstName: string; programs: string; comments: string }): string {
+  const lines = [
+    `Hi ${opts.firstName},`,
+    "",
+    `Congratulations! Your home has been approved for ${opts.programs}.`,
+  ];
+  if (opts.comments.trim()) lines.push("", opts.comments.trim());
+  lines.push("", "Please contact us to organise a time to meet and collect your new buddy.", "", "— CAPS");
+  return lines.join("\n");
+}
+
+/** Draft for a home check that needs more work first. */
 export function improvementsDraft(opts: { firstName: string; items: string }): string {
   return [
     `Hi ${opts.firstName},`,
     "",
-    "Thanks for offering to foster a dog, and for having us visit.",
+    "Thank you for having us visit.",
     "",
-    "Before we can approve your home for fostering, we'd need the following sorted:",
+    "Unfortunately there are still some outstanding details we need to clarify, or changes you need to make, before your home is dog ready, including:",
     "",
     opts.items.trim() || "- ",
     "",
-    "Once that's done, let us know and we'll arrange another quick visit.",
+    "Please get in touch to discuss the details.",
     "",
     "— CAPS",
   ].join("\n");
 }
 
-export function improvementsEmail(body: string): {
-  subject: string;
-  text: string;
-  html: string;
-} {
-  const text = `${body}\n\n${SPAM_NOTE_TEXT}`;
+export function homeCheckEmail(
+  body: string,
+  outcome: "passed" | "improvements_needed",
+): { subject: string; text: string; html: string } {
+  const text = `${body}
+
+${SPAM_NOTE_TEXT}`;
   const html = shell(
     `${body
       .split("\n")
       .map((line) => (line.trim() ? `<p>${esc(line)}</p>` : ""))
       .join("")}${SPAM_NOTE_HTML}`,
   );
-  return { subject: "Your CAPS home check — a few things to sort first", text, html };
+  return {
+    subject:
+      outcome === "passed" ? "Your CAPS home has been approved" : "Your CAPS home check — a few things to sort first",
+    text,
+    html,
+  };
+}
+
+export function improvementsEmail(body: string) {
+  return homeCheckEmail(body, "improvements_needed");
 }

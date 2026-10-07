@@ -1,6 +1,18 @@
 "use client";
 
 import { EMPTY_PET, type HomeDetails, type Pet, type YesNo } from "@/lib/homecare-form";
+import {
+  CHILD_AGES,
+  CHILDREN,
+  FENCE_HEIGHTS,
+  FENCE_TYPES,
+  OWNERSHIP_TYPES,
+  PEOPLE_AT_HOME,
+  PET_TYPES,
+  TEMPERAMENTS,
+  YES_NO,
+} from "@/lib/home-options";
+import { Pick, PickOther } from "@/components/apply/pick";
 
 const inputClass = "h-11 px-3 rounded-[var(--radius)] border border-line-cool bg-white text-base w-full";
 
@@ -18,50 +30,6 @@ function Field({ label, children, required }: { label: string; children: React.R
       </span>
       {children}
     </label>
-  );
-}
-
-const PET_TYPES = ["Dog", "Cat", "Horse", "Bird", "Rabbit / guinea pig", "Reptile", "Farm animal", "Other"];
-const TEMPERAMENTS = ["Friendly with other animals", "Gentle but shy", "Playful / energetic", "Dominant / bossy", "Can be aggressive", "Not sure"];
-const YES_NO: [string, string][] = [
-  ["yes", "Yes"],
-  ["no", "No"],
-];
-const CHILD_AGES = Array.from({ length: 16 }, (_, i): [string, string] => [String(i), i === 0 ? "Under 1" : String(i)]);
-
-const FENCE_TYPES = ["Colorbond / metal", "Timber / paling", "Brick / masonry", "Chain link / wire mesh", "Pool-style fence", "Picket", "Other", "No fence"];
-const FENCE_HEIGHTS = ["Under 1 m", "1 – 1.2 m", "1.2 – 1.5 m", "1.5 – 1.8 m", "Over 1.8 m"];
-const PEOPLE_AT_HOME: [string, string][] = [
-  ...Array.from({ length: 9 }, (_, i): [string, string] => [String(i + 1), String(i + 1)]),
-  ["10", "10 or more"],
-];
-const CHILDREN: [string, string][] = [
-  ...Array.from({ length: 5 }, (_, i): [string, string] => [String(i), i === 0 ? "None" : String(i)]),
-  ["6", "6 or more"],
-];
-
-// A dropdown that keeps any older free-text answer visible as its own option.
-function Pick({
-  value,
-  onChange,
-  options,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: (string | [string, string])[];
-}) {
-  const pairs = options.map((o): [string, string] => (typeof o === "string" ? [o, o] : o));
-  const known = pairs.some(([v]) => v === value);
-  return (
-    <select className={inputClass} value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">Choose one…</option>
-      {pairs.map(([v, label]) => (
-        <option key={v} value={v}>
-          {label}
-        </option>
-      ))}
-      {value && !known && <option value={value}>{value}</option>}
-    </select>
   );
 }
 
@@ -108,27 +76,21 @@ export function HomeDetailsFields({
 
       <fieldset className="flex flex-col gap-3 border border-line rounded-[var(--radius)] p-4">
         <legend className="text-sm font-bold px-1">Your home and garden</legend>
-        <Field label="Do you own or rent your property?" required>
-          <select className={inputClass} value={value.propertyOwnership} onChange={(e) => set("propertyOwnership", e.target.value)}>
-            <option value="">Choose one…</option>
-            <option value="Own">Own</option>
-            <option value="Rent">Rent</option>
-            {value.propertyOwnership && !["Own", "Rent"].includes(value.propertyOwnership) && (
-              <option value={value.propertyOwnership}>{value.propertyOwnership}</option>
-            )}
-          </select>
+        <Field label="Ownership type" required>
+          <Pick value={value.propertyOwnership} onChange={(v) => set("propertyOwnership", v)} options={OWNERSHIP_TYPES} />
           {value.propertyOwnership.toLowerCase().startsWith("rent") && (
             <span className="text-sm text-warm-ink bg-warm-tint rounded-[var(--radius)] p-2">
-              If you rent, we&apos;ll need a letter from your landlord confirming that pets are allowed.
+              If you rent, fostering needs a copy of your real estate approval. Jail break doesn&apos;t, because the dog is
+              visiting rather than living at your home.
             </span>
           )}
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Fence type" required>
-            <Pick value={value.fenceType} onChange={(v) => set("fenceType", v)} options={FENCE_TYPES} />
+            <PickOther value={value.fenceType} onChange={(v) => set("fenceType", v)} options={FENCE_TYPES} />
           </Field>
           <Field label="Fence height" required>
-            <Pick value={value.fenceHeight} onChange={(v) => set("fenceHeight", v)} options={FENCE_HEIGHTS} />
+            <PickOther value={value.fenceHeight} onChange={(v) => set("fenceHeight", v)} options={FENCE_HEIGHTS} otherLabel="Please specify (include feet or metres)" />
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-3">
