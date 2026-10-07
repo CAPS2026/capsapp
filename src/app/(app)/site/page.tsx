@@ -46,7 +46,7 @@ export default async function SitePage() {
 
       {person?.isStaff && (
         <Link href="/apply/qr" className="text-sm font-semibold text-brand-ink self-start">
-          Printable QR codes for the forms →
+          Printable QR code to register with CAPS →
         </Link>
       )}
 

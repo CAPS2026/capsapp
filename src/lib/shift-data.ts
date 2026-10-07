@@ -1,4 +1,5 @@
 import { shiftDb } from "@/lib/shift-db";
+import { healthWatchState, healthWatchTitle, nextSession, type HealthWatchState } from "@/lib/health-watch";
 import {
   hhmm,
   initials,
@@ -406,10 +407,11 @@ type InstanceRow = {
   claimed_by: { id: string; first_name: string; surname: string } | null;
   vet_appointment_id: string | null;
   vet_task_kind: string | null;
+  health_concern_id: string | null;
 };
 
 const INSTANCE_SELECT =
-  "id, template_id, date, part, category, title, status, note, is_extra, skippable, actioned_at, vet_appointment_id, vet_task_kind, " +
+  "id, template_id, date, part, category, title, status, note, is_extra, skippable, actioned_at, vet_appointment_id, vet_task_kind, health_concern_id, " +
   "actioned_by:people!task_instance_actioned_by_fkey(first_name, surname), " +
   "claimed_by:people!task_instance_claimed_by_fkey(id, first_name, surname)";
 
@@ -432,6 +434,7 @@ function toRow(r: InstanceRow, carriedOver: boolean): ShiftTaskRow {
     actionedAt: r.actioned_at,
     carriedOver,
     isVet: r.vet_appointment_id !== null,
+    isHealth: r.health_concern_id !== null,
   };
 }
 
@@ -495,6 +498,42 @@ async function ensureVetTasks(date: string, today: InstanceRow[]): Promise<boole
         changed = true;
       }
     }
+  }
+  return changed;
+}
+
+/** A health concern makes one "Keep an eye on <dog>" task, at the top of the
+ *  NEXT shift's checklist ("Do this first!"), whether or not it has been
+ *  dealt with by then. Made on the day (and kept to one per concern) for
+ *  today's two shifts: the morning picks up yesterday afternoon's concerns,
+ *  the afternoon picks up this morning's. True if anything was made (so the
+ *  caller reads today's tasks again). */
+async function ensureHealthWatchTasks(date: string, today: InstanceRow[]): Promise<boolean> {
+  const supabase = await shiftDb();
+  const yesterday = shiftDay(date, -1);
+  const { data, error } = await supabase
+    .from("health_concern")
+    .select("id, dog_name, body, date, part")
+    .or(`and(date.eq.${yesterday},part.eq.afternoon),and(date.eq.${date},part.eq.morning)`);
+  if (error || !data || data.length === 0) return false;
+
+  const have = new Set(today.map((r) => r.health_concern_id).filter((id): id is string => id !== null));
+  let changed = false;
+  for (const c of data as Array<{ id: string; dog_name: string | null; body: string; date: string; part: Part }>) {
+    if (have.has(c.id)) continue;
+    const next = nextSession(c.date, c.part);
+    if (next.date !== date) continue;
+    const { error: insErr } = await supabase.from("task_instance").insert({
+      date,
+      part: next.part,
+      category: "do_first",
+      title: healthWatchTitle(c.dog_name, c.body),
+      sort_order: 0,
+      skippable: false,
+      health_concern_id: c.id,
+    });
+    if (insErr && insErr.code !== "23505") console.error("ensureHealthWatchTasks: insert failed", insErr);
+    changed = true;
   }
   return changed;
 }
@@ -616,6 +655,12 @@ export async function getShiftChecklist(part: Part): Promise<{
   // Zeke to the vet (8:00 admit)"). Created on the day, kept in step if the
   // appointment is edited, removed with it if it is deleted.
   if (await ensureVetTasks(date, (todayRows ?? []) as unknown as InstanceRow[])) {
+    const again = await readToday();
+    if (!again.error) todayRows = again.data;
+  }
+
+  // "Keep an eye on <dog>" tasks for the shift after a health concern.
+  if (await ensureHealthWatchTasks(date, (todayRows ?? []) as unknown as InstanceRow[])) {
     const again = await readToday();
     if (!again.error) todayRows = again.data;
   }
@@ -1145,6 +1190,76 @@ export async function getHealthConcerns(limit = 40): Promise<HealthConcernRow[]>
     resolvedNote: r.resolved_note,
   }));
   return [...rows.filter((r) => !r.resolvedAt), ...rows.filter((r) => r.resolvedAt)];
+}
+
+export type HealthWatchItem = {
+  id: string;
+  state: HealthWatchState;
+  dogName: string | null;
+  urgent: boolean;
+  body: string;
+  personName: string;
+  createdAt: string;
+  date: string;
+  part: Part;
+  resolvedAt: string | null;
+  resolvedByName: string | null;
+  resolvedNote: string | null;
+};
+
+/** The health concerns a shift's sidebar shows (see healthWatchState): its
+ *  own, the previous shift's (keep an eye on the dog, dealt with or not), and
+ *  any older one that has still not been dealt with. Open ones first. */
+export async function getHealthWatch(current: { date: string; part: Part }): Promise<HealthWatchItem[]> {
+  const supabase = await shiftDb();
+  const since = shiftDay(current.date, -2);
+  const { data, error } = await supabase
+    .from("health_concern")
+    .select(
+      "id, dog_name, urgent, body, date, part, created_at, resolved_at, resolved_by_name, resolved_note, " +
+        "person:people!health_concern_person_id_fkey(first_name, surname), shift:shift_log!health_concern_shift_log_id_fkey(guest_name)",
+    )
+    .or(`resolved_at.is.null,date.gte.${since}`)
+    .order("created_at", { ascending: false })
+    .limit(30);
+  if (error) {
+    console.error("getHealthWatch failed", error);
+    return [];
+  }
+  const items: HealthWatchItem[] = [];
+  for (const r of (data ?? []) as unknown as Array<{
+    id: string;
+    dog_name: string | null;
+    urgent: boolean;
+    body: string;
+    date: string;
+    part: Part;
+    created_at: string;
+    resolved_at: string | null;
+    resolved_by_name: string | null;
+    resolved_note: string | null;
+    person: { first_name: string; surname: string } | null;
+    shift: { guest_name: string | null } | null;
+  }>) {
+    const state = healthWatchState({ date: r.date, part: r.part, resolved: r.resolved_at !== null }, current);
+    if (!state) continue;
+    items.push({
+      id: r.id,
+      state,
+      dogName: r.dog_name,
+      urgent: r.urgent,
+      body: r.body,
+      personName: withGuestName(r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown", r.shift?.guest_name),
+      createdAt: r.created_at,
+      date: r.date,
+      part: r.part,
+      resolvedAt: r.resolved_at,
+      resolvedByName: r.resolved_by_name,
+      resolvedNote: r.resolved_note,
+    });
+  }
+  const rank = (i: HealthWatchItem) => (i.resolvedAt ? 1 : 0);
+  return items.sort((a, b) => rank(a) - rank(b));
 }
 
 /** Dog names typed in the staff app before (health concerns, last year),

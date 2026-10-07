@@ -117,6 +117,7 @@ function TaskRow({
           {task.title}
           {task.isExtra && <span className={`${TAG} bg-brand-tint text-brand-ink`}>EXTRA</span>}
           {task.isVet && <span className={`${TAG} bg-[#FBE9F1] text-[#7E1F4A]`}>VET</span>}
+          {task.isHealth && <span className={`${TAG} bg-[#FDEBDD] text-[#8A3A0A]`}>HEALTH</span>}
           {task.skippable && !task.isExtra && <span className={`${TAG} bg-gray-tint text-ink-muted`}>OPTIONAL</span>}
           {task.claimedByName && open && (
             <span className={`${TAG} bg-sun-tint text-[#8a6a12]`}>{firstName(task.claimedByName)}&rsquo;s</span>

@@ -1,31 +1,24 @@
 // Client-safe types + helpers for the Logs screen (docs/ui-flows.md §10).
 
-export type LogTab =
-  | "activity"
-  | "walks"
-  | "jail_break"
-  | "foster"
-  | "homecare"
-  | "yard"
-  | "bed_rest"
-  | "medical"
-  | "site"
-  | "dogs"
-  | "people";
+export type LogTab = "activity" | "medical" | "site" | "dogs" | "people";
 
 export const LOG_TABS: { key: LogTab; label: string }[] = [
   { key: "activity", label: "All activity" },
-  { key: "walks", label: "Walks" },
-  { key: "jail_break", label: "Jail Break" },
-  { key: "foster", label: "Foster" },
-  { key: "homecare", label: "Jail Break + Foster" },
-  { key: "yard", label: "Yard" },
-  { key: "bed_rest", label: "Bed Rest" },
   { key: "medical", label: "Medical" },
   { key: "site", label: "Visitors" },
   { key: "dogs", label: "Dogs" },
   { key: "people", label: "People" },
 ];
+
+/** Old per-type tab addresses (bookmarks, links) now open All activity with the matching type chips on. */
+export const LEGACY_TAB_TYPES: Record<string, string[]> = {
+  walks: ["walk"],
+  jail_break: ["jail_break"],
+  foster: ["foster"],
+  homecare: ["jail_break", "foster"],
+  yard: ["yard"],
+  bed_rest: ["bed_rest"],
+};
 
 /** The activity types, for the type chips on the All activity tab. */
 export const ACTIVITY_TYPES: { key: string; label: string }[] = [
@@ -37,7 +30,7 @@ export const ACTIVITY_TYPES: { key: string; label: string }[] = [
 ];
 
 /** Tabs backed by the dog_activity table (they share the richer filters). */
-export const ACTIVITY_TABS: LogTab[] = ["activity", "walks", "jail_break", "foster", "homecare", "yard", "bed_rest"];
+export const ACTIVITY_TABS: LogTab[] = ["activity"];
 
 /** Tabs that are registers, not activity — only the date range applies. */
 export const REGISTER_TABS: LogTab[] = ["dogs", "people"];

@@ -253,13 +253,13 @@ export const HELP_ARTICLES: HelpArticle[] = [
   },
   {
     id: "qr-codes",
-    title: "Print the QR codes for the forms",
+    title: "Print the QR code for the form",
     topic: "Records & reports",
     audience: "staff",
     keywords: "poster sign scan volunteer foster form print",
     steps: [
-      "On the Site Visitors tab tap Printable QR codes for the forms.",
-      "Tap Print. Put the volunteer code and the foster / jail break code up around the site.",
+      "On the Site Visitors tab tap Printable QR code for the form.",
+      "Tap Print. The one code covers volunteering, foster, jail break and adoption — put it up around the site.",
     ],
   },
   // ---------------- Modes & access
