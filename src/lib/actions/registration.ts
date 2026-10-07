@@ -31,6 +31,14 @@ function normPhone(s: string): string {
   return s.replace(/\D/g, "").replace(/^(?:0|61)/, "");
 }
 
+// "consult@example.org" -> "c•••••@example.org": enough to jog someone's memory,
+// not enough to reveal the address to a stranger.
+function maskEmail(e: string) {
+  const [user, domain] = e.split("@");
+  if (!user || !domain) return null;
+  return `${user[0]}${"•".repeat(Math.min(5, Math.max(user.length - 1, 1)))}@${domain}`;
+}
+
 export async function registerVolunteer(input: {
   firstName: string;
   surname: string;
@@ -112,7 +120,7 @@ export async function registerVolunteer(input: {
       return {
         error: "Because you're under 18, please give a parent or guardian's name and phone number.",
       };
-    if (!clean(input.parentEmail) || !/^[^@s]+@[^@s]+.[^@s]+$/.test(clean(input.parentEmail)))
+    if (!clean(input.parentEmail) || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(clean(input.parentEmail)))
       return { error: "Please give the parent or guardian's email address — we send them a copy of their consent." };
     if (!clean(input.parentSignature))
       return { error: "The parent or guardian needs to type their full name to give consent." };
@@ -128,7 +136,7 @@ export async function registerVolunteer(input: {
   // already knows. Match on email, normalised phone, or exact name.
   const { data: existing } = await supabase.from("people").select("email, phone, first_name, surname");
   const nPhone = normPhone(phone);
-  const duplicate = (existing ?? []).some(
+  const duplicate = (existing ?? []).find(
     (p) =>
       (p.email && p.email.toLowerCase() === email) ||
       (nPhone.length >= 6 && p.phone && normPhone(p.phone) === nPhone) ||
@@ -136,9 +144,11 @@ export async function registerVolunteer(input: {
         p.surname?.toLowerCase() === surname.toLowerCase()),
   );
   if (duplicate) {
+    const hint = duplicate.email ? maskEmail(duplicate.email) : null;
     return {
-      error:
-        "It looks like you're already registered with CAPS. Please contact the shelter if you need to update your details.",
+      error: hint
+        ? `You're already registered with CAPS under ${hint}. Go back and use that email, or contact the shelter if you no longer have access to it.`
+        : "It looks like you're already registered with CAPS. Please contact the shelter if you need to update your details.",
     };
   }
 

@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { VolunteerForm } from "@/components/apply/volunteer-form";
+import { ApplyShell } from "@/components/apply/apply-shell";
 
 // The ONE public form (docs/ui-flows.md §7, Paul 2026-10-05): volunteering at
 // the shelter, fostering, jail break, or any mix. /volunteer and /homecare
@@ -21,20 +21,16 @@ export default async function ApplyVolunteerPage({
           <h1 className="text-2xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
             {homecareFirst ? "Foster or Jail Break with CAPS" : "Work with us"}
           </h1>
-          <p className="text-sm text-ink max-w-sm">
-            {homecareFirst
+        </div>
+
+        <ApplyShell
+          homecareFirst={homecareFirst}
+          intro={
+            homecareFirst
               ? "Give a dog a break from the shelter — for a day, a weekend, or longer. Applications are reviewed by CAPS before you can take a dog out."
-              : "There are many ways you can work with CAPS and support the animals in our care. Select your interests below. It's easy to change your mind and add more later."}
-          </p>
-        </div>
-
-        <div className="bg-card border border-line rounded-[var(--radius)] p-5">
-          <VolunteerForm homecareFirst={homecareFirst} />
-        </div>
-
-        <p className="text-xs text-ink text-center">
-          Already registered? You&apos;re good to go — check in with a caretaker when you&apos;re at the shelter.
-        </p>
+              : "There are many ways you can work with CAPS and support the animals in our care. Select your interests below. It's easy to change your mind and add more later."
+          }
+        />
       </div>
     </main>
   );

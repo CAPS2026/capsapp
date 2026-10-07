@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { Children, isValidElement, useEffect, useRef, useState, useTransition } from "react";
 import { registerVolunteer } from "@/lib/actions/registration";
 import { applyForAdoptionPublic, applyForHomecarePublic, checkHomecareApplicant } from "@/lib/actions/homecare-public";
 import {
@@ -11,7 +11,7 @@ import {
   type RegisterResult,
 } from "@/lib/registration";
 import { VOLUNTEER_TERMS } from "@/lib/terms";
-import { EMPTY_HOME, homePayload, type HomeDetails } from "@/lib/homecare-form";
+import { EMPTY_HOME, homeDetailsError, homePayload, type HomeDetails } from "@/lib/homecare-form";
 import { HomeDetailsFields } from "@/components/apply/home-details-fields";
 import { PhotoPicker } from "@/components/apply/photo-picker";
 
@@ -19,47 +19,27 @@ const inputClass =
   "h-11 px-3 rounded-[var(--radius)] border border-line-cool bg-white text-base w-full";
 const areaClass = "px-3 py-2 rounded-[var(--radius)] border border-line-cool bg-white text-base w-full";
 
-function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
+// A red * after the label when the input inside is `required`.
+function Star() {
   return (
-    <label className="flex flex-col gap-1 text-sm">
-      <span className="font-semibold">{label}</span>
-      {children}
-      {hint && <span className="text-xs text-ink">{hint}</span>}
-    </label>
+    <span className="text-danger" aria-hidden="true">
+      {" "}
+      *
+    </span>
   );
 }
 
-// A stacked radio group rendered as tappable rows.
-function RadioRows({
-  legend,
-  options,
-  value,
-  onChange,
-  name,
-}: {
-  legend: string;
-  options: { code: string; label: string }[];
-  value: string;
-  onChange: (code: string) => void;
-  name: string;
-}) {
+function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
+  const required = Children.toArray(children).some((c) => isValidElement(c) && (c.props as { required?: boolean }).required);
   return (
-    <fieldset className="flex flex-col gap-2">
-      <legend className="text-sm font-bold">{legend}</legend>
-      <div className="flex flex-col gap-1.5">
-        {options.map((o) => (
-          <label
-            key={o.code}
-            className={`flex items-start gap-2 text-sm px-3 py-2 rounded-[var(--radius)] border cursor-pointer ${
-              value === o.code ? "border-brand bg-brand-tint" : "border-line-cool"
-            }`}
-          >
-            <input type="radio" name={name} className="mt-0.5" checked={value === o.code} onChange={() => onChange(o.code)} />
-            {o.label}
-          </label>
-        ))}
-      </div>
-    </fieldset>
+    <label className="flex flex-col gap-1 text-sm">
+      <span className="font-semibold">
+        {label}
+        {required && <Star />}
+      </span>
+      {children}
+      {hint && <span className="text-xs text-ink">{hint}</span>}
+    </label>
   );
 }
 
@@ -78,7 +58,10 @@ function YesNo({
 }) {
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="text-sm font-bold">{legend}</legend>
+      <legend className="text-sm font-bold">
+        {legend}
+        <Star />
+      </legend>
       <div className="flex gap-2">
         {(
           [
@@ -101,6 +84,16 @@ function YesNo({
   );
 }
 
+// Same rule the server applies: 8–15 digits once spaces, dashes and + are ignored.
+function phoneOk(p: string) {
+  const n = p.replace(/\D/g, "").length;
+  return n >= 8 && n <= 15;
+}
+
+function emailOk(e: string) {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e.trim());
+}
+
 type Step = "start" | "about" | "contact" | "dogs" | "homecare" | "finish";
 
 const STEP_TITLE: Record<Step, string> = {
@@ -117,7 +110,7 @@ const STEP_TITLE: Record<Step, string> = {
 // surname given on the first page already belong to someone registered, the
 // personal pages are skipped — they only give the home details for
 // fostering / jail break, and sign.
-export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boolean }) {
+export function VolunteerForm({ homecareFirst = false, onDone }: { homecareFirst?: boolean; onDone?: () => void }) {
   const [form, setForm] = useState({
     firstName: "",
     surname: "",
@@ -127,6 +120,7 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
     dateOfBirth: "",
     address: "",
     ecName: "",
+    ecSurname: "",
     ecPhone: "",
     ecRelationship: "",
     ecEmail: "",
@@ -165,6 +159,9 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
   };
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<"active" | "pending" | "applied" | null>(null);
+  useEffect(() => {
+    if (done) onDone?.();
+  }, [done, onDone]);
   const [isPending, startTransition] = useTransition();
 
   const wantsHomecare = fosterInterest || jailBreakInterest;
@@ -257,8 +254,15 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
 
     if (step === "start") {
       if (!wantsAnything) return setError("Please tick at least one thing you're interested in.");
+      if (!emailOk(form.email)) return setError("Your email address doesn't look right — please check it.");
       startTransition(async () => {
-        const r = await checkHomecareApplicant({ email: form.email, surname: form.surname, website: form.website });
+        const r = await checkHomecareApplicant({
+          email: form.email,
+          surname: form.surname,
+          firstName: form.firstName,
+          dateOfBirth: form.dateOfBirth,
+          website: form.website,
+        });
         if (r.registered) {
           if (!wantsHomecare && !adoptionInterest) {
             setError("You're already registered — you're good to go. Check in with a caretaker when you're at the shelter.");
@@ -273,7 +277,22 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
       });
       return;
     }
-    if (step === "about" && !over18) return setError("Please tell us whether you're 18 or over.");
+    if (step === "about") {
+      if (!phoneOk(form.phone)) return setError("Your phone number doesn't look right — please check it (include the area or mobile code).");
+      if (!over18) return setError("Please tell us whether you're 18 or over.");
+      if (isMinor && !phoneOk(form.parentPhone))
+        return setError("The parent / guardian's phone number doesn't look right — please check it.");
+      if (isMinor && !emailOk(form.parentEmail))
+        return setError("The parent / guardian's email address doesn't look right — please check it.");
+    }
+    if (step === "contact" && !phoneOk(form.ecPhone))
+      return setError("The emergency contact's phone number doesn't look right — please check it.");
+    if (step === "contact" && form.ecEmail.trim() && !emailOk(form.ecEmail))
+      return setError("The emergency contact's email address doesn't look right — please check it.");
+    if (step === "homecare") {
+      const homeErr = homeDetailsError(home);
+      if (homeErr) return setError(homeErr);
+    }
     if (step === "dogs") {
       if (!form.experienceLevel) return setError("Please pick the option that best describes your experience.");
       if (onSite && interests.length === 0) return setError("Pick at least one thing you'd like to help with.");
@@ -293,6 +312,8 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
           const r = await applyForHomecarePublic({
             email: form.email,
             surname: form.surname,
+            firstName: form.firstName,
+            dateOfBirth: form.dateOfBirth,
             website: form.website,
             application: {
               jailBreak: jailBreakInterest,
@@ -309,6 +330,8 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
           const r = await applyForAdoptionPublic({
             email: form.email,
             surname: form.surname,
+            firstName: form.firstName,
+            dateOfBirth: form.dateOfBirth,
             website: form.website,
             photoData: photo || undefined,
           });
@@ -319,6 +342,7 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
       }
       const result: RegisterResult = await registerVolunteer({
         ...form,
+        ecName: `${form.ecName.trim()} ${form.ecSurname.trim()}`.trim(),
         over18: over18 === "yes",
         interests: onSite ? interests : [],
         fosterInterest,
@@ -377,7 +401,16 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
           <p>You said you&apos;re interested in adoption — someone from CAPS will be in touch to chat about the next steps.</p>
         )}
 
-        <p className="text-ink">You can close this page now.</p>
+        <p className="text-ink">
+          Want to change your interests, or foster or adopt later? Just fill in this form again and update your
+          interests.
+        </p>
+        <a
+          href="https://capeanimalprotectionshelter.org.au"
+          className="h-11 flex items-center justify-center rounded-[var(--radius)] bg-brand text-white font-bold"
+        >
+          Go to the CAPS website
+        </a>
       </div>
     );
   }
@@ -388,8 +421,11 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
         <span>
           Step {idx + 1} of {steps.length}
         </span>
-        <span className="font-bold">{STEP_TITLE[step]}</span>
+        <span className="text-2xl font-extrabold text-ink" style={{ fontFamily: "var(--font-display)" }}>{STEP_TITLE[step]}</span>
       </div>
+      <p className="text-xs text-ink -mt-3">
+        <span className="text-danger">*</span> means the question must be answered.
+      </p>
       <div className="h-1.5 rounded-full bg-gray-tint overflow-hidden" aria-hidden="true">
         <div className="h-full bg-brand" style={{ width: `${((idx + 1) / steps.length) * 100}%` }} />
       </div>
@@ -398,7 +434,10 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
       {step === "start" && (
         <>
           <fieldset className="flex flex-col gap-2">
-            <legend className="text-sm font-bold">Select your interests below.</legend>
+            <legend className="text-sm font-bold">
+              Select your interests below.
+              <Star />
+            </legend>
             {(
               [
                 [onSite, setOnSite, "Volunteer at the shelter", "includes becoming a member of our committee. Complete the form and start right away."],
@@ -422,7 +461,27 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
           </fieldset>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Your email">
+            <Field label="First name">
+              <input
+                className={inputClass}
+                required
+                autoComplete="given-name"
+                value={form.firstName}
+                onChange={(e) => set("firstName", e.target.value)}
+              />
+            </Field>
+            <Field label="Surname">
+              <input
+                className={inputClass}
+                required
+                autoComplete="family-name"
+                value={form.surname}
+                onChange={(e) => set("surname", e.target.value)}
+              />
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Email">
               <input
                 type="email"
                 inputMode="email"
@@ -433,18 +492,19 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
                 onChange={(e) => set("email", e.target.value)}
               />
             </Field>
-            <Field label="Your surname">
+            <Field label="Date of birth">
               <input
+                type="date"
+                autoComplete="bday"
                 className={inputClass}
                 required
-                autoComplete="family-name"
-                value={form.surname}
-                onChange={(e) => set("surname", e.target.value)}
+                value={form.dateOfBirth}
+                onChange={(e) => set("dateOfBirth", e.target.value)}
               />
             </Field>
           </div>
           <p className="text-base text-ink">
-            If you&apos;re already registered with CAPS we&apos;ll recognise you and only ask what&apos;s new.
+            If you&apos;re already registered with CAPS we&apos;ll recognise you (by email, or by name and date of birth) and only ask what&apos;s new.
           </p>
         </>
       )}
@@ -453,28 +513,17 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
       {step === "about" && (
         <>
           <p className="text-sm text-ink bg-gray-tint rounded-[var(--radius)] p-3">
-            We couldn&apos;t find a registration for that email and surname. If you&apos;ve registered before, tap{" "}
-            <strong>Back</strong> and try the email you used then. Otherwise, carry on and we&apos;ll set you up as new.
+            We couldn&apos;t find a registration for those details. If you&apos;ve registered before, tap{" "}
+            <strong>Back</strong> and check your name, date of birth and the email you used then. Otherwise, carry on and we&apos;ll set you up as new.
           </p>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="First name">
-              <input
-                className={inputClass}
-                required
-                autoComplete="given-name"
-                value={form.firstName}
-                onChange={(e) => set("firstName", e.target.value)}
-              />
-            </Field>
-            <Field label="Nickname" hint="Optional.">
-              <input
-                className={inputClass}
-                autoComplete="nickname"
-                value={form.nickname}
-                onChange={(e) => set("nickname", e.target.value)}
-              />
-            </Field>
-          </div>
+          <Field label="What should we call you (nickname)?" hint="Optional.">
+            <input
+              className={inputClass}
+              autoComplete="nickname"
+              value={form.nickname}
+              onChange={(e) => set("nickname", e.target.value)}
+            />
+          </Field>
 
           <Field label="Phone" hint="e.g. 0400 123 456">
             <input
@@ -489,16 +538,6 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Date of birth">
-              <input
-                type="date"
-                autoComplete="bday"
-                className={inputClass}
-                required
-                value={form.dateOfBirth}
-                onChange={(e) => set("dateOfBirth", e.target.value)}
-              />
-            </Field>
             <Field label="Address" hint="Optional.">
               <input
                 className={inputClass}
@@ -565,10 +604,35 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
       {step === "contact" && (
         <fieldset className="flex flex-col gap-3">
           <p className="text-sm text-ink">Someone we can call if there&apos;s a problem while you&apos;re out with a dog.</p>
+          {isMinor && form.parentName.trim() && (
+            <button
+              type="button"
+              className="self-start text-sm font-bold px-3 py-2 rounded-[var(--radius)] border border-line-cool bg-white"
+              onClick={() => {
+                const parts = form.parentName.trim().split(/\s+/);
+                const last = parts.length > 1 ? parts.pop()! : "";
+                setForm((f) => ({
+                  ...f,
+                  ecName: parts.join(" "),
+                  ecSurname: last,
+                  ecPhone: f.parentPhone,
+                  ecEmail: f.parentEmail,
+                  ecRelationship: "Parent / guardian",
+                }));
+              }}
+            >
+              Same as my parent / guardian
+            </button>
+          )}
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Name">
+            <Field label="First name">
               <input className={inputClass} required value={form.ecName} onChange={(e) => set("ecName", e.target.value)} />
             </Field>
+            <Field label="Surname">
+              <input className={inputClass} required value={form.ecSurname} onChange={(e) => set("ecSurname", e.target.value)} />
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <Field label="Phone">
               <input
                 type="tel"
@@ -579,28 +643,34 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
                 onChange={(e) => set("ecPhone", e.target.value)}
               />
             </Field>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
             <Field label="Relationship" hint="e.g. partner, parent, friend.">
               <input className={inputClass} value={form.ecRelationship} onChange={(e) => set("ecRelationship", e.target.value)} />
             </Field>
-            <Field label="Email" hint="Optional.">
-              <input type="email" inputMode="email" className={inputClass} value={form.ecEmail} onChange={(e) => set("ecEmail", e.target.value)} />
-            </Field>
           </div>
+          <Field label="Email" hint="Optional.">
+            <input type="email" inputMode="email" className={inputClass} value={form.ecEmail} onChange={(e) => set("ecEmail", e.target.value)} />
+          </Field>
         </fieldset>
       )}
 
       {/* ---------------- 4. you and dogs */}
       {step === "dogs" && (
         <>
-          <RadioRows
-            legend="Briefly describe your experience and confidence in handling dogs"
-            name="experience"
-            options={EXPERIENCE_OPTIONS}
-            value={form.experienceLevel}
-            onChange={(code) => set("experienceLevel", code)}
-          />
+          <Field label="Briefly describe your experience and confidence in handling dogs">
+            <select
+              className={inputClass}
+              required
+              value={form.experienceLevel}
+              onChange={(e) => set("experienceLevel", e.target.value)}
+            >
+              <option value="">Choose one…</option>
+              {EXPERIENCE_OPTIONS.map((o) => (
+                <option key={o.code} value={o.code}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </Field>
           {form.experienceLevel === "other" && (
             <Field label="Tell us more">
               <input className={inputClass} value={form.experienceOther} onChange={(e) => set("experienceOther", e.target.value)} />
@@ -609,7 +679,10 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
 
           {onSite && (
             <fieldset className="flex flex-col gap-2">
-              <legend className="text-sm font-bold">Which activities at the shelter are you interested in? Tick all that apply.</legend>
+              <legend className="text-sm font-bold">
+                Which activities at the shelter are you interested in? Tick all that apply.
+                <Star />
+              </legend>
               <div className="grid grid-cols-2 gap-2">
                 {VOLUNTEER_INTERESTS.map((i) => (
                   <label
@@ -689,7 +762,10 @@ export function VolunteerForm({ homecareFirst = false }: { homecareFirst?: boole
             </div>
             <label className="flex items-start gap-2 text-sm">
               <input type="checkbox" className="mt-1" checked={agreeTerms} onChange={(e) => setAgreeTerms(e.target.checked)} />
-              <span>I have read and agree to the above terms.</span>
+              <span>
+                I have read and agree to the above terms.
+                <Star />
+              </span>
             </label>
           </fieldset>
 
