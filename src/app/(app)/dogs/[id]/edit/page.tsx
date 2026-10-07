@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentPerson } from "@/lib/auth";
 import { getDogForEdit } from "@/lib/dog-edit";
 import { IntakeForm } from "@/components/intake/intake-form";
+import { PhotoManager } from "@/components/dogs/photo-manager";
 import { formatDate } from "@/lib/format";
 
 // Edit a dog's details at any time. Staff can change the SavourLife profile; the
@@ -33,6 +34,7 @@ export default async function EditDogPage({ params }: { params: Promise<{ id: st
             : "This dog was added before the intake screen existed, so there is no intake record — you can edit the SavourLife profile."}
         </p>
       )}
+      <PhotoManager dogId={id} dogName={data.initial.name} photos={data.photos} />
       <IntakeForm
         officerName={`${me.firstName} ${me.surname}`.trim()}
         today=""

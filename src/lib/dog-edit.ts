@@ -7,6 +7,7 @@ export type DogEditData = {
   /** The dog has a paper intake record (dogs added before intake existed don't). */
   hasIntake: boolean;
   updatedAt: string | null;
+  photos: { path: string; url: string }[];
   initial: IntakeInput;
 };
 
@@ -19,9 +20,10 @@ export async function getDogForEdit(dogId: string): Promise<DogEditData | null> 
   const { data: dog } = await supabase.from("dogs").select("*").eq("id", dogId).maybeSingle();
   if (!dog) return null;
   // Read tolerantly: dogs added before intake existed have no intake row.
-  const [{ data: intake }, { data: conf }] = await Promise.all([
+  const [{ data: intake }, { data: conf }, { data: media }] = await Promise.all([
     supabase.from("dog_intake").select("*").eq("dog_id", dogId).maybeSingle(),
     supabase.from("dog_confidential").select("sl_contact_email").eq("dog_id", dogId).maybeSingle(),
+    supabase.from("dog_media").select("path").eq("dog_id", dogId).order("sort_order"),
   ]);
 
   // The reason is stored as "Chosen reason — more detail": split it back into the dropdown and the note.
@@ -88,6 +90,10 @@ export async function getDogForEdit(dogId: string): Promise<DogEditData | null> 
     ref: str(dog.ref),
     hasIntake: !!intake,
     updatedAt: (dog.updated_at as string | null) ?? null,
+    photos: (media ?? []).map((m) => ({
+      path: m.path as string,
+      url: supabase.storage.from("dog-photos").getPublicUrl(m.path as string).data.publicUrl,
+    })),
     initial,
   };
 }

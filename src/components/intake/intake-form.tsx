@@ -154,7 +154,7 @@ export function IntakeForm({
           {saved.name} is in ({saved.ref})
         </h2>
         <p className="text-sm text-ink">
-          The intake record is saved and signed. Photos and the SavourLife listing come next. Staff and admin can see
+          The intake record is saved and signed. Add photos next — SavourLife needs at least one, and the first is the featured image. Staff and admin can see
           every detail on the dog&apos;s page; volunteers see only the essentials.
         </p>
         <div className="flex gap-2 flex-wrap">
@@ -164,6 +164,13 @@ export function IntakeForm({
             className="h-12 px-5 rounded-[var(--radius)] bg-brand text-white font-bold"
           >
             Open {saved.name}
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push(`/dogs/${saved.dogId}/edit`)}
+            className="h-12 px-5 rounded-[var(--radius)] border border-brand text-brand-ink font-bold"
+          >
+            Add photos
           </button>
           <button
             type="button"
