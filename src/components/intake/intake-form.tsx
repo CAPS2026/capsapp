@@ -74,7 +74,7 @@ function Field({
 }) {
   return (
     <label className="flex flex-col gap-1 text-sm">
-      <span className="font-semibold">
+      <span className="font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
         {label}
         {required && <Star />}
         {sl && <SL />}
@@ -193,6 +193,9 @@ export function IntakeForm({
     );
   }
 
+  // The intake date is part of the signed record, so only someone who can change that record sees it when editing.
+  const showDate = !edit || edit.showRecord;
+
   return (
     <form onSubmit={submit} className="flex flex-col gap-4">
       <p className="text-xs text-ink">
@@ -200,15 +203,22 @@ export function IntakeForm({
         asks for, in the order their form uses.
       </p>
 
-      <Section
-        title="SavourLife profile"
-        note="Everything in this box is captured for the SavourLife listing, in their order."
-      >
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <Field label="Name" required sl hint="Match the microchip. Use 'Unknown' plus the date if there isn't one.">
-            <input className={inputClass} value={f.name} onChange={(e) => set("name", e.target.value)} />
+      <Section title="The dog" note="Answers tagged SL go on the SavourLife listing.">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {showDate && (
+            <Field label="Date of intake" required>
+              <input type="date" className={inputClass} value={f.intakeDate} onChange={(e) => set("intakeDate", e.target.value)} />
+            </Field>
+          )}
+          <Field label="Name" required sl>
+            <input
+              className={inputClass}
+              placeholder="As on the microchip"
+              value={f.name}
+              onChange={(e) => set("name", e.target.value)}
+            />
           </Field>
-          <Field label="Breed" required sl hint="Pick a suggestion or type your own.">
+          <Field label="Breed" required sl>
             <input
               list="breed-suggestions"
               className={inputClass}
@@ -224,10 +234,7 @@ export function IntakeForm({
           <Field label="Sex" required sl>
             <P value={f.sex} onChange={(v) => set("sex", v)} options={SEX_OPTIONS} />
           </Field>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <Field label="Date of birth" required sl hint="Leave blank and pick an approximate age if unknown.">
+          <Field label="Date of birth" required sl>
             <input
               type="date"
               className={inputClass}
@@ -235,23 +242,42 @@ export function IntakeForm({
               onChange={(e) => set("dateOfBirth", e.target.value)}
             />
           </Field>
-          <Field label="Approximate age" sl>
-            <Pick
+          <Field label="Or approx. age" sl>
+            <P
               value={f.ageBand}
               onChange={(v) => set("ageBand", v)}
               options={AGE_BANDS.map(([k, label]): [string, string] => [k, label])}
             />
           </Field>
-          <Field label="Size when adult" sl>
+          <Field label="Adult size" sl>
             <P value={f.sizeWhenAdult} onChange={(v) => set("sizeWhenAdult", v)} options={SIZE_OPTIONS} />
           </Field>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <Field label="Coat length" sl>
             <P value={f.coatLength} onChange={(v) => set("coatLength", v)} options={COAT_LENGTHS} />
           </Field>
-          <Field label="Microchip number" sl>
+          <Field label="Colour">
+            <PO value={f.colour} onChange={(v) => set("colour", v)} options={COLOURS} />
+          </Field>
+          <Field label="Markings">
+            <input
+              className={inputClass}
+              placeholder="e.g. white chest"
+              value={f.markings}
+              onChange={(e) => set("markings", e.target.value)}
+            />
+          </Field>
+          <Field label="Weight (kg)">
+            <input
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="0.1"
+              className={inputClass}
+              value={f.weightKg}
+              onChange={(e) => set("weightKg", e.target.value)}
+            />
+          </Field>
+          <Field label="Microchip no." sl>
             <input
               inputMode="numeric"
               className={inputClass}
@@ -259,31 +285,40 @@ export function IntakeForm({
               onChange={(e) => set("microchip", e.target.value)}
             />
           </Field>
-          <Field label="Foster / case manager email" sl hint="Gets the enquiries. Never shown publicly.">
+        </div>
+        <p className="text-xs text-ink -mt-2">
+          Name: use &lsquo;Unknown&rsquo; plus the date if there is no microchip. No date of birth? Pick an approximate age.
+        </p>
+
+        <Field label="Profile — personality and best features" sl>
+          <textarea
+            rows={4}
+            className={areaClass}
+            placeholder="The more detail, the more enquiries. Add it later if you don't know the dog yet."
+            value={f.description}
+            onChange={(e) => set("description", e.target.value)}
+          />
+        </Field>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Field label="Case manager email" sl>
             <input
               type="email"
               inputMode="email"
               className={inputClass}
+              placeholder="Gets enquiries, never public"
               value={f.contactEmail}
               onChange={(e) => set("contactEmail", e.target.value)}
             />
           </Field>
         </div>
 
-        <Field
-          label="Profile — personality and best features"
-          sl
-          hint="The more detail, the more enquiries. Leave it for now and add it later if you don't know the dog yet."
-        >
-          <textarea rows={4} className={areaClass} value={f.description} onChange={(e) => set("description", e.target.value)} />
-        </Field>
-
         <fieldset className="flex flex-col gap-2">
           <legend className="text-sm font-semibold mb-1">
-            Can they be re-homed with…
+            Can be re-homed with…
             <SL />
           </legend>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <Field label="Kids under 5">
               <P value={f.goodWithKidsU5} onChange={(v) => set("goodWithKidsU5", v)} options={YES_NO_UNTESTED} />
             </Field>
@@ -304,7 +339,7 @@ export function IntakeForm({
 
         <fieldset className="flex flex-col gap-2">
           <legend className="text-sm font-semibold mb-1">
-            Medical — tick what will be true at the time of adoption
+            Medical — what will be true at adoption
             <SL />
           </legend>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -324,213 +359,194 @@ export function IntakeForm({
         </fieldset>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="Medical issues" sl hint="Anything an adopter should know. Leave blank if none.">
-            <input className={inputClass} value={f.medicalIssues} onChange={(e) => set("medicalIssues", e.target.value)} />
+          <Field label="Medical issues" sl>
+            <input
+              className={inputClass}
+              placeholder="Anything an adopter should know"
+              value={f.medicalIssues}
+              onChange={(e) => set("medicalIssues", e.target.value)}
+            />
           </Field>
-          <Field label="Special needs" sl hint="Diet, medication, equipment. Leave blank if none.">
-            <input className={inputClass} value={f.specialNeeds} onChange={(e) => set("specialNeeds", e.target.value)} />
+          <Field label="Special needs" sl>
+            <input
+              className={inputClass}
+              placeholder="Diet, medication, equipment"
+              value={f.specialNeeds}
+              onChange={(e) => set("specialNeeds", e.target.value)}
+            />
           </Field>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Field label="Indoor only?" sl>
             <P value={f.indoorOnly} onChange={(v) => set("indoorOnly", v as YN)} options={YES_NO} />
           </Field>
           <Field label="Bonded pair?" sl>
             <P value={f.bondedPair} onChange={(v) => set("bondedPair", v as YN)} options={YES_NO} />
           </Field>
-          {f.bondedPair === "yes" && (
+          <Field label="Foster carer required?" sl>
+            <P value={f.fosterRequired} onChange={(v) => set("fosterRequired", v as YN)} options={YES_NO} />
+          </Field>
+        </div>
+        {f.bondedPair === "yes" && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label="Bonded with" required sl>
               <input className={inputClass} value={f.bondedPairName} onChange={(e) => set("bondedPairName", e.target.value)} />
             </Field>
-          )}
-        </div>
-
-        <fieldset className="flex flex-col gap-2">
-          <legend className="text-sm font-semibold mb-1">
-            Location
-            <SL />
-          </legend>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Suburb">
-              <input className={inputClass} value={f.suburb} onChange={(e) => set("suburb", e.target.value)} />
-            </Field>
-            <Field label="State">
-              <P value={f.state} onChange={(v) => set("state", v)} options={AU_STATES} />
-            </Field>
-            <Field label="Postcode" required>
-              <input
-                inputMode="numeric"
-                className={inputClass}
-                value={f.postcode}
-                onChange={(e) => set("postcode", e.target.value)}
-              />
-            </Field>
-            <Field label="Distance restriction">
-              <P value={f.distance} onChange={(v) => set("distance", v)} options={DISTANCE_OPTIONS} />
-            </Field>
           </div>
-        </fieldset>
+        )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <Field label="Adoption fee ($)" required sl hint="SavourLife needs one — enter 0 if none.">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Field label="Suburb" sl>
+            <input className={inputClass} value={f.suburb} onChange={(e) => set("suburb", e.target.value)} />
+          </Field>
+          <Field label="State" sl>
+            <P value={f.state} onChange={(v) => set("state", v)} options={AU_STATES} />
+          </Field>
+          <Field label="Postcode" required sl>
+            <input
+              inputMode="numeric"
+              className={inputClass}
+              value={f.postcode}
+              onChange={(e) => set("postcode", e.target.value)}
+            />
+          </Field>
+          <Field label="Distance limit" sl>
+            <P value={f.distance} onChange={(v) => set("distance", v)} options={DISTANCE_OPTIONS} />
+          </Field>
+          <Field label="Interstate adoption?" sl>
+            <P value={f.interstate} onChange={(v) => set("interstate", v as YN)} options={YES_NO} />
+          </Field>
+          <Field label="Adoption fee ($)" required sl>
             <input
               type="number"
               inputMode="decimal"
               min={0}
               step="0.01"
               className={inputClass}
+              placeholder="0 if none"
               value={f.adoptionFee}
               onChange={(e) => set("adoptionFee", e.target.value)}
             />
-          </Field>
-          <Field label="Interstate adoption available?" sl>
-            <P value={f.interstate} onChange={(v) => set("interstate", v as YN)} options={YES_NO} />
-          </Field>
-          <Field label="Foster carer required?" sl>
-            <P value={f.fosterRequired} onChange={(v) => set("fosterRequired", v as YN)} options={YES_NO} />
           </Field>
         </div>
       </Section>
 
       {(!edit || edit.showRecord) && (
-      <Section title="CAPS intake record" note="From the paper Animal Intake Record. Only staff and admin see this.">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="Date of intake" required>
-            <input type="date" className={inputClass} value={f.intakeDate} onChange={(e) => set("intakeDate", e.target.value)} />
-          </Field>
-          <Field label="Colour">
-            <PO value={f.colour} onChange={(v) => set("colour", v)} options={COLOURS} />
-          </Field>
-          <Field label="Markings">
-            <input
-              className={inputClass}
-              placeholder="e.g. white chest, one blue eye"
-              value={f.markings}
-              onChange={(e) => set("markings", e.target.value)}
-            />
-          </Field>
-          <Field label="Weight (kg)">
-            <input
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step="0.1"
-              className={inputClass}
-              value={f.weightKg}
-              onChange={(e) => set("weightKg", e.target.value)}
-            />
-          </Field>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="Source of intake" required>
-            <P value={f.source} onChange={(v) => set("source", v)} options={INTAKE_SOURCES} />
-          </Field>
+        <Section title="CAPS intake record" note="From the paper Animal Intake Record. Only staff and admin see this.">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Field label="Source of intake" required>
+              <P value={f.source} onChange={(v) => set("source", v)} options={INTAKE_SOURCES} />
+            </Field>
+            <Field label="Reason for intake" required>
+              <P value={f.reason} onChange={(v) => set("reason", v)} options={INTAKE_REASONS} />
+            </Field>
+            <Field label="More about the reason">
+              <input className={inputClass} value={f.reasonNote} onChange={(e) => set("reasonNote", e.target.value)} />
+            </Field>
+          </div>
           {SOURCES_WITH_PERSON.includes(f.source) && (
-            <Field label="Surrendered by">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Field label="Surrendered by">
+                <input
+                  className={inputClass}
+                  placeholder="Name and phone"
+                  value={f.surrenderedBy}
+                  onChange={(e) => set("surrenderedBy", e.target.value)}
+                />
+              </Field>
+            </div>
+          )}
+
+          <h3 className="text-sm font-extrabold pt-1">Initial health check</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Field label="Condition" required>
+              <P value={f.condition} onChange={(v) => set("condition", v)} options={CONDITIONS} />
+            </Field>
+            <Field label="Parasites seen?" required>
+              <P value={f.parasites} onChange={(v) => set("parasites", v as YN)} options={YES_NO} />
+            </Field>
+            <Field label="Injuries / illness">
               <input
                 className={inputClass}
-                placeholder="Name and phone"
-                value={f.surrenderedBy}
-                onChange={(e) => set("surrenderedBy", e.target.value)}
+                placeholder="Blank if none"
+                value={f.visibleInjuries}
+                onChange={(e) => set("visibleInjuries", e.target.value)}
               />
             </Field>
-          )}
-          <Field label="Reason for intake" required>
-            <P value={f.reason} onChange={(v) => set("reason", v)} options={INTAKE_REASONS} />
-          </Field>
-          <Field label="More about the reason" hint="Optional.">
-            <input className={inputClass} value={f.reasonNote} onChange={(e) => set("reasonNote", e.target.value)} />
-          </Field>
-        </div>
-
-        <h3 className="text-sm font-extrabold pt-1">Initial health check</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <Field label="Condition" required>
-            <P value={f.condition} onChange={(v) => set("condition", v)} options={CONDITIONS} />
-          </Field>
-          <Field label="Parasites observed?" required>
-            <P value={f.parasites} onChange={(v) => set("parasites", v as YN)} options={YES_NO} />
-          </Field>
-          <Field label="Visible injuries or illness" hint="Leave blank if none.">
-            <input
-              className={inputClass}
-              value={f.visibleInjuries}
-              onChange={(e) => set("visibleInjuries", e.target.value)}
-            />
-          </Field>
-          <Field label="Vaccination given at intake?" required>
-            <P value={f.vaccinationGiven} onChange={(v) => set("vaccinationGiven", v as YN)} options={YES_NO} />
-          </Field>
-          {f.vaccinationGiven === "yes" && (
-            <Field label="Vaccination type" required>
-              <P value={f.vaccinationType} onChange={(v) => set("vaccinationType", v)} options={VACCINE_TYPES} />
+            <Field label="Vaccination given?" required>
+              <P value={f.vaccinationGiven} onChange={(v) => set("vaccinationGiven", v as YN)} options={YES_NO} />
             </Field>
+            <Field label="Flea / tick / worm given?" required>
+              <P value={f.fleaTickWormGiven} onChange={(v) => set("fleaTickWormGiven", v as YN)} options={YES_NO} />
+            </Field>
+            {f.vaccinationGiven === "yes" && (
+              <Field label="Vaccination type" required>
+                <P value={f.vaccinationType} onChange={(v) => set("vaccinationType", v)} options={VACCINE_TYPES} />
+              </Field>
+            )}
+          </div>
+
+          <h3 className="text-sm font-extrabold pt-1">Initial behaviour assessment</h3>
+          <fieldset className="flex flex-wrap gap-2">
+            <legend className="text-sm font-semibold mb-1">
+              Tick all that apply
+              <Star />
+            </legend>
+            {BEHAVIOUR_OPTIONS.map(([code, label]) => (
+              <label
+                key={code}
+                className={`flex items-center gap-2 text-sm px-4 h-10 rounded-[var(--radius)] border cursor-pointer ${
+                  f.behaviour.includes(code) ? "border-brand bg-brand-tint font-semibold" : "border-line-cool"
+                }`}
+              >
+                <input type="checkbox" checked={f.behaviour.includes(code)} onChange={() => toggleBehaviour(code)} />
+                {label}
+              </label>
+            ))}
+          </fieldset>
+          {f.behaviour.includes("other") && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Field label="What other behaviour?" required>
+                <input className={inputClass} value={f.behaviourOther} onChange={(e) => set("behaviourOther", e.target.value)} />
+              </Field>
+            </div>
           )}
-          <Field label="Flea / tick / worm treatment given?" required>
-            <P value={f.fleaTickWormGiven} onChange={(v) => set("fleaTickWormGiven", v as YN)} options={YES_NO} />
-          </Field>
-        </div>
-
-        <h3 className="text-sm font-extrabold pt-1">Initial behaviour assessment</h3>
-        <fieldset className="flex flex-wrap gap-2">
-          <legend className="text-sm font-semibold mb-1">
-            Tick all that apply
-            <Star />
-          </legend>
-          {BEHAVIOUR_OPTIONS.map(([code, label]) => (
-            <label
-              key={code}
-              className={`flex items-center gap-2 text-sm px-4 h-11 rounded-[var(--radius)] border cursor-pointer ${
-                f.behaviour.includes(code) ? "border-brand bg-brand-tint font-semibold" : "border-line-cool"
-              }`}
-            >
-              <input type="checkbox" checked={f.behaviour.includes(code)} onChange={() => toggleBehaviour(code)} />
-              {label}
-            </label>
-          ))}
-        </fieldset>
-        {f.behaviour.includes("other") && (
-          <Field label="What other behaviour?" required>
-            <input className={inputClass} value={f.behaviourOther} onChange={(e) => set("behaviourOther", e.target.value)} />
-          </Field>
-        )}
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={f.experiencedOnly}
-            onChange={(e) => set("experiencedOnly", e.target.checked)}
-          />
-          Experienced handlers only (volunteers will see this on the dog)
-        </label>
-        {!edit && (
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={f.startOnBedRest} onChange={(e) => set("startOnBedRest", e.target.checked)} />
-            Start on bed rest (not ready for walks yet)
+            <input
+              type="checkbox"
+              checked={f.experiencedOnly}
+              onChange={(e) => set("experiencedOnly", e.target.checked)}
+            />
+            Experienced handlers only (volunteers will see this on the dog)
           </label>
-        )}
+          {!edit && (
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={f.startOnBedRest} onChange={(e) => set("startOnBedRest", e.target.checked)} />
+              Start on bed rest (not ready for walks yet)
+            </label>
+          )}
 
-        <Field label="Notes">
-          <textarea rows={3} className={areaClass} value={f.notes} onChange={(e) => set("notes", e.target.value)} />
-        </Field>
-      </Section>
+          <Field label="Notes">
+            <textarea rows={3} className={areaClass} value={f.notes} onChange={(e) => set("notes", e.target.value)} />
+          </Field>
+        </Section>
       )}
 
       {!edit && (
-      <Section
-        title="Sign-off"
-        note="Completed by an admin. Filled in from your sign-in; change it only if someone else did the intake."
-      >
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="Intake officer">
-            <input className={inputClass} value={f.officerName} onChange={(e) => set("officerName", e.target.value)} />
-          </Field>
-          <Field label="Signed (typed name)" required>
-            <input className={inputClass} value={f.signedName} onChange={(e) => set("signedName", e.target.value)} />
-          </Field>
-        </div>
-      </Section>
+        <Section
+          title="Sign-off"
+          note="Completed by an admin. Filled in from your sign-in; change it only if someone else did the intake."
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Field label="Intake officer">
+              <input className={inputClass} value={f.officerName} onChange={(e) => set("officerName", e.target.value)} />
+            </Field>
+            <Field label="Signed (typed name)" required>
+              <input className={inputClass} value={f.signedName} onChange={(e) => set("signedName", e.target.value)} />
+            </Field>
+          </div>
+        </Section>
       )}
 
       {error && <p className="text-sm text-danger">{error}</p>}
