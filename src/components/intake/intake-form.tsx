@@ -59,7 +59,7 @@ function SL() {
   return (
     <span
       title="This is captured for SavourLife"
-      className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-warm text-ink align-middle"
+      className="mr-1.5 px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-warm text-ink align-middle"
     >
       SL
     </span>
@@ -82,9 +82,9 @@ function Field({
   return (
     <label className="flex flex-col gap-1 text-sm">
       <span className="font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
+        {sl && <SL />}
         {label}
         {required && <Star />}
-        {sl && <SL />}
       </span>
       {children}
       {hint && <span className="text-xs text-ink">{hint}</span>}
@@ -420,8 +420,8 @@ export function IntakeForm({
 
         <fieldset className="flex flex-col gap-2">
           <legend className="text-sm font-semibold mb-1">
-            Can be re-homed with…
             <SL />
+            Can be re-homed with…
           </legend>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <Field label="Kids under 5">
@@ -444,8 +444,8 @@ export function IntakeForm({
 
         <fieldset className="flex flex-col gap-2">
           <legend className="text-sm font-semibold mb-1">
-            Medical — what will be true at adoption
             <SL />
+            Medical — what will be true at adoption
           </legend>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Field label="Desexed" required>

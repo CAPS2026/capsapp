@@ -7,7 +7,7 @@ export type DogEditData = {
   /** The dog has a paper intake record (dogs added before intake existed don't). */
   hasIntake: boolean;
   updatedAt: string | null;
-  photos: { path: string; url: string }[];
+  photos: { path: string; url: string; slInclude: boolean }[];
   initial: IntakeInput;
 };
 
@@ -20,11 +20,17 @@ export async function getDogForEdit(dogId: string): Promise<DogEditData | null> 
   const { data: dog } = await supabase.from("dogs").select("*").eq("id", dogId).maybeSingle();
   if (!dog) return null;
   // Read tolerantly: dogs added before intake existed have no intake row.
-  const [{ data: intake }, { data: conf }, { data: media }] = await Promise.all([
+  const [{ data: intake }, { data: conf }, mediaRes] = await Promise.all([
     supabase.from("dog_intake").select("*").eq("dog_id", dogId).maybeSingle(),
     supabase.from("dog_confidential").select("sl_contact_email").eq("dog_id", dogId).maybeSingle(),
-    supabase.from("dog_media").select("path").eq("dog_id", dogId).order("sort_order"),
+    supabase.from("dog_media").select("path, sl_include").eq("dog_id", dogId).order("sort_order"),
   ]);
+  // Until migration 46 is applied the SavourLife tick doesn't exist; fall back to plain paths.
+  let media: { path: string; sl_include?: boolean }[] | null = mediaRes.data as { path: string; sl_include?: boolean }[] | null;
+  if (mediaRes.error) {
+    const { data } = await supabase.from("dog_media").select("path").eq("dog_id", dogId).order("sort_order");
+    media = data as { path: string }[] | null;
+  }
 
   // The reason is stored as "Chosen reason — more detail": split it back into the dropdown and the note.
   const fullReason = str(intake?.reason);
@@ -91,8 +97,9 @@ export async function getDogForEdit(dogId: string): Promise<DogEditData | null> 
     hasIntake: !!intake,
     updatedAt: (dog.updated_at as string | null) ?? null,
     photos: (media ?? []).map((m) => ({
-      path: m.path as string,
-      url: supabase.storage.from("dog-photos").getPublicUrl(m.path as string).data.publicUrl,
+      path: m.path,
+      url: supabase.storage.from("dog-photos").getPublicUrl(m.path).data.publicUrl,
+      slInclude: !!m.sl_include,
     })),
     initial,
   };

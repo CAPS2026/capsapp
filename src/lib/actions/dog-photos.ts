@@ -15,6 +15,8 @@ import { getCurrentPerson } from "@/lib/auth";
 
 const BUCKET = "dog-photos";
 const MAX_PER_BATCH = 20;
+/** SavourLife shows up to 10 photos per dog. */
+const SL_LIMIT = 10;
 
 type Fail = { error: string };
 
@@ -58,6 +60,9 @@ export async function registerDogPhotos(dogId: string, paths: string[]): Promise
     .select("sort_order, is_primary")
     .eq("dog_id", dogId)
     .order("sort_order", { ascending: false });
+  // How many are already ticked for SavourLife (tolerant: the column arrives with migration 46).
+  const { data: ticked } = await supabase.from("dog_media").select("path").eq("dog_id", dogId).eq("sl_include", true);
+  const slRoom = Math.max(0, SL_LIMIT - (ticked?.length ?? 0));
   const next = (existing?.[0]?.sort_order ?? -1) + 1;
   const hasPrimary = (existing ?? []).some((m) => m.is_primary);
 
@@ -66,8 +71,13 @@ export async function registerDogPhotos(dogId: string, paths: string[]): Promise
     path,
     sort_order: next + i,
     is_primary: !hasPrimary && i === 0,
+    sl_include: i < slRoom, // the first photos fill SavourLife's 10 automatically; untick any you don't want
   }));
-  const { error } = await supabase.from("dog_media").insert(rows);
+  let { error } = await supabase.from("dog_media").insert(rows);
+  if (error?.code === "42703") {
+    // Migration 46 not applied yet: add them without the SavourLife tick.
+    ({ error } = await supabase.from("dog_media").insert(rows.map(({ sl_include: _ignored, ...r }) => r)));
+  }
   if (error) return { error: error.message };
 
   revalidatePath(`/dogs/${dogId}`);
@@ -135,5 +145,30 @@ export async function deleteDogPhoto(dogId: string, path: string): Promise<Fail 
   revalidatePath(`/dogs/${dogId}`);
   revalidatePath(`/dogs/${dogId}/edit`);
   revalidatePath("/dogs");
+  return { ok: true };
+}
+
+/** Tick or untick a photo for SavourLife (at most 10 per dog). */
+export async function setPhotoSavourLife(dogId: string, path: string, include: boolean): Promise<Fail | { ok: true }> {
+  const auth = await staffOrFail();
+  if ("error" in auth) return auth;
+  if (!path.startsWith(`${dogId}/`)) return { error: "That photo doesn't belong to this dog." };
+
+  const supabase = await createClient();
+  if (include) {
+    const { data: ticked, error: cErr } = await supabase
+      .from("dog_media")
+      .select("path")
+      .eq("dog_id", dogId)
+      .eq("sl_include", true);
+    if (cErr) return { error: "Apply migration 46 in Supabase first, then try again." };
+    if ((ticked ?? []).some((m) => m.path === path)) return { ok: true };
+    if ((ticked?.length ?? 0) >= SL_LIMIT) return { error: `SavourLife takes up to ${SL_LIMIT} photos. Untick one first.` };
+  }
+  const { error } = await supabase.from("dog_media").update({ sl_include: include }).eq("dog_id", dogId).eq("path", path);
+  if (error) return { error: error.code === "42703" ? "Apply migration 46 in Supabase first, then try again." : error.message };
+
+  revalidatePath(`/dogs/${dogId}/edit`);
+  revalidatePath(`/dogs/${dogId}/savourlife`);
   return { ok: true };
 }

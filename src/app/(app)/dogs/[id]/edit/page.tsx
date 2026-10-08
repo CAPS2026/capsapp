@@ -20,9 +20,17 @@ export default async function EditDogPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="flex flex-col gap-4 p-4 pb-8 max-w-4xl mx-auto w-full">
-      <Link href={`/dogs/${id}`} className="text-sm font-semibold text-brand-ink">
-        ← {data.initial.name}
-      </Link>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <Link href={`/dogs/${id}`} className="text-sm font-semibold text-brand-ink">
+          ← {data.initial.name}
+        </Link>
+        <Link
+          href={`/dogs/${id}/savourlife`}
+          className="text-sm font-bold px-3 py-1.5 rounded-[var(--radius)] bg-warm text-ink"
+        >
+          Generate SavourLife details
+        </Link>
+      </div>
       <h1 className="text-2xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
         Edit {data.initial.name} <span className="text-base font-normal text-ink-muted">{data.ref}</span>
       </h1>
