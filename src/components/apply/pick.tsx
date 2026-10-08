@@ -26,7 +26,7 @@ export function Pick({
   const known = list.some(([v]) => v === value);
   return (
     <select className={className} value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">Choose one…</option>
+      <option value="">Select…</option>
       {list.map(([v, label]) => (
         <option key={v} value={v}>
           {label}
@@ -62,7 +62,7 @@ export function PickOther({
         value={isOther ? OTHER : value}
         onChange={(e) => onChange(e.target.value)}
       >
-        <option value="">Choose one…</option>
+        <option value="">Select…</option>
         {fixed.map((o) => (
           <option key={o} value={o}>
             {o}

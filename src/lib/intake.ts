@@ -118,6 +118,17 @@ export const BREED_SUGGESTIONS = [
   "Unknown",
 ];
 
+/** Where the dog starts. Anything but Available starts that placement straight away (with its due-back time). */
+export const START_STATUSES: [string, string][] = [
+  ["available", "Available"],
+  ["bed_rest", "Bed rest"],
+  ["yard", "Yard"],
+  ["foster", "Foster"],
+  ["jail_break", "Jail break"],
+];
+
+export const YARD_CHOICES = ["Yard 1", "Yard 2"];
+
 /** SavourLife's distance restriction choices. */
 export const DISTANCE_OPTIONS = ["Unrestricted", "20 km", "40 km", "60 km", "100 km", "200 km", "500 km"];
 
@@ -180,8 +191,15 @@ export type IntakeInput = {
   notes: string;
   officerName: string;
   signedName: string;
-  /** Start on bed rest (not walkable yet) rather than Available. */
-  startOnBedRest: boolean;
+  /** Where the dog starts: available, or a placement that needs a due-back time. */
+  startStatus: string;
+  /** Foster / jail break carer (a person id). */
+  startPersonId: string;
+  /** Local "YYYY-MM-DDTHH:mm" in the form; an ISO time once it reaches the server. */
+  startDueBack: string;
+  startYard: string;
+  /** Bed rest: why. Foster / jail break: any note. */
+  startNotes: string;
 };
 
 export const EMPTY_INTAKE: IntakeInput = {
@@ -236,7 +254,11 @@ export const EMPTY_INTAKE: IntakeInput = {
   notes: "",
   officerName: "",
   signedName: "",
-  startOnBedRest: false,
+  startStatus: "available",
+  startPersonId: "",
+  startDueBack: "",
+  startYard: "Yard 1",
+  startNotes: "",
 };
 
 /** SavourLife profile checks (staff can edit these any time). Returns the first thing missing, or null. */
@@ -252,6 +274,17 @@ export function profileError(f: IntakeInput): string | null {
     return "Please enter the adoption fee (SavourLife needs one, even if it is $0).";
   if (f.contactEmail.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.contactEmail.trim()))
     return "The foster / case manager email doesn't look right — please check it.";
+  return null;
+}
+
+/** The starting-placement answers, when the dog doesn't start as Available. */
+export function placementError(f: IntakeInput): string | null {
+  if (f.startStatus === "available") return null;
+  if ((f.startStatus === "foster" || f.startStatus === "jail_break") && !f.startPersonId) return "Pick the carer.";
+  if (!f.startDueBack) return "Pick a due-back date and time.";
+  if (Number.isNaN(new Date(f.startDueBack).getTime())) return "Enter a valid due-back date and time.";
+  if (new Date(f.startDueBack) <= new Date()) return "Due back must be in the future.";
+  if (f.startStatus === "bed_rest" && !f.startNotes.trim()) return "Notes are required for bed rest.";
   return null;
 }
 
@@ -277,7 +310,7 @@ export function signoffError(f: IntakeInput): string | null {
 
 /** Everything a new intake needs. Mirrors the server check so the message appears on the page. */
 export function intakeError(f: IntakeInput): string | null {
-  return profileError(f) ?? recordError(f) ?? signoffError(f);
+  return profileError(f) ?? placementError(f) ?? recordError(f) ?? signoffError(f);
 }
 
 /** Estimated date of birth from an age band (midpoint), as YYYY-MM-DD. */

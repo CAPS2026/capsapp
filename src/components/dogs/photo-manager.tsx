@@ -3,28 +3,13 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { shrinkToJpeg } from "@/lib/image-shrink";
 import { deleteDogPhoto, prepareDogPhotoUploads, registerDogPhotos, reorderDogPhotos } from "@/lib/actions/dog-photos";
 
 export type ManagedPhoto = { path: string; url: string };
 
-const MAX_SIDE = 2000;
 /** SavourLife shows up to 10 photos per dog. */
 const SL_LIMIT = 10;
-
-/** Shrink a picked image to a JPEG no bigger than MAX_SIDE on its longest edge (phone photos are huge). */
-async function shrink(file: File): Promise<Blob> {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("no canvas");
-  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  return await new Promise<Blob>((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("no blob"))), "image/jpeg", 0.85),
-  );
-}
 
 const btn = "h-9 px-3 rounded-[var(--radius)] border border-line-cool bg-white text-sm font-semibold disabled:opacity-40";
 
@@ -48,7 +33,7 @@ export function PhotoManager({ dogId, dogName, photos }: { dogId: string; dogNam
       const done: string[] = [];
       for (let i = 0; i < picked.length; i++) {
         setBusy(`Uploading photo ${i + 1} of ${picked.length}…`);
-        const blob = await shrink(picked[i]);
+        const blob = await shrinkToJpeg(picked[i]);
         const { path, token } = prep.uploads[i];
         const { error: upErr } = await supabase.storage.from("dog-photos").uploadToSignedUrl(path, token, blob, {
           contentType: "image/jpeg",
