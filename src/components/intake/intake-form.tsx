@@ -1,8 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createDogIntake, updateDogDetails } from "@/lib/actions/intake";
+import { listActiveCarers } from "@/lib/actions/dog-activity";
+import { prepareDogPhotoUploads, registerDogPhotos } from "@/lib/actions/dog-photos";
+import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
+import { shrinkToJpeg } from "@/lib/image-shrink";
+import { DateTimeField, DaysAheadSelect } from "@/components/dogs/datetime-field";
 import {
   AGE_BANDS,
   AU_STATES,
@@ -21,6 +26,8 @@ import {
   SEX_OPTIONS,
   SIZE_OPTIONS,
   SOURCES_WITH_PERSON,
+  START_STATUSES,
+  YARD_CHOICES,
   VACCINE_TYPES,
   YES_NO_UNTESTED,
   type IntakeInput,
@@ -114,6 +121,35 @@ export function IntakeForm({
   const [saved, setSaved] = useState<{ dogId: string; ref: string; name: string } | null>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+  const [carers, setCarers] = useState<{ id: string; name: string }[]>([]);
+  // Photos picked before saving: uploaded to the new dog as part of Save intake.
+  const [staged, setStaged] = useState<{ id: string; file: File; url: string }[]>([]);
+  const [photoNote, setPhotoNote] = useState<string | null>(null);
+  const photoRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!edit && (f.startStatus === "foster" || f.startStatus === "jail_break")) {
+      listActiveCarers(f.startStatus).then(setCarers);
+    }
+  }, [edit, f.startStatus]);
+
+  function stagePhotos(files: FileList | null) {
+    const picked = Array.from(files ?? []).filter((x) => x.type.startsWith("image/"));
+    setStaged((cur) => [
+      ...cur,
+      ...picked.map((file) => ({ id: `${file.name}-${file.size}-${Math.random()}`, file, url: URL.createObjectURL(file) })),
+    ]);
+    if (photoRef.current) photoRef.current.value = "";
+  }
+  function moveStaged(i: number, dir: -1 | 1) {
+    setStaged((cur) => {
+      const j = i + dir;
+      if (j < 0 || j >= cur.length) return cur;
+      const next = [...cur];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  }
 
   const set = <K extends keyof IntakeInput>(k: K, v: IntakeInput[K]) => setF((x) => ({ ...x, [k]: v }));
 
@@ -146,8 +182,38 @@ export function IntakeForm({
     const problem = intakeError(f);
     if (problem) return setError(problem);
     startTransition(async () => {
-      const r = await createDogIntake(f);
+      // The due-back time is picked in local time; the server wants an exact moment.
+      const payload = {
+        ...f,
+        startDueBack: f.startStatus === "available" ? "" : new Date(f.startDueBack).toISOString(),
+      };
+      const r = await createDogIntake(payload);
       if (!("ok" in r)) return setError(r.error);
+
+      // Photos need the dog to exist, so they go up straight after it is saved.
+      let note: string | null = null;
+      if (staged.length > 0) {
+        try {
+          const prep = await prepareDogPhotoUploads(r.dogId, staged.length);
+          if (!("ok" in prep)) throw new Error(prep.error);
+          const supabase = createBrowserSupabase();
+          const done: string[] = [];
+          for (let i = 0; i < staged.length; i++) {
+            const blob = await shrinkToJpeg(staged[i].file);
+            const { path, token } = prep.uploads[i];
+            const { error: upErr } = await supabase.storage.from("dog-photos").uploadToSignedUrl(path, token, blob, {
+              contentType: "image/jpeg",
+            });
+            if (upErr) throw new Error(upErr.message);
+            done.push(path);
+          }
+          const reg = await registerDogPhotos(r.dogId, done);
+          if (!("ok" in reg)) throw new Error(reg.error);
+        } catch (e) {
+          note = `The dog is saved, but the photos didn't upload (${e instanceof Error ? e.message : "unknown error"}). Add them with Edit dog.`;
+        }
+      }
+      setPhotoNote(note);
       setSaved({ dogId: r.dogId, ref: r.ref, name: f.name.trim() });
       window.scrollTo({ top: 0 });
     });
@@ -163,6 +229,7 @@ export function IntakeForm({
           The intake record is saved and signed. Add photos next — SavourLife needs at least one, and the first is the featured image. Staff and admin can see
           every detail on the dog&apos;s page; volunteers see only the essentials.
         </p>
+        {photoNote && <p className="text-sm text-danger">{photoNote}</p>}
         <div className="flex gap-2 flex-wrap">
           <button
             type="button"
@@ -182,6 +249,8 @@ export function IntakeForm({
             type="button"
             onClick={() => {
               setF(start);
+              setStaged([]);
+              setPhotoNote(null);
               setSaved(null);
             }}
             className="h-12 px-5 rounded-[var(--radius)] border border-line-cool font-semibold"
@@ -204,12 +273,48 @@ export function IntakeForm({
       </p>
 
       <Section title="The dog" note="Answers tagged SL go on the SavourLife listing.">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {showDate && (
-            <Field label="Date of intake" required>
-              <input type="date" className={inputClass} value={f.intakeDate} onChange={(e) => set("intakeDate", e.target.value)} />
+        {(showDate || !edit) && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {showDate && (
+              <Field label="Date of intake" required>
+                <input type="date" className={inputClass} value={f.intakeDate} onChange={(e) => set("intakeDate", e.target.value)} />
+              </Field>
+            )}
+            {!edit && (
+              <Field label="Starting status" required>
+                <P value={f.startStatus} onChange={(v) => set("startStatus", v)} options={START_STATUSES} />
+              </Field>
+            )}
+            {!edit && f.startStatus === "yard" && (
+              <Field label="Which yard" required>
+                <P value={f.startYard} onChange={(v) => set("startYard", v)} options={YARD_CHOICES} />
+              </Field>
+            )}
+            {!edit && (f.startStatus === "foster" || f.startStatus === "jail_break") && (
+              <Field label={f.startStatus === "foster" ? "Foster carer" : "Jail break carer"} required>
+                <P
+                  value={f.startPersonId}
+                  onChange={(v) => set("startPersonId", v)}
+                  options={carers.map((c): [string, string] => [c.id, c.name])}
+                />
+              </Field>
+            )}
+          </div>
+        )}
+        {!edit && f.startStatus !== "available" && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Field label="Due back" required>
+              <DateTimeField required value={f.startDueBack} onChange={(v) => set("startDueBack", v)} />
             </Field>
-          )}
+            <Field label="Or days from now">
+              <DaysAheadSelect value={f.startDueBack} onChange={(v) => set("startDueBack", v)} />
+            </Field>
+            <Field label={f.startStatus === "bed_rest" ? "Notes (why)" : "Notes"} required={f.startStatus === "bed_rest"}>
+              <input className={inputClass} value={f.startNotes} onChange={(e) => set("startNotes", e.target.value)} />
+            </Field>
+          </div>
+        )}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Field label="Name" required sl>
             <input
               className={inputClass}
@@ -432,6 +537,81 @@ export function IntakeForm({
         </div>
       </Section>
 
+      {!edit && (
+        <Section
+          title="Photos"
+          note="Add as many as you like. The first is the main photo (and SavourLife's featured image) — a clear face works best. They upload when you save."
+        >
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              type="button"
+              onClick={() => photoRef.current?.click()}
+              className="h-10 px-4 rounded-[var(--radius)] bg-brand text-white text-sm font-bold"
+            >
+              Add photos
+            </button>
+            <span className="text-xs text-ink">
+              {staged.length === 0
+                ? "None yet."
+                : `${staged.length} chosen · ${Math.min(staged.length, 10)} of 10 used on SavourLife`}
+            </span>
+            <input
+              ref={photoRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => stagePhotos(e.target.files)}
+            />
+          </div>
+          {staged.length > 0 && (
+            <ul className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+              {staged.map((p, i) => (
+                <li key={p.id} className="flex flex-col gap-1">
+                  <div className="relative aspect-square rounded-[var(--radius)] overflow-hidden bg-gray-tint">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- local preview */}
+                    <img src={p.url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                    {i === 0 && (
+                      <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded-full bg-brand text-white text-[10px] font-bold">
+                        Main
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      disabled={i === 0}
+                      onClick={() => moveStaged(i, -1)}
+                      className="h-8 px-2 rounded border border-line-cool text-sm disabled:opacity-40"
+                      aria-label="Move earlier"
+                    >
+                      ←
+                    </button>
+                    <button
+                      type="button"
+                      disabled={i === staged.length - 1}
+                      onClick={() => moveStaged(i, 1)}
+                      className="h-8 px-2 rounded border border-line-cool text-sm disabled:opacity-40"
+                      aria-label="Move later"
+                    >
+                      →
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStaged((cur) => cur.filter((_, k) => k !== i))}
+                      className="h-8 px-2 rounded border border-line-cool text-sm text-danger"
+                      aria-label="Remove photo"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+      )}
+
       {(!edit || edit.showRecord) && (
         <Section title="CAPS intake record" note="From the paper Animal Intake Record. Only staff and admin see this.">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -520,12 +700,6 @@ export function IntakeForm({
             />
             Experienced handlers only (volunteers will see this on the dog)
           </label>
-          {!edit && (
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={f.startOnBedRest} onChange={(e) => set("startOnBedRest", e.target.checked)} />
-              Start on bed rest (not ready for walks yet)
-            </label>
-          )}
 
           <Field label="Notes">
             <textarea rows={3} className={areaClass} value={f.notes} onChange={(e) => set("notes", e.target.value)} />

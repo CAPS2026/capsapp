@@ -74,7 +74,7 @@ export async function createDogIntake(input: IntakeInput): Promise<Result> {
     .insert({
       ref,
       name: clean(input.name),
-      status: input.startOnBedRest ? "bed_rest" : "available",
+      status: "available", // changed by the placement below, if there is one
       arrival_date: input.intakeDate,
       arrival_type: input.source,
       arrival_notes: arrivalNotes || null,
@@ -147,6 +147,27 @@ export async function createDogIntake(input: IntakeInput): Promise<Result> {
     // Don't leave a half-entered dog behind.
     await supabase.from("dogs").delete().eq("id", dog.id);
     return { error: `Couldn't save the intake record (${intakeErr.message}). Has migration 45 been applied?` };
+  }
+
+  // Start the chosen placement now: the dog's status follows its activity, exactly as
+  // when staff use Start Yard / Bed Rest / Jail Break / Foster on the dog's page.
+  if (input.startStatus !== "available") {
+    const type = input.startStatus as "yard" | "bed_rest" | "jail_break" | "foster";
+    const homecare = type === "foster" || type === "jail_break";
+    const { error: actErr } = await supabase.from("dog_activity").insert({
+      dog_id: dog.id,
+      type,
+      person_id: homecare ? input.startPersonId : null,
+      placed_by: me.id,
+      started_at: new Date().toISOString(),
+      due_back: new Date(input.startDueBack).toISOString(),
+      reason: type === "yard" ? input.startYard : type === "bed_rest" ? clean(input.startNotes) : null,
+      notes: homecare ? orNull(input.startNotes) : null,
+    });
+    if (actErr) {
+      await supabase.from("dogs").delete().eq("id", dog.id);
+      return { error: `Couldn't start ${input.startStatus.replace("_", " ")}: ${actErr.message}` };
+    }
   }
 
   revalidatePath("/dogs");
