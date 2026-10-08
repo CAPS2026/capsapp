@@ -12,9 +12,11 @@ export type Pet = {
   temperament: string;
   desexed: YesNo;
   vaccinated: YesNo;
+  /** Flea, tick, worm and heartworm prevention up to date. */
+  prevention: YesNo;
 };
 
-export const EMPTY_PET: Pet = { type: "", breed: "", age: "", temperament: "", desexed: "", vaccinated: "" };
+export const EMPTY_PET: Pet = { type: "", breed: "", age: "", temperament: "", desexed: "", vaccinated: "", prevention: "" };
 
 export type HomeDetails = {
   propertyOwnership: string;
@@ -78,7 +80,7 @@ export function homeDetailsError(h: HomeDetails): string | null {
     if (h.pets.length === 0) return "Please add details for each animal you have.";
     for (let i = 0; i < h.pets.length; i++) {
       const p = h.pets[i];
-      if (!p.type || !p.breed.trim() || !p.age.trim() || !p.temperament || !p.desexed || !p.vaccinated)
+      if (!p.type || !p.breed.trim() || !p.age.trim() || !p.temperament || !p.desexed || !p.vaccinated || !p.prevention)
         return `Please complete every question for animal ${i + 1}.`;
     }
   }
@@ -93,7 +95,7 @@ function animalSummary(h: HomeDetails) {
   if (ages.some((a) => a.trim())) lines.push(`Children under 16 — ages: ${ages.map((a) => a.trim() || "?").join(", ")}`);
   h.pets.forEach((p, i) =>
     lines.push(
-      `Animal ${i + 1}: ${p.type}; breed: ${p.breed.trim()}; age: ${p.age.trim()}; temperament: ${p.temperament}; desexed: ${yn(p.desexed)}; vaccinations up to date: ${yn(p.vaccinated)}`,
+      `Animal ${i + 1}: ${p.type}; breed: ${p.breed.trim()}; age: ${p.age.trim()}; temperament: ${p.temperament}; desexed: ${yn(p.desexed)}; vaccinations up to date: ${yn(p.vaccinated)}; prevention up to date: ${yn(p.prevention)}`,
     ),
   );
   // Anything typed in the old free-text box (or by the assessor) is kept, not replaced.
@@ -123,6 +125,7 @@ export function parseHomeText(text: string | null | undefined): { childAges: str
         temperament: get("temperament"),
         desexed: back(get("desexed")),
         vaccinated: back(get("vaccinations up to date")),
+        prevention: back(get("prevention up to date")),
       });
     } else if (line.startsWith("Notes:")) {
       extra.push(line.slice(6).trim());
