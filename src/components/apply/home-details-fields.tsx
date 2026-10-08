@@ -150,12 +150,16 @@ export function HomeDetailsFields({
                       <Pick value={p.temperament} onChange={(v) => setPet("temperament", v)} options={TEMPERAMENTS} />
                     </Field>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <Field label="Desexed?" required>
                       <Pick value={p.desexed} onChange={(v) => setPet("desexed", v as YesNo)} options={YES_NO} />
                     </Field>
-                    <Field label="Vaccinations and prevention up to date?" required>
+                    <Field label="Vaccinations up to date?" required>
                       <Pick value={p.vaccinated} onChange={(v) => setPet("vaccinated", v as YesNo)} options={YES_NO} />
+                    </Field>
+                    <Field label="Prevention up to date?" required>
+                      <Pick value={p.prevention} onChange={(v) => setPet("prevention", v as YesNo)} options={YES_NO} />
+                      <span className="text-xs text-ink">Flea, tick, worm and heartworm.</span>
                     </Field>
                   </div>
                   {value.pets.length > 1 && (
