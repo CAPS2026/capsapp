@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { DogConfidential, DogDetail, DogIntake, MedicalEvent, ActivityEntry, NoteEntry } from "@/lib/dog-detail";
 import { STATUS_COLOR_VAR, endActionLabel } from "@/lib/dogs";
 import {
@@ -89,6 +90,11 @@ export function DogDetailView({
                 {dog.name}
               </h1>
               <span className="text-sm text-ink-muted">{dog.ref}</span>
+              {isStaff && (
+                <Link href={`/dogs/${dog.id}/edit`} className="text-sm font-bold text-brand-ink underline ml-1">
+                  Edit dog
+                </Link>
+              )}
             </div>
             <div className="flex items-center gap-2 flex-wrap mt-1">
               <span

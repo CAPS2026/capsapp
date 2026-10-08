@@ -45,18 +45,20 @@ export function PickOther({
   onChange,
   options,
   otherLabel = "Please specify",
+  className = inputClass,
 }: {
   value: string;
   onChange: (v: string) => void;
   options: string[];
   otherLabel?: string;
+  className?: string;
 }) {
   const fixed = options.filter((o) => o !== OTHER);
   const isOther = value === OTHER || (value !== "" && !fixed.includes(value));
   return (
     <div className="flex flex-col gap-2">
       <select
-        className={inputClass}
+        className={className}
         value={isOther ? OTHER : value}
         onChange={(e) => onChange(e.target.value)}
       >
@@ -70,7 +72,7 @@ export function PickOther({
       </select>
       {isOther && (
         <input
-          className={inputClass}
+          className={className}
           placeholder={otherLabel}
           value={value === OTHER ? "" : value}
           onChange={(e) => onChange(e.target.value || OTHER)}
