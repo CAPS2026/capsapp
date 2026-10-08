@@ -91,9 +91,17 @@ export function DogDetailView({
               </h1>
               <span className="text-sm text-ink-muted">{dog.ref}</span>
               {isStaff && (
-                <Link href={`/dogs/${dog.id}/edit`} className="text-sm font-bold text-brand-ink underline ml-1">
-                  Edit dog
-                </Link>
+                <>
+                  <Link href={`/dogs/${dog.id}/edit`} className="text-sm font-bold text-brand-ink underline ml-1">
+                    Edit dog
+                  </Link>
+                  <Link
+                    href={`/dogs/${dog.id}/savourlife`}
+                    className="text-sm font-bold px-3 py-1 rounded-[var(--radius)] bg-warm text-ink ml-1"
+                  >
+                    Generate SavourLife details
+                  </Link>
+                </>
               )}
             </div>
             <div className="flex items-center gap-2 flex-wrap mt-1">
