@@ -9,6 +9,7 @@ import {
   saveEndOfShift,
   type EndOfShiftTask,
 } from "@/lib/actions/shift";
+import { PhotoPicker } from "@/components/shift/photo-picker";
 
 /** Shared pop-up shell, same look as the late-reason prompt. Deliberately
  *  does NOT close on a click outside the box or on Escape: someone halfway
@@ -249,6 +250,8 @@ export function HealthConcernDialog({ onClose }: { onClose: () => void }) {
   const [dogName, setDogName] = useState("");
   const [body, setBody] = useState("");
   const [urgent, setUrgent] = useState(false);
+  const [photoPaths, setPhotoPaths] = useState<string[]>([]);
+  const [photosBusy, setPhotosBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ emailed: boolean } | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -279,7 +282,7 @@ export function HealthConcernDialog({ onClose }: { onClose: () => void }) {
     }
     setError(null);
     startTransition(async () => {
-      const r = await flagHealthConcern({ body, dogName, urgent });
+      const r = await flagHealthConcern({ body, dogName, urgent, photoPaths });
       if (r.error) setError(r.error);
       else setResult({ emailed: r.emailed === true });
     });
@@ -328,6 +331,15 @@ export function HealthConcernDialog({ onClose }: { onClose: () => void }) {
         What is the concern?
         <textarea rows={4} value={body} onChange={(e) => setBody(e.target.value)} className={FIELD} />
       </label>
+      <div className="flex flex-col gap-1">
+        <PhotoPicker
+          onChange={(paths, busy) => {
+            setPhotoPaths(paths);
+            setPhotosBusy(busy);
+          }}
+        />
+        <p className="m-0 text-xs text-ink-muted">Photos of the dog only, please. Up to 3.</p>
+      </div>
       <label className="flex items-center gap-2 text-sm font-bold text-foreground">
         <input type="checkbox" checked={urgent} onChange={(e) => setUrgent(e.target.checked)} className="h-5 w-5" />
         Urgent, needs attention now
@@ -336,11 +348,11 @@ export function HealthConcernDialog({ onClose }: { onClose: () => void }) {
       <div className="flex gap-2">
         <button
           type="button"
-          disabled={isPending}
+          disabled={isPending || photosBusy}
           onClick={submit}
           className="h-11 flex-1 rounded-[var(--radius)] bg-danger text-sm font-bold text-white disabled:opacity-50"
         >
-          {isPending ? "Sending…" : "Send to Shayna"}
+          {isPending ? "Sending…" : photosBusy ? "Uploading photo…" : "Send to Shayna"}
         </button>
         <button type="button" onClick={onClose} className="h-11 rounded-[var(--radius)] border border-line px-4 text-sm font-bold text-ink-muted">
           Cancel

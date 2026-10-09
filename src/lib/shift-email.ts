@@ -11,6 +11,7 @@
 
 import { sendEmail, siteUrl } from "@/lib/email";
 import { HEALTH_LINK_DAYS } from "@/lib/health-link";
+import { signPhotoPaths } from "@/lib/shift-photos";
 import { shiftDb } from "@/lib/shift-db";
 import { DOSE_REASON_LABEL, VET_KIND_LABEL, getDueDoses, getVetAppointments, getVolunteerCount } from "@/lib/care-data";
 import {
@@ -581,6 +582,7 @@ export async function sendHealthConcernEmail(opts: {
   dogName: string | null;
   urgent: boolean;
   body: string;
+  photoPaths?: string[];
 }): Promise<boolean> {
   const recipients = await getHealthConcernRecipients();
   if (recipients.length === 0) return false;
@@ -600,16 +602,32 @@ export async function sendHealthConcernEmail(opts: {
   const link = token ? `${siteUrl()}/approve/health/${token}` : null;
   const linkNote = `This link works for ${HEALTH_LINK_DAYS} days. After that, mark it as dealt with on the Handover log tab in the staff app.`;
 
+  // Photos: small previews that open the full photo. The links are signed and
+  // last three days, so an old forwarded email stops showing them. The page
+  // behind the "Mark as dealt with" button always has fresh links.
+  const photoLinks = opts.photoPaths?.length ? await signPhotoPaths(opts.photoPaths, 3 * 24 * 3600) : new Map<string, string>();
+  const photoUrls = (opts.photoPaths ?? []).map((p) => photoLinks.get(p)).filter((u): u is string => !!u);
+  const photosHtml = photoUrls.length
+    ? `<p style="margin:12px 0 0;">${photoUrls
+        .map(
+          (u) =>
+            `<a href="${u}" style="margin-right:6px;"><img src="${u}" alt="Photo" width="120" style="width:120px;border-radius:8px;border:1px solid #E2725B;" /></a>`,
+        )
+        .join("")}</p>
+      <p style="margin:4px 0 0;font-size:12px;color:#6B6B68;">Tap a photo to open it. These photo links work for 3 days.</p>`
+    : "";
+  const photosText = photoUrls.length ? `\n\nPhotos (links work for 3 days):\n${photoUrls.join("\n")}` : "";
+
   const result = await sendEmail({
     to: recipients,
     subject,
-    text: `${intro}\n\n${opts.urgent ? "Marked urgent.\n" : ""}${opts.dogName ? `Dog: ${opts.dogName}\n` : ""}${opts.body}${
+    text: `${intro}\n\n${opts.urgent ? "Marked urgent.\n" : ""}${opts.dogName ? `Dog: ${opts.dogName}\n` : ""}${opts.body}${photosText}${
       link ? `\n\nOnce it has been dealt with, mark it here (opening the link changes nothing until you press the button):\n${link}\n(${linkNote})` : ""
     }`,
     html: `<div style="font-family:sans-serif;max-width:520px;">
       <h2 style="color:#9A3A26;">${opts.urgent ? "URGENT: " : ""}Health concern${esc(who)}</h2>
       <p style="font-size:14px;">${esc(intro)}</p>
-      <div style="border:1px solid #E2725B;background:#FCEDE8;border-radius:10px;padding:14px;font-size:14px;">${esc(opts.body)}</div>${
+      <div style="border:1px solid #E2725B;background:#FCEDE8;border-radius:10px;padding:14px;font-size:14px;">${esc(opts.body)}</div>${photosHtml}${
         link
           ? `
       <p style="margin:18px 0 8px;"><a href="${link}" style="display:inline-block;background:#1A7ABF;color:#ffffff;font-weight:bold;font-size:15px;text-decoration:none;padding:12px 20px;border-radius:8px;">Mark as dealt with</a></p>

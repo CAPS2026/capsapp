@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentPerson } from "@/lib/auth";
 import { markLeaveNoticesForShift } from "@/lib/leave-data";
+import { cleanPhotoPaths } from "@/lib/shift-photos";
 import { getAllDogNames, getMedication, medDueOn, type DoseReason } from "@/lib/care-data";
 import {
   getActiveShiftPerson,
@@ -409,6 +410,7 @@ export async function flagHealthConcern(input: {
   body: string;
   dogName: string;
   urgent: boolean;
+  photoPaths?: string[];
 }): Promise<{ error?: string; emailed?: boolean }> {
   const me = await requireActingPerson();
   if (!me) return { error: "Pick who you are first." };
@@ -416,6 +418,8 @@ export async function flagHealthConcern(input: {
   if (!body) return { error: "Describe the concern first." };
   const dogName = input.dogName.trim();
   if (!dogName) return { error: "Enter the dog's name." };
+  const photoPaths = cleanPhotoPaths(input.photoPaths);
+  if (!photoPaths) return { error: "Those photos could not be attached. Remove them and add them again." };
   const open = await getOpenShift(me.id);
   const part = open?.part ?? resolvePart(null);
   const date = open?.date ?? shelterToday();
@@ -431,6 +435,7 @@ export async function flagHealthConcern(input: {
       dog_name: dogName,
       urgent: input.urgent,
       body,
+      photo_paths: photoPaths,
     })
     .select("id")
     .single();
@@ -444,6 +449,7 @@ export async function flagHealthConcern(input: {
     dogName,
     urgent: input.urgent,
     body,
+    photoPaths,
   }).catch((e) => {
     console.error("flagHealthConcern: email failed", e);
     return false;
@@ -581,10 +587,12 @@ export async function addExtraTask(title: string): Promise<Result> {
 // Handover
 // ---------------------------------------------------------------------------
 
-export async function addHandoverNote(body: string): Promise<Result> {
+export async function addHandoverNote(body: string, photoPaths?: string[]): Promise<Result> {
   const me = await requireActingPerson();
   if (!me) return { error: "Pick who you are first." };
   if (!body.trim()) return { error: "Write something first." };
+  const photos = cleanPhotoPaths(photoPaths);
+  if (!photos) return { error: "Those photos could not be attached. Remove them and add them again." };
   const supabase = await createClient();
   const date = shelterToday();
   const open = await getOpenShift(me.id);
@@ -595,6 +603,7 @@ export async function addHandoverNote(body: string): Promise<Result> {
     date,
     part,
     body: body.trim(),
+    photo_paths: photos,
   });
   if (error) return { error: error.message };
   revalidatePath("/shift/handover");

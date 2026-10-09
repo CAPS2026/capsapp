@@ -1,4 +1,5 @@
 import { shiftDb } from "@/lib/shift-db";
+import { signPhotoPaths } from "@/lib/shift-photos";
 import { healthWatchState, healthWatchTitle, nextSession, type HealthWatchState } from "@/lib/health-watch";
 import {
   hhmm,
@@ -720,20 +721,22 @@ export type HandoverNoteRow = {
   /** When it was ticked off, and by whom; null while still to do. */
   doneAt: string | null;
   doneByName: string | null;
+  /** Short-lived links to the photos on it (see lib/shift-photos.ts). */
+  photoUrls: string[];
 };
 
 /** Handover notes: every one still to do (newest first), then the most
  *  recent ones already ticked off. */
 export async function getHandoverNotes(limit = 30): Promise<HandoverNoteRow[]> {
   const supabase = await shiftDb();
-  const cols = "id, date, part, body, created_at, is_auto, done_at, done_by_name, person:people!handover_note_person_id_fkey(first_name, surname), shift:shift_log!handover_note_shift_log_id_fkey(guest_name)";
+  const cols = "id, date, part, body, created_at, is_auto, done_at, done_by_name, photo_paths, person:people!handover_note_person_id_fkey(first_name, surname), shift:shift_log!handover_note_shift_log_id_fkey(guest_name)";
   const [open, done] = await Promise.all([
     supabase.from("handover_note").select(cols).is("done_at", null).order("created_at", { ascending: false }),
     supabase.from("handover_note").select(cols).not("done_at", "is", null).order("created_at", { ascending: false }).limit(limit),
   ]);
   if (open.error) console.error("getHandoverNotes failed", open.error);
 
-  return ([...(open.data ?? []), ...(done.data ?? [])] as unknown as Array<{
+  const rows = [...(open.data ?? []), ...(done.data ?? [])] as unknown as Array<{
     id: string;
     date: string;
     part: Part;
@@ -742,9 +745,12 @@ export async function getHandoverNotes(limit = 30): Promise<HandoverNoteRow[]> {
     is_auto: boolean;
     done_at: string | null;
     done_by_name: string | null;
+    photo_paths: string[] | null;
     person: { first_name: string; surname: string } | null;
     shift: { guest_name: string | null } | null;
-  }>).map((r) => ({
+  }>;
+  const signed = await signPhotoPaths(rows.flatMap((r) => r.photo_paths ?? []), 3600);
+  return rows.map((r) => ({
     id: r.id,
     personName: withGuestName(r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown", r.shift?.guest_name),
     date: r.date,
@@ -754,6 +760,7 @@ export async function getHandoverNotes(limit = 30): Promise<HandoverNoteRow[]> {
     isAuto: r.is_auto,
     doneAt: r.done_at,
     doneByName: r.done_by_name,
+    photoUrls: (r.photo_paths ?? []).map((p) => signed.get(p)).filter((u): u is string => !!u),
   }));
 }
 
@@ -1148,6 +1155,8 @@ export type HealthConcernRow = {
   resolvedAt: string | null;
   resolvedByName: string | null;
   resolvedNote: string | null;
+  /** Short-lived links to the photos on it (see lib/shift-photos.ts). */
+  photoUrls: string[];
 };
 
 /** Recent health concerns: not yet dealt with first (newest first), then
@@ -1157,13 +1166,13 @@ export async function getHealthConcerns(limit = 40): Promise<HealthConcernRow[]>
   const { data, error } = await supabase
     .from("health_concern")
     .select(
-      "id, dog_name, urgent, body, date, part, created_at, resolved_at, resolved_by_name, resolved_note, " +
+      "id, dog_name, urgent, body, date, part, created_at, resolved_at, resolved_by_name, resolved_note, photo_paths, " +
         "person:people!health_concern_person_id_fkey(first_name, surname), shift:shift_log!health_concern_shift_log_id_fkey(guest_name)",
     )
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) console.error("getHealthConcerns failed", error);
-  const rows = ((data ?? []) as unknown as Array<{
+  const rows = (data ?? []) as unknown as Array<{
     id: string;
     dog_name: string | null;
     urgent: boolean;
@@ -1175,8 +1184,11 @@ export async function getHealthConcerns(limit = 40): Promise<HealthConcernRow[]>
     shift: { guest_name: string | null } | null;
     resolved_by_name: string | null;
     resolved_note: string | null;
+    photo_paths: string[] | null;
     person: { first_name: string; surname: string } | null;
-  }>).map((r) => ({
+  }>;
+  const signed = await signPhotoPaths(rows.flatMap((r) => r.photo_paths ?? []), 3600);
+  const mapped: HealthConcernRow[] = rows.map((r) => ({
     id: r.id,
     personName: withGuestName(r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown", r.shift?.guest_name),
     dogName: r.dog_name,
@@ -1188,8 +1200,9 @@ export async function getHealthConcerns(limit = 40): Promise<HealthConcernRow[]>
     resolvedAt: r.resolved_at,
     resolvedByName: r.resolved_by_name,
     resolvedNote: r.resolved_note,
+    photoUrls: (r.photo_paths ?? []).map((p) => signed.get(p)).filter((u): u is string => !!u),
   }));
-  return [...rows.filter((r) => !r.resolvedAt), ...rows.filter((r) => r.resolvedAt)];
+  return [...mapped.filter((r) => !r.resolvedAt), ...mapped.filter((r) => r.resolvedAt)];
 }
 
 export type HealthWatchItem = {
