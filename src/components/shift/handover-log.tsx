@@ -6,6 +6,8 @@ import { clockTime, firstName, parseYmd } from "@/lib/shift";
 import type { HandoverNoteRow } from "@/lib/shift-data";
 import { addHandoverNote, tickHandoverNote } from "@/lib/actions/shift";
 import { PersonAvatar } from "@/components/shift/person-avatar";
+import { PhotoPicker } from "@/components/shift/photo-picker";
+import { PhotoThumbs } from "@/components/shift/photo-thumbs";
 
 function whenLabel(n: HandoverNoteRow) {
   const day = parseYmd(n.date).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" });
@@ -22,16 +24,22 @@ export function HandoverLog({ notes }: { notes: HandoverNoteRow[] }) {
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [photoPaths, setPhotoPaths] = useState<string[]>([]);
+  const [photosBusy, setPhotosBusy] = useState(false);
+  // Changing the key empties the photo picker after a note is saved.
+  const [pickerKey, setPickerKey] = useState(0);
 
   function send() {
-    if (!body.trim()) return;
+    if (!body.trim() || photosBusy) return;
     setError(null);
     setSaved(false);
     startTransition(async () => {
-      const r = await addHandoverNote(body);
+      const r = await addHandoverNote(body, photoPaths);
       if (r.error) setError(r.error);
       else {
         setBody("");
+        setPhotoPaths([]);
+        setPickerKey((k) => k + 1);
         setSaved(true);
         router.refresh();
       }
@@ -89,6 +97,7 @@ export function HandoverLog({ notes }: { notes: HandoverNoteRow[] }) {
                   <p className={`m-0 whitespace-pre-line text-[14px] leading-normal ${done ? "text-ink-muted line-through" : "font-semibold text-foreground"}`}>
                     {n.body}
                   </p>
+                  <PhotoThumbs urls={n.photoUrls} />
                   {done && n.doneByName && n.doneAt && (
                     <p className="m-0 text-[10.5px] font-semibold text-ok">
                       Done by {n.doneByName}, {clockTime(n.doneAt)}
@@ -122,13 +131,20 @@ export function HandoverLog({ notes }: { notes: HandoverNoteRow[] }) {
           aria-label="Leave a note for the next shift"
           className="w-full resize-y rounded-[var(--radius)] border border-line-cool bg-white px-3 py-2 text-[15px] leading-normal text-foreground outline-none placeholder:text-ink-muted"
         />
+        <PhotoPicker
+          key={pickerKey}
+          onChange={(paths, busy) => {
+            setPhotoPaths(paths);
+            setPhotosBusy(busy);
+          }}
+        />
         <div className="flex items-center gap-3">
           <button
             type="submit"
-            disabled={isPending || !body.trim()}
+            disabled={isPending || photosBusy || !body.trim()}
             className="h-11 rounded-[var(--radius)] bg-brand px-6 text-[16px] font-extrabold text-white disabled:opacity-50"
           >
-            {isPending ? "Saving…" : "Save note"}
+            {isPending ? "Saving…" : photosBusy ? "Uploading photo…" : "Save note"}
           </button>
           {saved && (
             <span role="status" className="flex items-center gap-1.5 text-[16px] font-extrabold text-ok">

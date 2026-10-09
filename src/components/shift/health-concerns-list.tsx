@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { resolveHealthConcern } from "@/lib/actions/shift";
 import { PART_LABEL, clockTime, parseYmd } from "@/lib/shift";
 import type { HealthConcernRow } from "@/lib/shift-data";
+import { PhotoThumbs } from "@/components/shift/photo-thumbs";
 
 /** Health concerns, on the Handover log tab: the ones not yet dealt with
  *  first. Everyone can see whether a concern has been dealt with; only
@@ -62,6 +63,7 @@ function Concern({ c, isAdmin }: { c: HealthConcernRow; isAdmin: boolean }) {
         </span>
       </div>
       <p className="m-0 whitespace-pre-wrap text-sm">{c.body}</p>
+      <PhotoThumbs urls={c.photoUrls} />
 
       {c.resolvedAt ? (
         <p className="m-0 text-xs font-semibold text-ok">

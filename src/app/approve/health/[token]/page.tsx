@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { HEALTH_LINK_DAYS, healthLinkExpired } from "@/lib/health-link";
 import { PART_LABEL, parseYmd, type Part } from "@/lib/shift";
 import { HealthLinkButton } from "@/components/shift/health-link-button";
+import { PhotoThumbs } from "@/components/shift/photo-thumbs";
+import { signPhotoPaths } from "@/lib/shift-photos";
 
 // Public landing page for the link in the health concern email (the
 // /approve prefix is already open to people who aren't logged in). Opening
@@ -18,7 +20,7 @@ export default async function HealthConcernLinkPage({ params }: { params: Promis
     ? await admin
         .from("health_concern")
         .select(
-          "dog_name, urgent, body, date, part, created_at, resolved_at, resolved_by_name, resolved_note, " +
+          "dog_name, urgent, body, date, part, created_at, resolved_at, resolved_by_name, resolved_note, photo_paths, " +
             "person:people!health_concern_person_id_fkey(first_name, surname)",
         )
         .eq("token", token)
@@ -34,8 +36,11 @@ export default async function HealthConcernLinkPage({ params }: { params: Promis
     resolved_at: string | null;
     resolved_by_name: string | null;
     resolved_note: string | null;
+    photo_paths: string[] | null;
     person: { first_name: string; surname: string } | null;
   } | null;
+  const signed = await signPhotoPaths(c?.photo_paths ?? [], 3600);
+  const photoUrls = (c?.photo_paths ?? []).map((p) => signed.get(p)).filter((u): u is string => !!u);
 
   const day = c ? parseYmd(c.date).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" }) : "";
 
@@ -62,6 +67,7 @@ export default async function HealthConcernLinkPage({ params }: { params: Promis
                 <b>When:</b> {day}, {PART_LABEL[c.part].toLowerCase()} shift
               </p>
               <p className="m-0 whitespace-pre-wrap">{c.body}</p>
+              <PhotoThumbs urls={photoUrls} />
             </div>
             {c.resolved_at ? (
               <p className="m-0 text-sm font-semibold text-ok">
