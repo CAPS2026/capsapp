@@ -14,6 +14,7 @@ import { ActionMenu } from "@/components/dogs/action-menu";
 import { ActivitySection } from "@/components/dogs/activity-section";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { Field } from "@/components/detail-field";
+import { slStatusLabel } from "@/lib/savourlife-status";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -188,7 +189,16 @@ export function DogDetailView({
           <Field label="Adoption policy" value={dog.adoptionPolicy} />
           <Field label="BIN / source no." value={dog.binSourceNumber} />
           <Field label="SavourLife ID" value={dog.savourlifeId} />
-          <Field label="Listed on SavourLife" value={yesNo(dog.listedOnSavourlife)} />
+          <Field
+            label="SavourLife status"
+            value={[
+              slStatusLabel(dog.slStatus),
+              dog.slStatus === "on_hold" && dog.slHoldReason ? `(${dog.slHoldReason})` : "",
+              dog.slStatus === "adopted" && dog.slEnquiryNumber ? `(enquiry ${dog.slEnquiryNumber})` : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          />
           <Field label="Coat length" value={dog.coatLength} />
           <Field label="Indoor only" value={yesNo(dog.indoorOnly)} />
           <Field label="Foster carer required" value={yesNo(dog.fosterCareRequired)} />
