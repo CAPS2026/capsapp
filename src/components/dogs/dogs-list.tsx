@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { DogListItem, OrgSettings, StatusMeta } from "@/lib/dogs";
-import { STATUS_COLOR_VAR, endActionLabel } from "@/lib/dogs";
+import { STATUS_COLOR_VAR, endActionLabel, type DogStatus } from "@/lib/dogs";
 import {
   daysAgoLabel,
   formatDaysHoursOut,
@@ -16,7 +16,7 @@ import {
 import { DogActionButton } from "@/components/dogs/dog-action-button";
 import { ActionMenu } from "@/components/dogs/action-menu";
 
-type FilterKey = "available" | "out_now";
+type FilterKey = DogStatus | "out_now";
 
 export function DogsList({
   dogs,
@@ -54,11 +54,24 @@ export function DogsList({
 
   const filteredDogs = useMemo(() => {
     return dogs.filter((dog) => {
-      if (activeFilter === "available" && dog.status !== "available") return false;
-      if (activeFilter === "out_now" && !statusByCode.get(dog.status)?.isOut) return false;
+      if (activeFilter === "out_now") return !!statusByCode.get(dog.status)?.isOut;
+      if (activeFilter) return dog.status === activeFilter;
       return true;
     });
   }, [dogs, activeFilter, statusByCode]);
+
+  // One button per status, Available first, each with how many dogs are in it right now.
+  const chipOrder: DogStatus[] = ["available", "walking", "yard", "bed_rest", "jail_break", "fostered"];
+  const chips = useMemo(() => {
+    const known = new Map(statusMeta.map((st) => [st.code, st]));
+    const codes = [...chipOrder.filter((c) => known.has(c)), ...statusMeta.map((st) => st.code).filter((c) => !chipOrder.includes(c))];
+    return codes.map((code) => ({
+      code,
+      label: known.get(code)?.label ?? code,
+      count: dogs.filter((d) => d.status === code).length,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dogs, statusMeta]);
 
   const groups = useMemo(() => {
     return statusMeta.map((status) => {
@@ -77,7 +90,17 @@ export function DogsList({
   return (
     <div className="flex flex-col gap-6 p-4 pb-6">
       <div className="flex gap-2 flex-wrap">
-        <FilterChip label="Available" active={activeFilter === "available"} onClick={() => toggleFilter("available")} />
+        <FilterChip label="All" active={activeFilter === null} onClick={() => setActiveFilter(null)} />
+        {chips.map((c) => (
+          <FilterChip
+            key={c.code}
+            label={`${c.label} (${c.count})`}
+            dot={`var(${STATUS_COLOR_VAR[c.code]})`}
+            muted={c.count === 0}
+            active={activeFilter === c.code}
+            onClick={() => toggleFilter(c.code)}
+          />
+        ))}
         <FilterChip label="Out now" active={activeFilter === "out_now"} onClick={() => toggleFilter("out_now")} />
       </div>
 
@@ -117,15 +140,28 @@ export function DogsList({
   );
 }
 
-function FilterChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function FilterChip({
+  label,
+  active,
+  onClick,
+  dot,
+  muted,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  dot?: string;
+  muted?: boolean;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`h-9 px-3 rounded-full text-sm font-semibold border transition-colors ${
-        active ? "bg-brand text-white border-brand" : "bg-card text-ink-muted border-line"
+      className={`h-9 px-3 rounded-full text-sm font-semibold border transition-colors flex items-center gap-1.5 ${
+        active ? "bg-brand text-white border-brand" : `bg-card border-line ${muted ? "text-ink-muted/60" : "text-ink-muted"}`
       }`}
     >
+      {dot && <span className="inline-block w-2 h-2 rounded-full" style={{ background: dot }} />}
       {label}
     </button>
   );
