@@ -60,24 +60,27 @@ export function ActivitySection({
 
   return (
     <>
-      <div className={`flex flex-col gap-1 ${canKiosk ? "pb-2 border-b border-line" : ""}`}>
-        {latest.map(({ type, entry }) => (
-          <div key={type} className="text-sm">
-            <span className="font-semibold">{TYPE_LABEL[type] ?? type}: </span>
-            {entry ? (
-              <button
-                type="button"
-                onClick={() => openRecord(entry.id)}
-                className="text-left underline-offset-2 hover:underline"
-              >
-                {formatActivityRecordLine(entry)}
-              </button>
-            ) : (
-              <span className="text-ink-muted">None yet</span>
-            )}
-          </div>
-        ))}
-      </div>
+      {/* Plain volunteers only get the latest of each kind that has happened; everyone who can see the
+          full history gets just the list below, so the same walk isn't shown twice. */}
+      {!canKiosk && (
+        <div className="flex flex-col gap-1">
+          {latest.every(({ entry }) => !entry) && <p className="text-sm text-ink-muted">No activity yet.</p>}
+          {latest.map(({ type, entry }) =>
+            entry ? (
+              <div key={type} className="text-sm">
+                <span className="font-semibold">{TYPE_LABEL[type] ?? type}: </span>
+                <button
+                  type="button"
+                  onClick={() => openRecord(entry.id)}
+                  className="text-left underline-offset-2 hover:underline"
+                >
+                  {formatActivityRecordLine(entry)}
+                </button>
+              </div>
+            ) : null,
+          )}
+        </div>
+      )}
 
       {/* Full who-did-what history is for staff + Volunteer Plus — plain
           volunteers get the latest-of-each-type summary above and nothing
@@ -85,8 +88,7 @@ export function ActivitySection({
           enforced by RLS on the person embed; this just keeps the plain
           volunteer view lean. */}
       {canKiosk && (
-        <div className="pt-1 flex flex-col gap-1">
-          <h3 className="text-sm font-bold text-ink-muted">Recent activity</h3>
+        <div className="flex flex-col gap-1">
           {recent.length === 0 ? (
             <p className="text-sm text-ink-muted">No activity yet.</p>
           ) : (
