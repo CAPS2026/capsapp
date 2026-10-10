@@ -88,36 +88,6 @@ export const YES_NO_UNTESTED: [string, string][] = [
   ["untested", "Not tested"],
 ];
 
-/** Common breeds as suggestions only — SavourLife uses its own numbered breed list, so the box stays free text until we have it. */
-export const BREED_SUGGESTIONS = [
-  "Australian Cattle Dog",
-  "Australian Kelpie",
-  "Australian Shepherd",
-  "Beagle",
-  "Border Collie",
-  "Boxer",
-  "Bull Arab",
-  "Cavoodle",
-  "Chihuahua",
-  "Cocker Spaniel",
-  "Dachshund",
-  "Staffordshire Bull Terrier",
-  "Greyhound",
-  "German Shepherd",
-  "Golden Retriever",
-  "Jack Russell Terrier",
-  "Labrador Retriever",
-  "Maltese",
-  "Mastiff",
-  "Pug",
-  "Rottweiler",
-  "Shih Tzu",
-  "Staffy cross",
-  "Terrier cross",
-  "Mixed breed",
-  "Unknown",
-];
-
 /** Where the dog starts. Anything but Available starts that placement straight away (with its due-back time). */
 export const START_STATUSES: [string, string][] = [
   ["available", "Available"],
@@ -261,57 +231,88 @@ export const EMPTY_INTAKE: IntakeInput = {
   startNotes: "",
 };
 
-/** SavourLife profile checks (staff can edit these any time). Returns the first thing missing, or null. */
-export function profileError(f: IntakeInput): string | null {
-  if (!f.name.trim()) return "Please give the dog a name (or 'Unknown' with the date, e.g. Unknown 7 Oct).";
-  if (!f.breed.trim()) return "Please enter a breed (or 'Unknown').";
-  if (!f.dateOfBirth && !f.ageBand) return "Please give a date of birth, or pick an approximate age.";
-  if (!f.sex) return "Please choose male or female.";
-  if (!f.desexed) return "Please say whether the dog is desexed.";
-  if (f.bondedPair === "yes" && !f.bondedPairName.trim()) return "Please say who the dog is bonded with.";
-  if (!f.postcode.trim()) return "Please enter the postcode for the listing.";
+/** One thing wrong on the form: which field (its key on IntakeInput, or a group name) and what to tell the person. */
+export type Issue = { key: string; message: string };
+
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+/** SavourLife profile checks (staff can edit these any time). Returns every problem, not just the first. */
+export function profileIssues(f: IntakeInput): Issue[] {
+  const out: Issue[] = [];
+  if (!f.name.trim()) out.push({ key: "name", message: "Name — give the dog a name (or 'Unknown' with the date)." });
+  if (!f.breed.trim()) out.push({ key: "breed", message: "Breed — enter a breed (or 'Unknown')." });
+  if (!f.sex) out.push({ key: "sex", message: "Sex — choose male or female." });
+  if (!f.dateOfBirth && !f.ageBand)
+    out.push({ key: "dateOfBirth", message: "Date of birth — enter it, or pick an approximate age." });
+  if (!f.desexed) out.push({ key: "desexed", message: "Desexed — say yes or no." });
+  if (f.bondedPair === "yes" && !f.bondedPairName.trim())
+    out.push({ key: "bondedPairName", message: "Bonded with — say who the dog is bonded with." });
+  if (!f.postcode.trim()) out.push({ key: "postcode", message: "Postcode — needed for the SavourLife listing." });
   if (!f.adoptionFee.trim() || !Number.isFinite(parseFloat(f.adoptionFee)))
-    return "Please enter the adoption fee (SavourLife needs one, even if it is $0).";
-  if (f.contactEmail.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.contactEmail.trim()))
-    return "The foster / case manager email doesn't look right — please check it.";
-  return null;
+    out.push({ key: "adoptionFee", message: "Adoption fee — SavourLife needs one (enter 0 if there is none)." });
+  if (f.contactEmail.trim() && !EMAIL_RE.test(f.contactEmail.trim()))
+    out.push({ key: "contactEmail", message: "Case manager email — doesn't look right." });
+  return out;
 }
 
 /** The starting-placement answers, when the dog doesn't start as Available. */
-export function placementError(f: IntakeInput): string | null {
-  if (f.startStatus === "available") return null;
-  if ((f.startStatus === "foster" || f.startStatus === "jail_break") && !f.startPersonId) return "Pick the carer.";
-  if (!f.startDueBack) return "Pick a due-back date and time.";
-  if (Number.isNaN(new Date(f.startDueBack).getTime())) return "Enter a valid due-back date and time.";
-  if (new Date(f.startDueBack) <= new Date()) return "Due back must be in the future.";
-  if (f.startStatus === "bed_rest" && !f.startNotes.trim()) return "Notes are required for bed rest.";
-  return null;
+export function placementIssues(f: IntakeInput): Issue[] {
+  if (f.startStatus === "available") return [];
+  const out: Issue[] = [];
+  if ((f.startStatus === "foster" || f.startStatus === "jail_break") && !f.startPersonId)
+    out.push({ key: "startPersonId", message: "Carer — pick who the dog is going to." });
+  if (!f.startDueBack) out.push({ key: "startDueBack", message: "Due back — say when the dog is due back." });
+  else if (Number.isNaN(new Date(f.startDueBack).getTime()))
+    out.push({ key: "startDueBack", message: "Due back — enter a valid date and time." });
+  else if (new Date(f.startDueBack) <= new Date())
+    out.push({ key: "startDueBack", message: "Due back — must be in the future." });
+  if (f.startStatus === "bed_rest" && !f.startNotes.trim())
+    out.push({ key: "startNotes", message: "Notes — say why the dog is on bed rest." });
+  return out;
 }
 
 /** The paper intake record's required answers (admin). */
-export function recordError(f: IntakeInput): string | null {
-  if (!f.intakeDate) return "Please set the date of intake.";
-  if (!f.source) return "Please choose where the dog came from.";
-  if (!f.reason) return "Please choose the reason for intake.";
-  if (!f.condition) return "Please record the dog's condition.";
-  if (!f.parasites) return "Please say whether parasites were seen.";
-  if (!f.vaccinationGiven) return "Please say whether a vaccination was given.";
-  if (f.vaccinationGiven === "yes" && !f.vaccinationType) return "Please choose the vaccination type.";
-  if (!f.fleaTickWormGiven) return "Please say whether flea, tick or worm treatment was given.";
-  if (f.behaviour.length === 0) return "Please pick at least one initial behaviour assessment.";
-  if (f.behaviour.includes("other") && !f.behaviourOther.trim()) return "Please say what the other behaviour is.";
-  return null;
+export function recordIssues(f: IntakeInput): Issue[] {
+  const out: Issue[] = [];
+  if (!f.intakeDate) out.push({ key: "intakeDate", message: "Date of intake — set the date." });
+  if (!f.source) out.push({ key: "source", message: "Source of intake — where did the dog come from?" });
+  if (!f.reason) out.push({ key: "reason", message: "Reason for intake — choose one." });
+  if (!f.condition) out.push({ key: "condition", message: "Condition — record the dog's condition." });
+  if (!f.parasites) out.push({ key: "parasites", message: "Parasites seen? — say yes or no." });
+  if (!f.vaccinationGiven) out.push({ key: "vaccinationGiven", message: "Vaccination given? — say yes or no." });
+  else if (f.vaccinationGiven === "yes" && !f.vaccinationType)
+    out.push({ key: "vaccinationType", message: "Vaccination type — choose one." });
+  if (!f.fleaTickWormGiven)
+    out.push({ key: "fleaTickWormGiven", message: "Flea / tick / worm given? — say yes or no." });
+  if (f.behaviour.length === 0)
+    out.push({ key: "behaviour", message: "Behaviour assessment — tick at least one." });
+  else if (f.behaviour.includes("other") && !f.behaviourOther.trim())
+    out.push({ key: "behaviourOther", message: "What other behaviour? — say what you saw." });
+  return out;
 }
 
-export function signoffError(f: IntakeInput): string | null {
-  if (!f.signedName.trim()) return "Please type your name to sign the intake record.";
-  return null;
+export function signoffIssues(f: IntakeInput): Issue[] {
+  return f.signedName.trim() ? [] : [{ key: "signedName", message: "Signed — type your name to sign the record." }];
 }
 
-/** Everything a new intake needs. Mirrors the server check so the message appears on the page. */
-export function intakeError(f: IntakeInput): string | null {
-  return profileError(f) ?? placementError(f) ?? recordError(f) ?? signoffError(f);
+/** Every problem a new intake has, in the order the form shows the fields. */
+export function intakeIssues(f: IntakeInput): Issue[] {
+  const order = ["intakeDate", "startStatus", "startPersonId", "startYard", "startDueBack", "startNotes"];
+  const placement = [...recordIssues(f).filter((i) => i.key === "intakeDate"), ...placementIssues(f)].sort(
+    (a, b) => order.indexOf(a.key) - order.indexOf(b.key),
+  );
+  const record = recordIssues(f).filter((i) => i.key !== "intakeDate");
+  return [...placement, ...profileIssues(f), ...record, ...signoffIssues(f)];
 }
+
+// Server checks and the older callers want just the first message.
+const firstMessage = (list: Issue[]) => list[0]?.message.replace(/^[^—]+— /, "") ?? null;
+export const profileError = (f: IntakeInput) => firstMessage(profileIssues(f));
+export const placementError = (f: IntakeInput) => firstMessage(placementIssues(f));
+export const recordError = (f: IntakeInput) => firstMessage(recordIssues(f));
+export const signoffError = (f: IntakeInput) => firstMessage(signoffIssues(f));
+/** Everything a new intake needs. Mirrors the server check. */
+export const intakeError = (f: IntakeInput) => firstMessage(intakeIssues(f));
 
 /** Estimated date of birth from an age band (midpoint), as YYYY-MM-DD. */
 export function dobFromBand(band: string, today = new Date()): string | null {

@@ -1,18 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { createContext, useContext, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createDogIntake, updateDogDetails } from "@/lib/actions/intake";
 import { listActiveCarers } from "@/lib/actions/dog-activity";
 import { prepareDogPhotoUploads, registerDogPhotos } from "@/lib/actions/dog-photos";
 import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 import { shrinkToJpeg } from "@/lib/image-shrink";
-import { DateTimeField, DaysAheadSelect } from "@/components/dogs/datetime-field";
+import { DueBackPicker } from "@/components/intake/due-back";
 import {
   AGE_BANDS,
   AU_STATES,
   BEHAVIOUR_OPTIONS,
-  BREED_SUGGESTIONS,
   COAT_LENGTHS,
   COLOURS,
   CONDITIONS,
@@ -20,9 +19,10 @@ import {
   EMPTY_INTAKE,
   INTAKE_REASONS,
   INTAKE_SOURCES,
-  intakeError,
-  profileError,
-  recordError,
+  intakeIssues,
+  profileIssues,
+  recordIssues,
+  type Issue,
   SEX_OPTIONS,
   SIZE_OPTIONS,
   SOURCES_WITH_PERSON,
@@ -59,28 +59,43 @@ function SL() {
   return (
     <span
       title="This is captured for SavourLife"
-      className="mr-1.5 px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-warm text-ink align-middle"
+      className="mr-1.5 px-1 py-px rounded text-[9px] font-bold bg-warm-tint text-warm-ink border border-warm align-middle"
     >
       SL
     </span>
   );
 }
 
+// The keys of every field with a problem, so each one can be ringed in red.
+const IssueKeys = createContext<Set<string>>(new Set());
+
 function Field({
   label,
   required,
   sl,
   hint,
+  k,
   children,
 }: {
   label: string;
   required?: boolean;
   sl?: boolean;
   hint?: string;
+  /** The field's key on the form, used to ring it red when it has a problem. */
+  k?: string;
   children: React.ReactNode;
 }) {
+  const keys = useContext(IssueKeys);
+  const bad = !!k && keys.has(k);
   return (
-    <label className="flex flex-col gap-1 text-sm">
+    <label
+      data-key={k}
+      className={`flex flex-col gap-1 text-sm ${
+        bad
+          ? "[&_input]:border-danger [&_select]:border-danger [&_textarea]:border-danger [&_input]:ring-2 [&_select]:ring-2 [&_textarea]:ring-2 [&_input]:ring-danger/30 [&_select]:ring-danger/30 [&_textarea]:ring-danger/30"
+          : ""
+      }`}
+    >
       <span className="font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
         {sl && <SL />}
         {label}
@@ -94,7 +109,7 @@ function Field({
 
 function Section({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
   return (
-    <fieldset className="flex flex-col gap-4 border border-line rounded-[var(--radius)] bg-card p-5">
+    <fieldset className="flex flex-col gap-5 border border-line rounded-[var(--radius)] bg-card p-5">
       <legend className="text-base font-extrabold px-1" style={{ fontFamily: "var(--font-display)" }}>
         {title}
       </legend>
@@ -121,6 +136,23 @@ export function IntakeForm({
   const [saved, setSaved] = useState<{ dogId: string; ref: string; name: string } | null>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+  const [issues, setIssues] = useState<Issue[]>([]);
+  const [showIssues, setShowIssues] = useState(false);
+  const summaryRef = useRef<HTMLDivElement>(null);
+
+  const computeIssues = (): Issue[] =>
+    edit ? [...profileIssues(f), ...(edit.showRecord ? recordIssues(f) : [])] : intakeIssues(f);
+  // After a failed save the list updates as things are fixed, so it shrinks to nothing.
+  useEffect(() => {
+    if (showIssues) setIssues(computeIssues());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f, showIssues]);
+
+  function jumpTo(key: string) {
+    const el = document.querySelector<HTMLElement>(`[data-key="${key}"]`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    el?.querySelector<HTMLElement>("input, select, textarea")?.focus({ preventScroll: true });
+  }
   const [carers, setCarers] = useState<{ id: string; name: string }[]>([]);
   // Photos picked before saving: uploaded to the new dog as part of Save intake.
   const [staged, setStaged] = useState<{ id: string; file: File; url: string }[]>([]);
@@ -167,10 +199,15 @@ export function IntakeForm({
   function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    const found = computeIssues();
+    if (found.length > 0) {
+      setIssues(found);
+      setShowIssues(true);
+      summaryRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
     if (edit) {
       // Editing: the profile always; the paper record only when this person can change it. No sign-off.
-      const problem = profileError(f) ?? (edit.showRecord ? recordError(f) : null);
-      if (problem) return setError(problem);
       startTransition(async () => {
         const r = await updateDogDetails(edit.dogId, f);
         if (!("ok" in r)) return setError(r.error);
@@ -179,8 +216,6 @@ export function IntakeForm({
       });
       return;
     }
-    const problem = intakeError(f);
-    if (problem) return setError(problem);
     startTransition(async () => {
       // The due-back time is picked in local time; the server wants an exact moment.
       const payload = {
@@ -265,33 +300,53 @@ export function IntakeForm({
   // The intake date is part of the signed record, so only someone who can change that record sees it when editing.
   const showDate = !edit || edit.showRecord;
 
+  const summary =
+    issues.length > 0 ? (
+      <div ref={summaryRef} className="rounded-[var(--radius)] border-2 border-danger bg-white p-4 text-sm" role="alert">
+        <p className="font-extrabold text-danger">
+          {issues.length === 1 ? "1 thing to fix before saving:" : `${issues.length} things to fix before saving:`}
+        </p>
+        <ul className="mt-2 flex flex-col gap-1">
+          {issues.map((i) => (
+            <li key={i.key}>
+              <button type="button" onClick={() => jumpTo(i.key)} className="text-left underline text-danger">
+                {i.message}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    ) : null;
+
   return (
-    <form onSubmit={submit} className="flex flex-col gap-4">
+    <IssueKeys.Provider value={new Set(issues.map((i) => i.key))}>
+    <form onSubmit={submit} className="flex flex-col gap-5">
       <p className="text-xs text-ink">
         <span className="text-danger">*</span> means the question must be answered. <SL /> marks everything SavourLife also
         asks for, in the order their form uses.
       </p>
+      {issues.length > 0 && summary}
 
       <Section title="The dog" note="Answers tagged SL go on the SavourLife listing.">
         {(showDate || !edit) && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {showDate && (
-              <Field label="Date of intake" required>
+              <Field k="intakeDate" label="Date of intake" required>
                 <input type="date" className={inputClass} value={f.intakeDate} onChange={(e) => set("intakeDate", e.target.value)} />
               </Field>
             )}
             {!edit && (
-              <Field label="Starting status" required>
+              <Field k="startStatus" label="Starting status" required>
                 <P value={f.startStatus} onChange={(v) => set("startStatus", v)} options={START_STATUSES} />
               </Field>
             )}
             {!edit && f.startStatus === "yard" && (
-              <Field label="Which yard" required>
+              <Field k="startYard" label="Which yard" required>
                 <P value={f.startYard} onChange={(v) => set("startYard", v)} options={YARD_CHOICES} />
               </Field>
             )}
             {!edit && (f.startStatus === "foster" || f.startStatus === "jail_break") && (
-              <Field label={f.startStatus === "foster" ? "Foster carer" : "Jail break carer"} required>
+              <Field k="startPersonId" label={f.startStatus === "foster" ? "Foster carer" : "Jail break carer"} required>
                 <P
                   value={f.startPersonId}
                   onChange={(v) => set("startPersonId", v)}
@@ -302,20 +357,22 @@ export function IntakeForm({
           </div>
         )}
         {!edit && f.startStatus !== "available" && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Field label="Due back" required>
-              <DateTimeField required value={f.startDueBack} onChange={(v) => set("startDueBack", v)} />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
+            <Field k="startDueBack" label="Back in…" required>
+              <DueBackPicker value={f.startDueBack} onChange={(v) => set("startDueBack", v)} />
             </Field>
-            <Field label="Or days from now">
-              <DaysAheadSelect value={f.startDueBack} onChange={(v) => set("startDueBack", v)} />
-            </Field>
-            <Field label={f.startStatus === "bed_rest" ? "Notes (why)" : "Notes"} required={f.startStatus === "bed_rest"}>
+            <Field
+              k="startNotes"
+              label={f.startStatus === "bed_rest" ? "Why bed rest?" : "Notes"}
+              required={f.startStatus === "bed_rest"}
+            >
               <input className={inputClass} value={f.startNotes} onChange={(e) => set("startNotes", e.target.value)} />
             </Field>
           </div>
         )}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <Field label="Name" required sl>
+        <h3 className="text-xs font-extrabold uppercase tracking-wide text-ink pt-1">About the dog</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Field k="name" label="Name" required sl>
             <input
               className={inputClass}
               placeholder="As on the microchip"
@@ -323,23 +380,13 @@ export function IntakeForm({
               onChange={(e) => set("name", e.target.value)}
             />
           </Field>
-          <Field label="Breed" required sl>
-            <input
-              list="breed-suggestions"
-              className={inputClass}
-              value={f.breed}
-              onChange={(e) => set("breed", e.target.value)}
-            />
-            <datalist id="breed-suggestions">
-              {BREED_SUGGESTIONS.map((b) => (
-                <option key={b} value={b} />
-              ))}
-            </datalist>
+          <Field k="breed" label="Breed" required sl>
+            <input className={inputClass} value={f.breed} onChange={(e) => set("breed", e.target.value)} />
           </Field>
-          <Field label="Sex" required sl>
+          <Field k="sex" label="Sex" required sl>
             <P value={f.sex} onChange={(v) => set("sex", v)} options={SEX_OPTIONS} />
           </Field>
-          <Field label="Date of birth" required sl>
+          <Field k="dateOfBirth" label="Date of birth" required sl>
             <input
               type="date"
               className={inputClass}
@@ -395,6 +442,7 @@ export function IntakeForm({
           Name: use &lsquo;Unknown&rsquo; plus the date if there is no microchip. No date of birth? Pick an approximate age.
         </p>
 
+        <h3 className="text-xs font-extrabold uppercase tracking-wide text-ink pt-2">Profile and suitability</h3>
         <Field label="Profile — personality and best features" sl>
           <textarea
             rows={4}
@@ -405,8 +453,8 @@ export function IntakeForm({
           />
         </Field>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <Field label="Case manager email" sl>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Field k="contactEmail" label="Case manager email" sl>
             <input
               type="email"
               inputMode="email"
@@ -442,13 +490,14 @@ export function IntakeForm({
           </div>
         </fieldset>
 
+        <h3 className="text-xs font-extrabold uppercase tracking-wide text-ink pt-2">Health</h3>
         <fieldset className="flex flex-col gap-2">
           <legend className="text-sm font-semibold mb-1">
             <SL />
             Medical — what will be true at adoption
           </legend>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <Field label="Desexed" required>
+            <Field k="desexed" label="Desexed" required>
               <P value={f.desexed} onChange={(v) => set("desexed", v as YN)} options={YES_NO} />
             </Field>
             <Field label="Vaccinated">
@@ -463,7 +512,7 @@ export function IntakeForm({
           </div>
         </fieldset>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Medical issues" sl>
             <input
               className={inputClass}
@@ -482,7 +531,7 @@ export function IntakeForm({
           </Field>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Field label="Indoor only?" sl>
             <P value={f.indoorOnly} onChange={(v) => set("indoorOnly", v as YN)} options={YES_NO} />
           </Field>
@@ -494,21 +543,21 @@ export function IntakeForm({
           </Field>
         </div>
         {f.bondedPair === "yes" && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Field label="Bonded with" required sl>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Field k="bondedPairName" label="Bonded with" required sl>
               <input className={inputClass} value={f.bondedPairName} onChange={(e) => set("bondedPairName", e.target.value)} />
             </Field>
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Field label="Suburb" sl>
             <input className={inputClass} value={f.suburb} onChange={(e) => set("suburb", e.target.value)} />
           </Field>
           <Field label="State" sl>
             <P value={f.state} onChange={(v) => set("state", v)} options={AU_STATES} />
           </Field>
-          <Field label="Postcode" required sl>
+          <Field k="postcode" label="Postcode" required sl>
             <input
               inputMode="numeric"
               className={inputClass}
@@ -522,7 +571,7 @@ export function IntakeForm({
           <Field label="Interstate adoption?" sl>
             <P value={f.interstate} onChange={(v) => set("interstate", v as YN)} options={YES_NO} />
           </Field>
-          <Field label="Adoption fee ($)" required sl>
+          <Field k="adoptionFee" label="Adoption fee ($)" required sl>
             <input
               type="number"
               inputMode="decimal"
@@ -614,11 +663,11 @@ export function IntakeForm({
 
       {(!edit || edit.showRecord) && (
         <Section title="CAPS intake record" note="From the paper Animal Intake Record. Only staff and admin see this.">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Field label="Source of intake" required>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Field k="source" label="Source of intake" required>
               <P value={f.source} onChange={(v) => set("source", v)} options={INTAKE_SOURCES} />
             </Field>
-            <Field label="Reason for intake" required>
+            <Field k="reason" label="Reason for intake" required>
               <P value={f.reason} onChange={(v) => set("reason", v)} options={INTAKE_REASONS} />
             </Field>
             <Field label="More about the reason">
@@ -626,7 +675,7 @@ export function IntakeForm({
             </Field>
           </div>
           {SOURCES_WITH_PERSON.includes(f.source) && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Field label="Surrendered by">
                 <input
                   className={inputClass}
@@ -639,11 +688,11 @@ export function IntakeForm({
           )}
 
           <h3 className="text-sm font-extrabold pt-1">Initial health check</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Field label="Condition" required>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Field k="condition" label="Condition" required>
               <P value={f.condition} onChange={(v) => set("condition", v)} options={CONDITIONS} />
             </Field>
-            <Field label="Parasites seen?" required>
+            <Field k="parasites" label="Parasites seen?" required>
               <P value={f.parasites} onChange={(v) => set("parasites", v as YN)} options={YES_NO} />
             </Field>
             <Field label="Injuries / illness">
@@ -654,21 +703,24 @@ export function IntakeForm({
                 onChange={(e) => set("visibleInjuries", e.target.value)}
               />
             </Field>
-            <Field label="Vaccination given?" required>
+            <Field k="vaccinationGiven" label="Vaccination given?" required>
               <P value={f.vaccinationGiven} onChange={(v) => set("vaccinationGiven", v as YN)} options={YES_NO} />
             </Field>
-            <Field label="Flea / tick / worm given?" required>
+            <Field k="fleaTickWormGiven" label="Flea / tick / worm given?" required>
               <P value={f.fleaTickWormGiven} onChange={(v) => set("fleaTickWormGiven", v as YN)} options={YES_NO} />
             </Field>
             {f.vaccinationGiven === "yes" && (
-              <Field label="Vaccination type" required>
+              <Field k="vaccinationType" label="Vaccination type" required>
                 <P value={f.vaccinationType} onChange={(v) => set("vaccinationType", v)} options={VACCINE_TYPES} />
               </Field>
             )}
           </div>
 
           <h3 className="text-sm font-extrabold pt-1">Initial behaviour assessment</h3>
-          <fieldset className="flex flex-wrap gap-2">
+          <fieldset
+            data-key="behaviour"
+            className={`flex flex-wrap gap-2 ${issues.some((i) => i.key === "behaviour") ? "rounded-[var(--radius)] ring-2 ring-danger/40 p-2" : ""}`}
+          >
             <legend className="text-sm font-semibold mb-1">
               Tick all that apply
               <Star />
@@ -686,8 +738,8 @@ export function IntakeForm({
             ))}
           </fieldset>
           {f.behaviour.includes("other") && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <Field label="What other behaviour?" required>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <Field k="behaviourOther" label="What other behaviour?" required>
                 <input className={inputClass} value={f.behaviourOther} onChange={(e) => set("behaviourOther", e.target.value)} />
               </Field>
             </div>
@@ -712,17 +764,18 @@ export function IntakeForm({
           title="Sign-off"
           note="Completed by an admin. Filled in from your sign-in; change it only if someone else did the intake."
         >
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Field label="Intake officer">
               <input className={inputClass} value={f.officerName} onChange={(e) => set("officerName", e.target.value)} />
             </Field>
-            <Field label="Signed (typed name)" required>
+            <Field k="signedName" label="Signed (typed name)" required>
               <input className={inputClass} value={f.signedName} onChange={(e) => set("signedName", e.target.value)} />
             </Field>
           </div>
         </Section>
       )}
 
+      {summary && <div>{summary}</div>}
       {error && <p className="text-sm text-danger">{error}</p>}
 
       {/* The same buttons again at the end, so nobody scrolls back up after filling the long form. */}
@@ -752,5 +805,6 @@ export function IntakeForm({
         </button>
       </div>
     </form>
+    </IssueKeys.Provider>
   );
 }
