@@ -18,8 +18,15 @@ function whenLabel(n: HandoverNoteRow) {
  *  checklist task (the sidebar's "Check the handover log now" button stays
  *  until they all are), then recent ones already done, struck through. The
  *  box to leave a new note underneath. */
-export function HandoverLog({ notes }: { notes: HandoverNoteRow[] }) {
+export function HandoverLog({ notes, foldBefore }: { notes: HandoverNoteRow[]; foldBefore: string }) {
   const router = useRouter();
+  // Notes ticked off before `foldBefore` (3 days ago) are folded away under
+  // "Show earlier notes". Anything still to do always shows.
+  const [showEarlier, setShowEarlier] = useState(false);
+  const foldMs = new Date(foldBefore).getTime();
+  const isEarlier = (n: HandoverNoteRow) => n.doneAt !== null && new Date(n.doneAt).getTime() < foldMs;
+  const earlierCount = notes.filter(isEarlier).length;
+  const shown = showEarlier ? notes : notes.filter((n) => !isEarlier(n));
   const [isPending, startTransition] = useTransition();
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -61,10 +68,12 @@ export function HandoverLog({ notes }: { notes: HandoverNoteRow[] }) {
         Handover log
       </h2>
       <div className="rounded-[var(--radius)] border border-line bg-card">
-        {notes.length === 0 ? (
-          <p className="px-3.5 py-3 text-sm text-ink-muted">No handover notes yet.</p>
+        {shown.length === 0 ? (
+          <p className="px-3.5 py-3 text-sm text-ink-muted">
+            {earlierCount > 0 ? "No handover notes from the last 3 days." : "No handover notes yet."}
+          </p>
         ) : (
-          notes.map((n) => {
+          shown.map((n) => {
             const done = n.doneAt !== null;
             return (
               <div
@@ -109,6 +118,15 @@ export function HandoverLog({ notes }: { notes: HandoverNoteRow[] }) {
           })
         )}
       </div>
+      {earlierCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowEarlier((v) => !v)}
+          className="h-10 self-start rounded-[var(--radius)] border border-line px-4 text-sm font-bold text-ink-muted"
+        >
+          {showEarlier ? "Hide earlier notes" : `Show earlier notes (${earlierCount})`}
+        </button>
+      )}
 
       {/* A proper box (several lines; Enter starts a new line, it never
           sends) and a Save note button, with "Saved" beside it once the
