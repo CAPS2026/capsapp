@@ -38,6 +38,9 @@ export type DogDetail = {
   binSourceNumber: string | null;
   savourlifeId: number | null;
   listedOnSavourlife: boolean;
+  slStatus: string | null;
+  slHoldReason: string | null;
+  slEnquiryNumber: string | null;
   markings: string | null;
   coatLength: string | null;
   indoorOnly: boolean | null;
@@ -223,6 +226,9 @@ export async function getDogDetail(dogId: string, isStaff: boolean) {
     binSourceNumber: dogRow.bin_source_number,
     savourlifeId: dogRow.savourlife_id,
     listedOnSavourlife: dogRow.listed_on_savourlife,
+    slStatus: dogRow.sl_status ?? (dogRow.listed_on_savourlife ? "listed" : "not_listed"),
+    slHoldReason: dogRow.sl_hold_reason ?? null,
+    slEnquiryNumber: dogRow.sl_enquiry_number ?? null,
     markings: dogRow.markings ?? null,
     coatLength: dogRow.coat_length ?? null,
     indoorOnly: dogRow.indoor_only ?? null,
