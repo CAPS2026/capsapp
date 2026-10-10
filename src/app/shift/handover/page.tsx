@@ -12,11 +12,13 @@ export default async function HandoverPage() {
   if (!active && !me?.isAdmin) redirect("/shift");
 
   const [notes, concerns] = await Promise.all([getHandoverNotes(), getHealthConcerns()]);
+  // Notes ticked off more than 3 days ago are folded away.
+  const foldBefore = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
       <HealthConcernsList concerns={concerns} isAdmin={me?.isAdmin ?? false} />
-      <HandoverLog notes={notes} />
+      <HandoverLog notes={notes} foldBefore={foldBefore} />
     </div>
   );
 }
