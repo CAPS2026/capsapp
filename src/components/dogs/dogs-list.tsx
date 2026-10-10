@@ -279,11 +279,15 @@ function CardLine({ dog, orgSettings }: { dog: DogListItem; orgSettings: OrgSett
     case "walking": {
       if (!c) return null;
       const minutes = minutesSince(c.startedAt);
+      // Two short lines, laid out like the Foster / Jail Break card: who and how long on the first,
+      // when it started on the second.
       return (
-        <p className="text-xs" style={{ color: timerColor(minutes, orgSettings.walkAlertAfterMinutes) }}>
-          With: {c.personName ?? "someone"} · {formatStartedLine("Started", c.startedAt)} · Time Out{" "}
-          {formatMinutesOut(c.startedAt)}
-        </p>
+        <div className="text-xs" style={{ color: timerColor(minutes, orgSettings.walkAlertAfterMinutes) }}>
+          <p>
+            With: {c.personName ?? "someone"} · Time out: {formatMinutesOut(c.startedAt)}
+          </p>
+          <p>{formatStartedLine("Started", c.startedAt)}</p>
+        </div>
       );
     }
     case "yard": {
