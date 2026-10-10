@@ -14,6 +14,7 @@ import { ActionMenu } from "@/components/dogs/action-menu";
 import { ActivitySection } from "@/components/dogs/activity-section";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { Field } from "@/components/detail-field";
+import { ManageMenu } from "@/components/dogs/manage-menu";
 import { slStatusLabel } from "@/lib/savourlife-status";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -23,6 +24,14 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       {children}
     </section>
   );
+}
+
+/** "2 days with CAPS" for a new arrival, "3 months with CAPS" later. */
+function withCapsText(arrivalDate: string): string {
+  const days = Math.max(0, Math.floor((Date.now() - new Date(arrivalDate).getTime()) / 86400000));
+  if (days === 0) return "arrived today";
+  if (days < 60) return `${days} day${days === 1 ? "" : "s"} with CAPS`;
+  return `${formatYearsMonths(arrivalDate)} with CAPS`;
 }
 
 function yesNo(v: boolean | null): string | null {
@@ -66,7 +75,7 @@ export function DogDetailView({
 }) {
   const primaryPhoto = dog.photos.find((p) => p.isPrimary) ?? dog.photos[0];
   const age = dog.dateOfBirth ? formatYearsMonths(dog.dateOfBirth) : dog.ageOverride;
-  const timeWithCaps = dog.arrivalDate ? formatYearsMonths(dog.arrivalDate) : "Time unknown";
+  const arrivalLine = dog.arrivalDate ? `Arrived ${formatDate(dog.arrivalDate)} · ${withCapsText(dog.arrivalDate)}` : null;
   const canBringIn = canKiosk || currentActivity?.personId === currentPersonId;
 
   return (
@@ -86,24 +95,14 @@ export function DogDetailView({
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <div className="flex items-baseline gap-2 flex-wrap">
-              <h1 className="text-xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
-                {dog.name}
-              </h1>
-              <span className="text-sm text-ink-muted">{dog.ref}</span>
-              {isStaff && (
-                <>
-                  <Link href={`/dogs/${dog.id}/edit`} className="text-sm font-bold text-brand-ink underline ml-1">
-                    Edit dog
-                  </Link>
-                  <Link
-                    href={`/dogs/${dog.id}/savourlife`}
-                    className="text-sm font-bold px-3 py-1 rounded-[var(--radius)] bg-warm text-ink ml-1"
-                  >
-                    Generate SavourLife details
-                  </Link>
-                </>
-              )}
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <h1 className="text-xl font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
+                  {dog.name}
+                </h1>
+                <span className="text-sm text-ink-muted">{dog.ref}</span>
+              </div>
+              {isStaff && <ManageMenu dogId={dog.id} />}
             </div>
             <div className="flex items-center gap-2 flex-wrap mt-1">
               <span
@@ -117,6 +116,7 @@ export function DogDetailView({
               )}
             </div>
             {currentActivity && <CurrentStatusLine status={dog.status} current={currentActivity} />}
+            {arrivalLine && <p className="text-xs text-ink mt-1">{arrivalLine}</p>}
           </div>
         </div>
 
@@ -243,7 +243,14 @@ export function DogDetailView({
         </Section>
       )}
 
-      {isStaff && (confidential || medicalEvents.length > 0) && (
+      {isStaff &&
+        (!!(
+          confidential?.behaviourNotes ||
+          confidential?.adoptionHistory ||
+          confidential?.medicalSummaryInternal ||
+          confidential?.restrictions
+        ) ||
+          medicalEvents.length > 0) && (
         <Section title="Staff only">
           {confidential && (
             <>
@@ -267,7 +274,7 @@ export function DogDetailView({
         </Section>
       )}
 
-      <Section title="Activity">
+      <Section title="Recent activity">
         <ActivitySection
           dogId={dog.id}
           latest={latestOfEachType}
@@ -287,10 +294,6 @@ export function DogDetailView({
             </p>
           </div>
         ))}
-      </Section>
-
-      <Section title="Time with CAPS">
-        <p className="text-sm">{timeWithCaps}</p>
       </Section>
 
       {isAdmin && (
@@ -336,23 +339,27 @@ function CurrentStatusLine({ status, current }: { status: DogDetail["status"]; c
     );
   }
 
-  const who = current.personName ? `With: ${current.personName} · ` : status === "yard" ? `${current.reason ?? "Yard"} · ` : "";
+  // Two short lines for every kind: who / how long on the first, when it started (and is due) on the second.
   const timeOut =
     status === "walking"
-      ? ` · Time Out ${formatMinutesOut(current.startedAt)}`
+      ? `Time out: ${formatMinutesOut(current.startedAt)}`
       : status === "yard"
-        ? ` · Time in Yard ${formatMinutesOut(current.startedAt)}`
-        : status === "bed_rest"
-          ? ` · Time out: ${formatDaysHoursOut(current.startedAt)}`
-          : "";
+        ? `Time in yard: ${formatMinutesOut(current.startedAt)}`
+        : `Time out: ${formatDaysHoursOut(current.startedAt)}`;
+  const first =
+    status === "yard"
+      ? [current.reason ?? "Yard", timeOut]
+      : status === "bed_rest"
+        ? [timeOut, current.reason ?? ""]
+        : [current.personName ? `With: ${current.personName}` : "", timeOut];
   return (
-    <p className="text-sm text-ink mt-1">
-      {who}
-      {formatStartedLine(startLabel, current.startedAt)}
-      {current.dueBack && <> · {formatStartedLine("Due End", current.dueBack)}</>}
-      {status === "bed_rest" && current.reason ? ` · ${current.reason}` : ""}
-      {overdueFlag}
-      {timeOut}
-    </p>
+    <div className="text-sm text-ink mt-1">
+      <p>{first.filter(Boolean).join(" · ")}</p>
+      <p>
+        {formatStartedLine(startLabel, current.startedAt)}
+        {current.dueBack && <> · {formatStartedLine("Due End", current.dueBack)}</>}
+        {overdueFlag}
+      </p>
+    </div>
   );
 }

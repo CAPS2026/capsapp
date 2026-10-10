@@ -37,14 +37,34 @@ export function toDatetimeLocalValue(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// Times are always shown in Weipa time (Australia/Brisbane, UTC+10, no daylight saving) so a page drawn
+// on the server (UTC) and one drawn in the browser agree, and both match the Logs day boundaries.
+const TZ = "Australia/Brisbane";
+
+/** The day of the month in Weipa time. */
+function dayNum(iso: string): number {
+  return Number(new Date(iso).toLocaleDateString("en-AU", { timeZone: TZ, day: "numeric" }));
+}
+
+/** "2026-10-10" in Weipa time, for comparing days. */
+function ymd(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-CA", { timeZone: TZ });
+}
+
 export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short" });
+  return new Date(iso).toLocaleDateString("en-AU", { timeZone: TZ, day: "numeric", month: "short" });
 }
 
 /** 24-hour "HH:mm", per Paul's request (not 12-hour AM/PM). */
 export function formatTime24(iso: string): string {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const parts = new Intl.DateTimeFormat("en-AU", {
+    timeZone: TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(iso));
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
+  return `${get("hour")}:${get("minute")}`;
 }
 
 function ordinal(n: number): string {
@@ -57,23 +77,24 @@ function ordinal(n: number): string {
 /** "Sat, 6th Sep" — the short date format from Paul's 2026-09-06 text review. */
 export function formatShortDate(iso: string): string {
   const d = new Date(iso);
-  const weekday = d.toLocaleDateString("en-AU", { weekday: "short" });
-  const month = d.toLocaleDateString("en-AU", { month: "short" });
-  return `${weekday}, ${ordinal(d.getDate())} ${month}`;
+  const weekday = d.toLocaleDateString("en-AU", { timeZone: TZ, weekday: "short" });
+  const month = d.toLocaleDateString("en-AU", { timeZone: TZ, month: "short" });
+  return `${weekday}, ${ordinal(dayNum(iso))} ${month}`;
 }
 
 /** "6-Sep-26" — compact date for dense activity records. */
 export function formatCompactDate(iso: string): string {
   const d = new Date(iso);
-  const month = d.toLocaleDateString("en-AU", { month: "short" }).slice(0, 3);
-  return `${d.getDate()}-${month}-${String(d.getFullYear()).slice(-2)}`;
+  const month = d.toLocaleDateString("en-AU", { timeZone: TZ, month: "short" }).slice(0, 3);
+  const year = d.toLocaleDateString("en-AU", { timeZone: TZ, year: "numeric" });
+  return `${dayNum(iso)}-${month}-${year.slice(-2)}`;
 }
 
 /** "10 Sep, 09:36" — compact timestamp for dense log tables (no weekday,
  *  no year; the log's date filter carries the year context). */
 export function formatLogDateTime(iso: string): string {
   const d = new Date(iso);
-  const date = d.toLocaleDateString("en-AU", { day: "numeric", month: "short" });
+  const date = d.toLocaleDateString("en-AU", { timeZone: TZ, day: "numeric", month: "short" });
   return `${date}, ${formatTime24(iso)}`;
 }
 
@@ -81,6 +102,7 @@ export function formatLogDateTime(iso: string): string {
 export function formatFullDateTime(iso: string): string {
   const d = new Date(iso);
   const date = d.toLocaleDateString("en-AU", {
+    timeZone: TZ,
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -112,10 +134,7 @@ export function formatActivityRecordLine(opts: {
     return parts.join(" · ");
   }
 
-  const s = new Date(startedAt);
-  const e = new Date(endedAt);
-  const sameDay =
-    s.getFullYear() === e.getFullYear() && s.getMonth() === e.getMonth() && s.getDate() === e.getDate();
+  const sameDay = ymd(startedAt) === ymd(endedAt);
 
   if (sameDay) {
     parts.push(formatCompactDate(startedAt));

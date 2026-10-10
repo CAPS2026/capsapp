@@ -252,10 +252,12 @@ export async function updateDogDetails(dogId: string, input: IntakeInput): Promi
   const { error: dogErr } = await supabase.from("dogs").update(dogFields).eq("id", dogId);
   if (dogErr) return { error: dogErr.message };
 
-  // Foster / case manager email lives in the staff-only table; clearing the box clears it.
-  const { error: confErr } = await supabase
-    .from("dog_confidential")
-    .upsert({ dog_id: dogId, sl_contact_email: orNull(input.contactEmail) });
+  // Foster / case manager email lives in the staff-only table. Only create the row when there is an email;
+  // clearing the box clears it on an existing row (and never leaves an empty confidential record behind).
+  const email = orNull(input.contactEmail);
+  const { error: confErr } = email
+    ? await supabase.from("dog_confidential").upsert({ dog_id: dogId, sl_contact_email: email })
+    : await supabase.from("dog_confidential").update({ sl_contact_email: null }).eq("dog_id", dogId);
   if (confErr) return { error: confErr.message };
 
   if (editRecord) {
