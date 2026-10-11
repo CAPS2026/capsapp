@@ -80,7 +80,13 @@ export function PersonDetailView({
               <span className="text-ink-muted">
                 {person.hasAccount ? "Has an app account" : "No app account"}
               </span>
-              {archived && <span className="text-ink-muted">· archived</span>}
+              {archived && (
+                <span className="text-ink-muted">
+                  · archived
+                  {person.archivedOn ? ` ${person.archivedOn}` : ""}
+                  {person.archiveReason ? ` (${person.archiveReason})` : ""}
+                </span>
+              )}
             </div>
           </div>
         </div>

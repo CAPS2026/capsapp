@@ -48,13 +48,12 @@ export function PeopleList({ people }: { people: PersonListItem[] }) {
     const q = query.trim().toLowerCase();
     let archivedCount = 0;
     const visible = people.filter((p) => {
-      if (p.archived) {
-        archivedCount += 1;
-        if (!showArchived) return false;
-      }
+      if (p.archived) archivedCount += 1;
+      // The Archived filter shows only archived people; otherwise they are hidden.
+      if (p.archived !== showArchived) return false;
       if (q && !p.name.toLowerCase().includes(q) && !(p.nickname ?? "").toLowerCase().includes(q))
         return false;
-      return selected.length === 0 || selected.some((f) => matchesFilter(p, f));
+      return showArchived || selected.length === 0 || selected.some((f) => matchesFilter(p, f));
     });
     // Pending first, then by name (the list already comes name-sorted).
     visible.sort((a, b) => Number(b.hasPending) - Number(a.hasPending));
@@ -84,6 +83,15 @@ export function PeopleList({ people }: { people: PersonListItem[] }) {
             {f.label}
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() => setShowArchived((v) => !v)}
+          className={`shrink-0 px-3 h-8 rounded-full text-sm font-semibold border ${
+            showArchived ? "bg-brand text-white border-brand" : "border-line-cool text-ink"
+          }`}
+        >
+          Archived{archivedCount > 0 ? ` (${archivedCount})` : ""}
+        </button>
       </div>
 
       {visible.length === 0 && <p className="text-sm text-ink-muted py-4">No one matches.</p>}
@@ -128,7 +136,11 @@ export function PeopleList({ people }: { people: PersonListItem[] }) {
                         {r.status === "pending" ? " • pending" : ""}
                       </span>
                     ))}
-                  {p.archived && <span className="text-xs text-ink-muted">archived</span>}
+                  {p.archived && (
+                      <span className="text-xs text-ink-muted">
+                        archived{p.archivedOn ? ` ${p.archivedOn}` : ""}{p.archiveReason ? ` · ${p.archiveReason}` : ""}
+                      </span>
+                    )}
                 </div>
                 {p.roles.some((r) => r.role === "volunteer" && r.status === "active") && (
                   <p className="text-xs text-ink mt-1">
@@ -150,16 +162,6 @@ export function PeopleList({ people }: { people: PersonListItem[] }) {
           </li>
         ))}
       </ul>
-
-      {archivedCount > 0 && (
-        <button
-          type="button"
-          onClick={() => setShowArchived((v) => !v)}
-          className="text-sm text-brand-ink font-semibold self-start"
-        >
-          {showArchived ? "Hide" : "Show"} archived ({archivedCount})
-        </button>
-      )}
     </div>
   );
 }

@@ -8,7 +8,9 @@ import {
   formatStartedLine,
   formatYearsMonths,
 } from "@/lib/format";
-import { deleteDog } from "@/lib/actions/dogs";
+import { deleteDog, reinstateDog } from "@/lib/actions/dogs";
+import { exitTypeLabel } from "@/lib/dog-exit";
+import type { ExitPerson } from "@/components/dogs/exit-dog-dialog";
 import { DogActionButton } from "@/components/dogs/dog-action-button";
 import { ActionMenu } from "@/components/dogs/action-menu";
 import { ActivitySection } from "@/components/dogs/activity-section";
@@ -58,6 +60,7 @@ export function DogDetailView({
   canKiosk,
   currentPersonId,
   currentPersonName,
+  exitPeople,
 }: {
   dog: DogDetail;
   confidential: DogConfidential | null;
@@ -72,6 +75,7 @@ export function DogDetailView({
   canKiosk: boolean;
   currentPersonId: string;
   currentPersonName: string;
+  exitPeople: ExitPerson[];
 }) {
   const primaryPhoto = dog.photos.find((p) => p.isPrimary) ?? dog.photos[0];
   const age = dog.dateOfBirth ? formatYearsMonths(dog.dateOfBirth) : dog.ageOverride;
@@ -102,12 +106,20 @@ export function DogDetailView({
                 </h1>
                 <span className="text-sm text-ink-muted">{dog.ref}</span>
               </div>
-              {isStaff && <ManageMenu dogId={dog.id} />}
+              {isStaff && (
+                <ManageMenu
+                  dogId={dog.id}
+                  dogName={dog.name}
+                  status={dog.status}
+                  slListed={dog.slStatus === "listed" || dog.slStatus === "on_hold"}
+                  people={exitPeople}
+                />
+              )}
             </div>
             <div className="flex items-center gap-2 flex-wrap mt-1">
               <span
                 className="inline-block text-xs font-bold px-2 py-0.5 rounded-full text-white"
-                style={{ background: `var(${STATUS_COLOR_VAR[dog.status]})` }}
+                style={{ background: STATUS_COLOR_VAR[dog.status] ? `var(${STATUS_COLOR_VAR[dog.status]})` : "#6b7280" }}
               >
                 {dog.status.replace("_", " ")}
               </span>
@@ -155,6 +167,42 @@ export function DogDetailView({
           )}
         </div>
       </div>
+
+      {dog.exit && (
+        <section className="bg-warm-tint border border-warm rounded-[var(--radius)] p-4 flex flex-col gap-1">
+          <h2 className="font-bold">
+            {exitTypeLabel(dog.exit.type)}
+            {dog.exit.date ? ` on ${formatDate(dog.exit.date)}` : ""}
+          </h2>
+          {dog.exit.personName && (
+            <p className="text-sm">
+              {dog.exit.type === "adopted" ? "Adopted by" : "Taken by"}{" "}
+              {dog.exit.personId ? (
+                <Link href={`/people/${dog.exit.personId}`} className="font-semibold text-brand-ink underline">
+                  {dog.exit.personName}
+                </Link>
+              ) : (
+                dog.exit.personName
+              )}
+              {dog.exit.type === "adopted" && dog.slEnquiryNumber ? ` (SavourLife enquiry ${dog.slEnquiryNumber})` : ""}
+            </p>
+          )}
+          {dog.exit.notes && <p className="text-sm">{dog.exit.notes}</p>}
+          {isStaff && (
+            <div className="pt-1">
+              <ConfirmDeleteButton
+                triggerLabel="Bring back to the shelter"
+                heading={`Bring ${dog.name} back?`}
+                body="This undoes the exit. The dog goes back to Available and appears on the Dogs list again."
+                confirmLabel="Bring back"
+                action={reinstateDog.bind(null, dog.id)}
+                redirectTo={`/dogs/${dog.id}`}
+                triggerClassName="text-sm font-semibold text-brand-ink underline underline-offset-2"
+              />
+            </div>
+          )}
+        </section>
+      )}
 
       <Section title="About">
         <Field label="Breed" value={dog.breed} />

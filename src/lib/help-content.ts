@@ -270,8 +270,8 @@ export const HELP_ARTICLES: HelpArticle[] = [
     audience: "staff",
     keywords: "pin switch hand over shared device ipad kiosk cafe locked",
     steps: [
-      "On a shared device a staff member taps Switch to Volunteer Mode. The app shows only what volunteers need: walks, yard, visitors and basic dog info.",
-      "To go back, tap Switch to Staff Mode and enter the staff PIN. It also switches back to volunteer mode on its own after a while with no use.",
+      "On a shared device a staff member taps VOLUNTEER MODE on the Staff / Volunteer toggle at the top. The app shows only what volunteers need: walks, yard, visitors and basic dog info.",
+      "To go back, tap STAFF MODE on the toggle and enter the staff PIN. It also switches back to volunteer mode on its own after a while with no use.",
       "Admins set or change the PIN under the ⚙ settings.",
     ],
   },

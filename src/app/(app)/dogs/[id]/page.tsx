@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentPerson } from "@/lib/auth";
 import { getDogDetail } from "@/lib/dog-detail";
+import { getMergeCandidates } from "@/lib/people-data";
 import { DogDetailView } from "@/components/dogs/dog-detail-view";
 
 // Dog detail card (docs/ui-flows.md §3) with the take-out/bring-in fast
@@ -14,6 +15,11 @@ export default async function DogDetailPage({ params }: { params: Promise<{ id: 
   const detail = await getDogDetail(id, person.isStaff);
   if (!detail) notFound();
 
+  // Staff pick the adopter in the Exit dog dialog.
+  const exitPeople = person.isStaff
+    ? (await getMergeCandidates("")).map((p) => ({ id: p.id, name: p.name }))
+    : [];
+
   return (
     <div className="flex flex-col gap-4 p-4 pb-8">
       <Link href="/dogs" className="text-sm font-semibold text-brand-ink">
@@ -24,6 +30,7 @@ export default async function DogDetailPage({ params }: { params: Promise<{ id: 
         isStaff={person.isStaff}
         isAdmin={person.isAdmin}
         canKiosk={person.canKiosk}
+        exitPeople={exitPeople}
         currentPersonId={person.id}
         currentPersonName={`${person.firstName} ${person.surname}`.trim()}
       />

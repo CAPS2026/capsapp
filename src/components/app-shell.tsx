@@ -95,9 +95,6 @@ export function AppShell({
         <div className={`${shellWidth} mx-auto flex items-center gap-3 px-4 h-11`}>
           {person.isStaff ? (
             <>
-              <span className="hidden sm:inline text-xs font-bold uppercase tracking-wide text-ink-muted">
-                Staff Mode
-              </span>
               <HandOverButton pinIsSet={pinIsSet} />
             </>
           ) : (

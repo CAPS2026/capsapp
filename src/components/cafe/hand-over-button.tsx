@@ -4,6 +4,7 @@ import { useRef, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { enterCafeMode } from "@/lib/actions/cafe";
+import { ModeToggle } from "@/components/cafe/mode-toggle";
 
 // (Called "Hand over" until 2026-10-04 — renamed because "handover" is the
 // staff app's own word for shift notes.) Shown in the header for a staff account that is NOT already in café
@@ -24,13 +25,7 @@ export function HandOverButton({ pinIsSet }: { pinIsSet: boolean }) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => dialogRef.current?.showModal()}
-        className="h-8 px-3 rounded-full border-2 border-brand text-brand-ink text-sm font-bold whitespace-nowrap"
-      >
-        Switch to Volunteer Mode
-      </button>
+      <ModeToggle mode="staff" onSwitch={() => dialogRef.current?.showModal()} />
 
       <dialog
         ref={dialogRef}

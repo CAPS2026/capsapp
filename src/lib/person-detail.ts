@@ -37,6 +37,8 @@ export type PersonDetail = {
   };
   notesInternal: string | null;
   createdAt: string;
+  archivedOn: string | null;
+  archiveReason: string | null;
   roles: PersonRoleDetail[];
   volunteerProfile: {
     interests: string[];
@@ -111,6 +113,8 @@ export async function getPersonDetail(id: string): Promise<PersonDetail | null> 
     photo_path: string | null;
     updated_at: string | null;
     notes_internal: string | null;
+    archived_on: string | null;
+    archive_reason: string | null;
     created_at: string;
     person_roles:
       | Array<{
@@ -186,6 +190,8 @@ export async function getPersonDetail(id: string): Promise<PersonDetail | null> 
     },
     notesInternal: row.notes_internal,
     createdAt: row.created_at,
+    archivedOn: row.archived_on ?? null,
+    archiveReason: row.archive_reason ?? null,
     roles: (row.person_roles ?? [])
       .slice()
       .sort((a, b) => a.role.localeCompare(b.role))
