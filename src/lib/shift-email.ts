@@ -12,6 +12,7 @@
 import { sendEmail, siteUrl } from "@/lib/email";
 import { HEALTH_LINK_DAYS } from "@/lib/health-link";
 import { signPhotoPaths } from "@/lib/shift-photos";
+import { COURSE_LINK_DAYS } from "@/lib/medication-link";
 import { shiftDb } from "@/lib/shift-db";
 import { DOSE_REASON_LABEL, VET_KIND_LABEL, getDueDoses, getVetAppointments, getVolunteerCount } from "@/lib/care-data";
 import {
@@ -495,6 +496,37 @@ export async function sendMissedDoseEmail(opts: {
     </div>`,
   });
   if (!result.ok) console.error("sendMissedDoseEmail: send failed", result.error);
+  return result.ok;
+}
+
+/** Tells Shayna a caretaker thinks a medication course is finished, with a
+ *  "Stop this medication" button (a link to a page that changes nothing until
+ *  the button on it is pressed). Returns whether it went. */
+export async function sendCourseFinishedEmail(opts: {
+  personName: string;
+  dogName: string;
+  medicine: string;
+  note: string;
+  token: string;
+}): Promise<boolean> {
+  const recipients = await getHealthConcernRecipients();
+  if (recipients.length === 0) return false;
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const link = `${siteUrl()}/approve/medication/${opts.token}`;
+  const line = `${opts.personName} says ${opts.dogName}'s ${opts.medicine} course looks finished${opts.note ? ` (${opts.note})` : ""}. It is still on the checklist, and the staff have been told to keep giving it until you stop it.`;
+  const linkNote = `This link works for ${COURSE_LINK_DAYS} days. After that, stop it on the Medications page in the staff app.`;
+  const result = await sendEmail({
+    to: recipients,
+    subject: `CAPS: medication course finished? (${opts.dogName})`,
+    text: `${line}\n\nTo stop it (opening the link changes nothing until you press the button):\n${link}\n(${linkNote})`,
+    html: `<div style="font-family:sans-serif;max-width:520px;">
+      <h2 style="color:#7E1F4A;">Course finished? ${esc(opts.dogName)}</h2>
+      <p style="font-size:14px;">${esc(line)}</p>
+      <p style="margin:18px 0 8px;"><a href="${link}" style="display:inline-block;background:#1A7ABF;color:#ffffff;font-weight:bold;font-size:15px;text-decoration:none;padding:12px 20px;border-radius:8px;">Stop this medication</a></p>
+      <p style="margin:0;font-size:12px;color:#6B6B68;">Opening the link changes nothing until you press the button on the page. ${esc(linkNote)}</p>
+    </div>`,
+  });
+  if (!result.ok) console.error("sendCourseFinishedEmail: send failed", result.error);
   return result.ok;
 }
 

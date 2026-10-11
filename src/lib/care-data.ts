@@ -24,9 +24,15 @@ export type Medication = {
   endDate: string | null;
   notes: string | null;
   stoppedAt: string | null;
+  /** A caretaker has told Shayna the course looks finished (see flagCourseFinished). */
+  finishFlaggedAt: string | null;
+  finishFlaggedBy: string | null;
+  finishNote: string | null;
 };
 
-const MED_SELECT = "id, dog_name, medicine, how_given, parts, frequency, weekdays, day_of_month, start_date, end_date, notes, stopped_at";
+const MED_SELECT =
+  "id, dog_name, medicine, how_given, parts, frequency, weekdays, day_of_month, start_date, end_date, notes, stopped_at, " +
+  "finish_flagged_at, finish_flagged_by, finish_note";
 
 type RawMed = {
   id: string;
@@ -41,6 +47,9 @@ type RawMed = {
   end_date: string | null;
   notes: string | null;
   stopped_at: string | null;
+  finish_flagged_at: string | null;
+  finish_flagged_by: string | null;
+  finish_note: string | null;
 };
 
 function toMed(r: RawMed): Medication {
@@ -57,6 +66,9 @@ function toMed(r: RawMed): Medication {
     endDate: r.end_date,
     notes: r.notes,
     stoppedAt: r.stopped_at,
+    finishFlaggedAt: r.finish_flagged_at,
+    finishFlaggedBy: r.finish_flagged_by,
+    finishNote: r.finish_note,
   };
 }
 

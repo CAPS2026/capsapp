@@ -106,6 +106,13 @@ export function MedicationList({ meds }: { meds: Medication[] }) {
                     {m.endDate ? ` until ${dayLabel(m.endDate)}` : ", ongoing"}
                   </div>
                   {m.notes && <div className="text-ink-muted">{m.notes}</div>}
+                  {m.finishFlaggedAt && (
+                    <div className="mt-1 rounded-md bg-warm-tint px-2.5 py-1.5 font-bold text-warm-ink">
+                      Course finished? {m.finishFlaggedBy ?? "A caretaker"} told Shayna on{" "}
+                      {new Date(m.finishFlaggedAt).toLocaleDateString("en-AU", { timeZone: "Australia/Brisbane", day: "numeric", month: "short" })}
+                      {m.finishNote ? `: ${m.finishNote}` : ""}. Press Stop if it is.
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <Link href={`/shift/medications?edit=${m.id}`} className={EDIT_BTN}>
