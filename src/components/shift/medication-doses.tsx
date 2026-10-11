@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { MEDS_STYLE, clockTime, hhmm } from "@/lib/shift";
-import { doseNotGiven, giveDose, undoDose } from "@/lib/actions/shift";
+import { doseNotGiven, flagCourseFinished, giveDose, undoDose } from "@/lib/actions/shift";
 import type { DoseReason, DueDose, VetAppointment } from "@/lib/care-data";
 
 const REASONS: { key: DoseReason; label: string }[] = [
@@ -47,6 +48,7 @@ export function MedicationSection({ doses, readOnly = false }: { doses: DueDose[
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [notGiven, setNotGiven] = useState<DueDose | null>(null);
+  const [finished, setFinished] = useState<DueDose | null>(null);
   const done = doses.filter((d) => d.status !== null).length;
 
   const run = (fn: () => Promise<{ error?: string }>) => {
@@ -104,6 +106,23 @@ export function MedicationSection({ doses, readOnly = false }: { doses: DueDose[
                 {d.medication.howGiven ? `, ${d.medication.howGiven}` : ""}
               </div>
               {d.medication.notes && <div className="text-xs text-ink-muted">{d.medication.notes}</div>}
+              {d.medication.finishFlaggedAt ? (
+                <div className="mt-[3px] text-[11px] font-bold" style={{ color: MEDS_STYLE.ink }}>
+                  Course finished: {d.medication.finishFlaggedBy ?? "a caretaker"} told Shayna. Keep giving it until she stops it.
+                </div>
+              ) : (
+                !readOnly && (
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => setFinished(d)}
+                    className="mt-1 h-8 rounded-[var(--radius)] border-[1.5px] px-2.5 text-xs font-extrabold disabled:opacity-50"
+                    style={{ borderColor: MEDS_STYLE.accent, color: MEDS_STYLE.ink }}
+                  >
+                    Course finished?
+                  </button>
+                )
+              )}
               {d.status === "given" && d.at && (
                 <div className="mt-[3px] text-[10.5px] font-semibold text-ok">
                   {d.byInitials} &middot; {clockTime(d.at)}
@@ -142,6 +161,91 @@ export function MedicationSection({ doses, readOnly = false }: { doses: DueDose[
         ))}
       </div>
       {notGiven && <NotGivenDialog dose={notGiven} onClose={() => setNotGiven(null)} />}
+      {finished && <CourseFinishedDialog dose={finished} onClose={() => setFinished(null)} />}
+    </div>
+  );
+}
+
+/** "Course finished?": tells Shayna. Does not stop anything, she does that.
+ *  Doesn't close on a click outside. */
+function CourseFinishedDialog({ dose, onClose }: { dose: DueDose; onClose: () => void }) {
+  const router = useRouter();
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ emailed: boolean } | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const m = dose.medication;
+
+  function send() {
+    setError(null);
+    startTransition(async () => {
+      const r = await flagCourseFinished(m.id, note);
+      if (r.error) setError(r.error);
+      else {
+        setResult({ emailed: r.emailed === true });
+        router.refresh();
+      }
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(44,44,42,0.4)] p-6">
+      <div role="dialog" aria-modal="true" aria-label="Course finished" className="flex w-full max-w-[480px] flex-col gap-3 rounded-[14px] bg-background p-6 shadow-[0_20px_40px_rgba(0,0,0,0.25)]">
+        <h2 className="m-0 text-lg font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
+          {m.dogName}: course finished?
+        </h2>
+        <p className="m-0 text-sm text-ink-muted">
+          {m.medicine}
+          {m.howGiven ? `, ${m.howGiven}` : ""}
+        </p>
+        {result ? (
+          <>
+            {result.emailed ? (
+              <p className="m-0 text-sm leading-relaxed text-foreground">
+                Shayna has been emailed and it is in the handover log. Keep giving it until she stops it.
+              </p>
+            ) : (
+              <p className="m-0 rounded-md bg-warm-tint px-3 py-2 text-sm font-semibold leading-relaxed text-warm-ink">
+                It is in the handover log, but Shayna was NOT emailed. Please tell her directly. Keep giving it until she
+                stops it.
+              </p>
+            )}
+            <button type="button" onClick={onClose} className="h-11 rounded-[var(--radius)] bg-brand text-sm font-bold text-white">
+              Done
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="m-0 rounded-md bg-warm-tint px-3 py-2 text-sm font-semibold text-warm-ink">
+              Shayna will be emailed and it goes in the handover log. She stops it. Until she does, it stays on the list
+              and keeps being given.
+            </p>
+            <label className="flex flex-col gap-1 text-xs font-bold">
+              Anything to add? (optional)
+              <textarea
+                rows={2}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                className="rounded-[var(--radius)] border border-line-cool bg-white px-3 py-2 text-sm font-normal"
+              />
+            </label>
+            {error && <p className="m-0 text-sm font-semibold text-danger">{error}</p>}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={send}
+                className="h-11 flex-1 rounded-[var(--radius)] bg-brand text-sm font-bold text-white disabled:opacity-50"
+              >
+                {isPending ? "Sending…" : "Tell Shayna"}
+              </button>
+              <button type="button" onClick={onClose} className="h-11 rounded-[var(--radius)] border border-line px-4 text-sm font-bold text-ink-muted">
+                Cancel
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

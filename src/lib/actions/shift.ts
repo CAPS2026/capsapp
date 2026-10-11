@@ -23,10 +23,12 @@ import {
 import {
   getShiftEmailPreview,
   maybeSendShiftEmail,
+  sendCourseFinishedEmail,
   sendHealthConcernEmail,
   sendMissedDoseEmail,
   type EmailPreview,
 } from "@/lib/shift-email";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { GUEST_NAME_MAX, distanceMetres, minutesLate, sessionInstant, shelterToday, shiftDay, type Part } from "@/lib/shift";
 
 type Result = { error: string } | { error?: undefined };
@@ -887,6 +889,62 @@ export async function doseNotGiven(
   }
   bust();
   revalidatePath("/shift/handover");
+  return { emailed };
+}
+
+/** "Course finished?" on a medication: a caretaker tells Shayna the course
+ *  looks finished. It does NOT stop anything (only an admin does that, from
+ *  the Medications page or the link in the email): it records who and when on
+ *  the medication, leaves a note in the handover log, and emails Shayna. The
+ *  medication keeps showing on the checklist until she stops it. */
+export async function flagCourseFinished(medicationId: string, note: string): Promise<{ error?: string; emailed?: boolean }> {
+  const me = await requireOnShift();
+  if (!me) return { error: NO_OPEN_SHIFT };
+  if (me.lateBlocked) return { error: LATE_REASON_REQUIRED };
+  const open = await getOpenShift(me.id);
+  if (!open) return { error: NO_OPEN_SHIFT };
+  const med = await getMedication(medicationId);
+  if (!med || med.stoppedAt) return { error: "That medication has already been stopped." };
+  if (med.finishFlaggedAt) return { error: "Shayna has already been told this course is finished." };
+  const clean = note.trim().slice(0, 300);
+
+  // Staff logins can't change medications (admin only), so this one field set
+  // is written with the server's own access, after the checks above.
+  const admin = createAdminClient();
+  const { data: flagged, error } = await admin
+    .from("medication")
+    .update({ finish_flagged_at: new Date().toISOString(), finish_flagged_by: me.name, finish_note: clean || null })
+    .eq("id", medicationId)
+    .is("stopped_at", null)
+    .is("finish_flagged_at", null)
+    .select("token")
+    .maybeSingle();
+  if (error) return { error: error.message };
+  if (!flagged) return { error: "Shayna has already been told this course is finished." };
+
+  const supabase = await createClient();
+  await supabase.from("handover_note").insert({
+    person_id: me.id,
+    shift_log_id: open.id,
+    date: open.date,
+    part: open.part,
+    body: `${med.dogName}: ${me.name} says the ${med.medicine} course is finished${clean ? ` (${clean})` : ""}. Shayna has been told and will stop it. Keep giving it until she does.`,
+    is_auto: true,
+  });
+
+  const emailed = await sendCourseFinishedEmail({
+    personName: me.name,
+    dogName: med.dogName,
+    medicine: med.medicine,
+    note: clean,
+    token: (flagged as { token: string }).token,
+  }).catch((e) => {
+    console.error("flagCourseFinished: email failed", e);
+    return false;
+  });
+  bust();
+  revalidatePath("/shift/handover");
+  revalidatePath("/shift/medications");
   return { emailed };
 }
 

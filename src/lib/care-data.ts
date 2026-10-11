@@ -24,9 +24,14 @@ export type Medication = {
   endDate: string | null;
   notes: string | null;
   stoppedAt: string | null;
+  /** A caretaker has told Shayna the course looks finished (see flagCourseFinished). */
+  finishFlaggedAt: string | null;
+  finishFlaggedBy: string | null;
+  finishNote: string | null;
 };
 
-const MED_SELECT = "id, dog_name, medicine, how_given, parts, frequency, weekdays, day_of_month, start_date, end_date, notes, stopped_at";
+// One plain string (not joined pieces), so the query's result type stays simple.
+const MED_SELECT = "id, dog_name, medicine, how_given, parts, frequency, weekdays, day_of_month, start_date, end_date, notes, stopped_at, finish_flagged_at, finish_flagged_by, finish_note";
 
 type RawMed = {
   id: string;
@@ -41,6 +46,9 @@ type RawMed = {
   end_date: string | null;
   notes: string | null;
   stopped_at: string | null;
+  finish_flagged_at: string | null;
+  finish_flagged_by: string | null;
+  finish_note: string | null;
 };
 
 function toMed(r: RawMed): Medication {
@@ -57,6 +65,9 @@ function toMed(r: RawMed): Medication {
     endDate: r.end_date,
     notes: r.notes,
     stoppedAt: r.stopped_at,
+    finishFlaggedAt: r.finish_flagged_at,
+    finishFlaggedBy: r.finish_flagged_by,
+    finishNote: r.finish_note,
   };
 }
 
@@ -95,13 +106,13 @@ export async function listMedications(): Promise<Medication[]> {
     .order("dog_name")
     .order("created_at");
   if (error) console.error("listMedications failed", error);
-  return ((data ?? []) as RawMed[]).map(toMed);
+  return ((data ?? []) as unknown as RawMed[]).map(toMed);
 }
 
 export async function getMedication(id: string): Promise<Medication | null> {
   const supabase = await shiftDb();
   const { data } = await supabase.from("medication").select(MED_SELECT).eq("id", id).maybeSingle();
-  return data ? toMed(data as RawMed) : null;
+  return data ? toMed(data as unknown as RawMed) : null;
 }
 
 export type DoseReason = "refused" | "vomited" | "away" | "other";
@@ -145,7 +156,7 @@ export async function getDueDoses(date: string, part: Part): Promise<DueDose[]> 
       person: { first_name: string; surname: string } | null;
     }>).map((d) => [d.medication_id, d]),
   );
-  return ((meds ?? []) as RawMed[])
+  return ((meds ?? []) as unknown as RawMed[])
     .map(toMed)
     .filter((m) => medDueOn(m, date, part))
     .sort((a, b) => a.dogName.localeCompare(b.dogName))
