@@ -30,9 +30,8 @@ export type Medication = {
   finishNote: string | null;
 };
 
-const MED_SELECT =
-  "id, dog_name, medicine, how_given, parts, frequency, weekdays, day_of_month, start_date, end_date, notes, stopped_at, " +
-  "finish_flagged_at, finish_flagged_by, finish_note";
+// One plain string (not joined pieces), so the query's result type stays simple.
+const MED_SELECT = "id, dog_name, medicine, how_given, parts, frequency, weekdays, day_of_month, start_date, end_date, notes, stopped_at, finish_flagged_at, finish_flagged_by, finish_note";
 
 type RawMed = {
   id: string;
@@ -107,13 +106,13 @@ export async function listMedications(): Promise<Medication[]> {
     .order("dog_name")
     .order("created_at");
   if (error) console.error("listMedications failed", error);
-  return ((data ?? []) as RawMed[]).map(toMed);
+  return ((data ?? []) as unknown as RawMed[]).map(toMed);
 }
 
 export async function getMedication(id: string): Promise<Medication | null> {
   const supabase = await shiftDb();
   const { data } = await supabase.from("medication").select(MED_SELECT).eq("id", id).maybeSingle();
-  return data ? toMed(data as RawMed) : null;
+  return data ? toMed(data as unknown as RawMed) : null;
 }
 
 export type DoseReason = "refused" | "vomited" | "away" | "other";
@@ -157,7 +156,7 @@ export async function getDueDoses(date: string, part: Part): Promise<DueDose[]> 
       person: { first_name: string; surname: string } | null;
     }>).map((d) => [d.medication_id, d]),
   );
-  return ((meds ?? []) as RawMed[])
+  return ((meds ?? []) as unknown as RawMed[])
     .map(toMed)
     .filter((m) => medDueOn(m, date, part))
     .sort((a, b) => a.dogName.localeCompare(b.dogName))
