@@ -19,6 +19,8 @@ export type PersonListItem = {
   isMinor: boolean;
   hasPending: boolean;
   archived: boolean;
+  archivedOn: string | null;
+  archiveReason: string | null;
   missingEmergencyContact: boolean;
   /** They explicitly said no to promotional-image use. */
   noImageConsent: boolean;
@@ -46,7 +48,7 @@ export async function getPeopleList(): Promise<PersonListItem[]> {
   const { data, error } = await supabase
     .from("people")
     .select(
-      "id, first_name, surname, nickname, email, phone, date_of_birth, ec_name, ec_phone, auth_user_id, image_consent, photo_path, updated_at, person_roles!person_roles_person_id_fkey(id, role, status)",
+      "id, first_name, surname, nickname, email, phone, date_of_birth, ec_name, ec_phone, auth_user_id, image_consent, photo_path, updated_at, archived_on, archive_reason, person_roles!person_roles_person_id_fkey(id, role, status)",
     )
     .order("surname")
     .order("first_name");
@@ -85,6 +87,8 @@ export async function getPeopleList(): Promise<PersonListItem[]> {
     image_consent: boolean | null;
     photo_path: string | null;
     updated_at: string | null;
+    archived_on: string | null;
+    archive_reason: string | null;
     person_roles: RoleRow[] | null;
   }>).map((p) => {
     const roles = p.person_roles ?? [];
@@ -103,6 +107,8 @@ export async function getPeopleList(): Promise<PersonListItem[]> {
       // No dedicated archive column yet — "archived" means every role has
       // been ended (exited/declined) and none is live.
       archived: roles.length > 0 && !roles.some((r) => r.status === "active" || r.status === "pending"),
+      archivedOn: p.archived_on,
+      archiveReason: p.archive_reason,
       missingEmergencyContact: active.some((r) => r.role === "volunteer") && (!p.ec_name || !p.ec_phone),
       noImageConsent: p.image_consent === false,
       photoUrl: personPhotoUrl(p.photo_path, p.updated_at),

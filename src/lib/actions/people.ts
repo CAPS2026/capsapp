@@ -129,7 +129,7 @@ export async function declineRole(personRoleId: string, personId: string): Promi
  * volunteer role back active; carer roles come back as pending so they
  * re-run approval.
  */
-export async function archivePerson(personId: string): Promise<Result> {
+export async function archivePerson(personId: string, reason?: string): Promise<Result> {
   const me = await requireStaff();
   if (!me) return { error: "Staff only." };
   const blocked = await staffProtection(personId);
@@ -143,6 +143,12 @@ export async function archivePerson(personId: string): Promise<Result> {
     .in("status", ["active", "pending"]);
 
   if (error) return { error: error.message };
+  // Remember when and why (migration 49). Not fatal if the columns are not there yet.
+  const { error: whyErr } = await supabase
+    .from("people")
+    .update({ archived_on: today(), archive_reason: reason?.trim() || null })
+    .eq("id", personId);
+  if (whyErr) console.error("archivePerson: could not record reason", whyErr);
   revalidate(personId);
   return {};
 }
@@ -169,6 +175,7 @@ export async function restorePerson(personId: string): Promise<Result> {
     .in("role", ["jailbreak_carer", "foster_carer"]);
   if (carerErr) return { error: carerErr.message };
 
+  await supabase.from("people").update({ archived_on: null, archive_reason: null }).eq("id", personId);
   revalidate(personId);
   return {};
 }

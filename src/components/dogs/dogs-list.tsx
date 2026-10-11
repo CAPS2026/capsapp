@@ -102,6 +102,14 @@ export function DogsList({
           />
         ))}
         <FilterChip label="Out now" active={activeFilter === "out_now"} onClick={() => toggleFilter("out_now")} />
+        {isStaff && (
+          <Link
+            href="/dogs/exited"
+            className="h-9 px-3 rounded-full text-sm font-semibold border bg-card border-line text-ink-muted flex items-center"
+          >
+            Exited
+          </Link>
+        )}
       </div>
 
       {groups.map(({ status, dogs: groupDogs }) =>

@@ -2,10 +2,22 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { ExitDogDialog, type ExitPerson } from "@/components/dogs/exit-dog-dialog";
 
 // One "⋯ Manage" menu for the staff-only actions on a dog, so they stop floating beside the name.
-// Exit dog will go here too.
-export function ManageMenu({ dogId }: { dogId: string }) {
+export function ManageMenu({
+  dogId,
+  dogName,
+  status,
+  slListed,
+  people,
+}: {
+  dogId: string;
+  dogName: string;
+  status: string;
+  slListed: boolean;
+  people: ExitPerson[];
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -52,6 +64,16 @@ export function ManageMenu({ dogId }: { dogId: string }) {
           >
             SavourLife details
           </Link>
+          {status !== "exited" && (
+            <ExitDogDialog
+              dogId={dogId}
+              dogName={dogName}
+              status={status}
+              slListed={slListed}
+              people={people}
+              onOpen={() => setOpen(false)}
+            />
+          )}
         </div>
       )}
     </div>

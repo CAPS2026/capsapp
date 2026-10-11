@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { exitCafeMode } from "@/lib/actions/cafe";
 import { PIN_MAX } from "@/lib/cafe";
+import { ModeToggle } from "@/components/cafe/mode-toggle";
 
 // The always-visible strip under the header while a device is in café
 // mode. Makes it obvious you're on the limited surface, and carries the
@@ -38,17 +39,8 @@ export function CafeBar() {
 
   return (
     <div className="bg-warm-tint border-b border-warm/40">
-      <div className="max-w-lg mx-auto flex items-center justify-between gap-3 px-4 h-10">
-        <span className="text-xs font-bold uppercase tracking-wide text-warm-ink">
-          Volunteer mode
-        </span>
-        <button
-          type="button"
-          onClick={open}
-          className="h-8 px-3 rounded-full border-2 border-warm-ink text-warm-ink text-sm font-bold whitespace-nowrap"
-        >
-          Switch to Staff Mode
-        </button>
+      <div className="max-w-lg mx-auto flex items-center gap-3 px-4 h-11">
+        <ModeToggle mode="volunteer" onSwitch={open} />
       </div>
 
       <dialog

@@ -51,6 +51,7 @@ export type DogDetail = {
   slSuburb: string | null;
   slState: string | null;
   slPostcode: string | null;
+  exit: { date: string | null; type: string | null; notes: string | null; personId: string | null; personName: string | null } | null;
   photos: { path: string; url: string; isPrimary: boolean; caption: string | null }[];
 };
 
@@ -196,6 +197,7 @@ export async function getDogDetail(dogId: string, isStaff: boolean) {
     ref: dogRow.ref,
     name: dogRow.name,
     status: dogRow.status,
+    exit: null,
     handlingNotes: dogRow.handling_notes,
     experiencedHandlerOnly: dogRow.experienced_handler_only,
     arrivalDate: dogRow.arrival_date,
@@ -241,6 +243,25 @@ export async function getDogDetail(dogId: string, isStaff: boolean) {
     slPostcode: dogRow.sl_postcode ?? null,
     photos,
   };
+
+  if (dogRow.status === "exited") {
+    let personName: string | null = null;
+    if (dogRow.exit_person_id) {
+      const { data: who } = await supabase
+        .from("people")
+        .select("first_name, surname")
+        .eq("id", dogRow.exit_person_id)
+        .maybeSingle();
+      if (who) personName = `${who.first_name} ${who.surname}`.trim();
+    }
+    dog.exit = {
+      date: dogRow.exit_date ?? null,
+      type: dogRow.exit_type ?? null,
+      notes: dogRow.exit_notes ?? null,
+      personId: dogRow.exit_person_id ?? null,
+      personName,
+    };
+  }
 
   const c = confidentialRow as {
     behaviour_notes: string | null;
