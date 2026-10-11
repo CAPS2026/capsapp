@@ -9,7 +9,7 @@ import { initials, parseYmd, type Part } from "@/lib/shift";
 // ---------------------------------------------------------------------------
 
 export type MedParts = "morning" | "afternoon" | "both";
-export type MedFrequency = "daily" | "weekly" | "monthly";
+export type MedFrequency = "daily" | "every_second_day" | "weekly" | "monthly";
 
 export type Medication = {
   id: string;
@@ -67,6 +67,15 @@ export function medDueOn(m: Medication, date: string, part: Part): boolean {
   if (m.endDate && date > m.endDate) return false;
   if (m.parts !== "both" && m.parts !== part) return false;
   const d = parseYmd(date);
+  // Every second day, counted from the start date (the start date is a dose
+  // day), e.g. the last weeks of a heartworm course.
+  if (m.frequency === "every_second_day") {
+    const s = parseYmd(m.startDate);
+    const days = Math.round(
+      (Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(s.getFullYear(), s.getMonth(), s.getDate())) / 86400000,
+    );
+    return days % 2 === 0;
+  }
   if (m.frequency === "weekly") return m.weekdays.includes(d.getDay());
   if (m.frequency === "monthly") {
     if (!m.dayOfMonth) return false;
