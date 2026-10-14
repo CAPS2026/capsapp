@@ -76,6 +76,9 @@ export type EmailPreview = {
   hasRecipients: boolean;
 };
 
+/** How long the photo links in the end-of-shift email keep working. */
+const SHIFT_EMAIL_PHOTO_DAYS = 14;
+
 type Built = Pick<EmailPreview, "people" | "outstanding" | "handover" | "health" | "volunteers" | "meds" | "vet">;
 
 function timeLabel(iso: string) {
@@ -296,6 +299,7 @@ function textBody(date: string, part: Part, b: Built, updateNote?: string): stri
     lines.push("HEALTH CONCERNS");
     for (const h of b.health) {
       lines.push(`  ${h.urgent ? "URGENT: " : ""}${h.dogName ? `${h.dogName}: ` : ""}${h.body} (${h.personName}, ${timeLabel(h.createdAt)})`);
+      for (const u of h.photoUrls ?? []) lines.push(`    Photo: ${u}`);
     }
     lines.push("");
   }
@@ -327,7 +331,10 @@ function textBody(date: string, part: Part, b: Built, updateNote?: string): stri
 
   lines.push("HANDOVER LOG");
   if (b.handover.length) {
-    for (const h of b.handover) lines.push(`  ${h.personName}, ${timeLabel(h.createdAt)}: ${h.body}`);
+    for (const h of b.handover) {
+      lines.push(`  ${h.personName}, ${timeLabel(h.createdAt)}: ${h.body}`);
+      for (const u of h.photoUrls ?? []) lines.push(`    Photo: ${u}`);
+    }
   } else {
     lines.push("  No handover notes this shift.");
   }
@@ -340,13 +347,20 @@ function htmlBody(date: string, part: Part, b: Built, updateNote?: string): stri
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const h3 = (s: string) => `<h3 style="font-family:sans-serif;font-size:14px;color:#2C2C2A;margin:18px 0 8px;">${s}</h3>`;
 
+  const photos = (urls: string[] | undefined, border: string) =>
+    urls?.length
+      ? `<p style="margin:6px 0 0;">${urls
+          .map((u) => `<a href="${u}" style="margin-right:6px;"><img src="${u}" alt="Photo" width="120" style="width:120px;border-radius:8px;border:1px solid ${border};" /></a>`)
+          .join("")}</p>`
+      : "";
+
   const health = b.health.length
     ? `<div style="border:1px solid #E2725B;background:#FCEDE8;border-radius:10px;padding:14px;margin-bottom:12px;">
         <p style="margin:0 0 6px;font-weight:800;color:#9A3A26;">Health concerns</p>
         ${b.health
           .map(
             (h) =>
-              `<p style="margin:4px 0;font-size:14px;">${h.urgent ? "<b>URGENT</b> " : ""}${h.dogName ? `<b>${esc(h.dogName)}:</b> ` : ""}${esc(h.body)} <span style="color:#6B6B68;font-size:12px;">(${esc(h.personName)}, ${timeLabel(h.createdAt)})</span></p>`,
+              `<p style="margin:4px 0;font-size:14px;">${h.urgent ? "<b>URGENT</b> " : ""}${h.dogName ? `<b>${esc(h.dogName)}:</b> ` : ""}${esc(h.body)} <span style="color:#6B6B68;font-size:12px;">(${esc(h.personName)}, ${timeLabel(h.createdAt)})</span></p>${photos(h.photoUrls, "#E2725B")}`,
           )
           .join("")}
       </div>`
@@ -399,7 +413,7 @@ function htmlBody(date: string, part: Part, b: Built, updateNote?: string): stri
     ? b.handover
         .map(
           (h) =>
-            `<p style="margin:4px 0;font-size:14px;"><b>${esc(h.personName)}</b> <span style="color:#6B6B68;font-size:12px;">${timeLabel(h.createdAt)}</span><br><span style="white-space:pre-line;">${esc(h.body)}</span></p>`,
+            `<p style="margin:4px 0;font-size:14px;"><b>${esc(h.personName)}</b> <span style="color:#6B6B68;font-size:12px;">${timeLabel(h.createdAt)}</span><br><span style="white-space:pre-line;">${esc(h.body)}</span></p>${photos(h.photoUrls, "#E0DDD6")}`,
         )
         .join("")
     : `<p style="margin:0;font-size:14px;color:#6B6B68;">No handover notes this shift.</p>`;
@@ -442,6 +456,14 @@ async function buildSession(date: string, part: Part): Promise<Built> {
     ]);
   const endsAtMs = sessionEndMs(date, session.ends, shifts);
 
+  // Photos on handover notes and health concerns: signed links that work for
+  // 14 days (Julie, 14 Oct), so Shayna can open the email later in the week.
+  const signed = await signPhotoPaths([...handover, ...health].flatMap((r) => r.photoPaths), SHIFT_EMAIL_PHOTO_DAYS * 24 * 3600);
+  const withUrls = <T extends { photoPaths: string[] }>(r: T): T & { photoUrls: string[] } => ({
+    ...r,
+    photoUrls: r.photoPaths.map((p) => signed.get(p)).filter((u): u is string => !!u),
+  });
+
   // Every dose due this shift, and what happened to it. A dose nobody
   // recorded is called out, not left out.
   const meds = doses.map((d) => {
@@ -464,7 +486,7 @@ async function buildSession(date: string, part: Part): Promise<Built> {
     );
 
   return {
-    ...buildBlocks(date, shifts, tasks, handover, health, radiusM, lateAfterMinutes, endsAtMs),
+    ...buildBlocks(date, shifts, tasks, handover.map(withUrls), health.map(withUrls), radiusM, lateAfterMinutes, endsAtMs),
     volunteers,
     meds,
     vet,

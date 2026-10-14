@@ -1081,14 +1081,14 @@ export async function getSessionTasks(date: string, part: Part): Promise<Session
   return [...rows.values()];
 }
 
-export type SessionHandoverRow = { personName: string; body: string; createdAt: string };
+export type SessionHandoverRow = { personName: string; body: string; createdAt: string; photoPaths: string[]; photoUrls?: string[] };
 
 /** Handover log entries written during (date, part). */
 export async function getSessionHandover(date: string, part: Part): Promise<SessionHandoverRow[]> {
   const supabase = await shiftDb();
   const { data, error } = await supabase
     .from("handover_note")
-    .select("body, created_at, person:people(first_name, surname), shift:shift_log!handover_note_shift_log_id_fkey(guest_name)")
+    .select("body, created_at, photo_paths, person:people(first_name, surname), shift:shift_log!handover_note_shift_log_id_fkey(guest_name)")
     .eq("date", date)
     .eq("part", part)
     .order("created_at");
@@ -1096,12 +1096,14 @@ export async function getSessionHandover(date: string, part: Part): Promise<Sess
   return ((data ?? []) as unknown as Array<{
     body: string;
     created_at: string;
+    photo_paths: string[] | null;
     shift: { guest_name: string | null } | null;
     person: { first_name: string; surname: string } | null;
   }>).map((r) => ({
     personName: withGuestName(r.person ? `${r.person.first_name} ${r.person.surname}`.trim() : "Unknown", r.shift?.guest_name),
     body: r.body,
     createdAt: r.created_at,
+    photoPaths: r.photo_paths ?? [],
   }));
 }
 
@@ -1111,6 +1113,8 @@ export type SessionHealthConcern = {
   urgent: boolean;
   body: string;
   createdAt: string;
+  photoPaths: string[];
+  photoUrls?: string[];
 };
 
 /** Health concerns raised during (date, part). */
@@ -1118,7 +1122,7 @@ export async function getSessionHealthConcerns(date: string, part: Part): Promis
   const supabase = await shiftDb();
   const { data, error } = await supabase
     .from("health_concern")
-    .select("dog_name, urgent, body, created_at, person:people!health_concern_person_id_fkey(first_name, surname), shift:shift_log!health_concern_shift_log_id_fkey(guest_name)")
+    .select("dog_name, urgent, body, created_at, photo_paths, person:people!health_concern_person_id_fkey(first_name, surname), shift:shift_log!health_concern_shift_log_id_fkey(guest_name)")
     .eq("date", date)
     .eq("part", part)
     .order("created_at");
@@ -1127,6 +1131,7 @@ export async function getSessionHealthConcerns(date: string, part: Part): Promis
     dog_name: string | null;
     urgent: boolean;
     body: string;
+    photo_paths: string[] | null;
     shift: { guest_name: string | null } | null;
     created_at: string;
     person: { first_name: string; surname: string } | null;
@@ -1136,6 +1141,7 @@ export async function getSessionHealthConcerns(date: string, part: Part): Promis
     urgent: r.urgent,
     body: r.body,
     createdAt: r.created_at,
+    photoPaths: r.photo_paths ?? [],
   }));
 }
 
