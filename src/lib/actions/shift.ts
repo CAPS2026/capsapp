@@ -16,6 +16,7 @@ import {
   getGuestPersonId,
   getOpenShift,
   getRegularPeople,
+  getRequiredLeft,
   getShiftSettings,
   resolvePart,
   touchShiftActivity,
@@ -29,7 +30,7 @@ import {
   type EmailPreview,
 } from "@/lib/shift-email";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { GUEST_NAME_MAX, distanceMetres, minutesLate, sessionInstant, shelterToday, shiftDay, type Part } from "@/lib/shift";
+import { GUEST_NAME_MAX, distanceMetres, firstName, minutesLate, parseYmd, sessionInstant, shelterToday, shiftDay, type Part } from "@/lib/shift";
 
 type Result = { error: string } | { error?: undefined };
 
@@ -305,14 +306,23 @@ export async function endShift(earlyReason?: string): Promise<Result> {
   return {};
 }
 
-const END_OF_SHIFT_NEEDED = "Tick each End of Shift task, or say why it wasn't done, before ending the shift.";
+const END_OF_SHIFT_NEEDED = "Tick each task, or say why it wasn't done, before ending the shift.";
 
-export type EndOfShiftTask = { id: string; title: string; reason: string | null };
+export type EndOfShiftTask = {
+  id: string;
+  title: string;
+  reason: string | null;
+  /** "from Fri morning" for a task left by an earlier shift, else null. */
+  from: string | null;
+};
 
-/** The session's End of Shift tasks still unticked, with any reason already
- *  given (kept in the task's note). Empty unless this is the last shift still
- *  open on the session: lights off, gates locked and the rest are for whoever
- *  leaves last, not someone finishing while a colleague carries on. */
+/** The session's required tasks still unticked (its own, and any left by
+ *  earlier shifts that are still showing as "Not done last shift"), with the
+ *  reason this shift has given. A reason on a task from an earlier shift is
+ *  that shift's, not this one's, so it does not count as an answer. Empty
+ *  unless this is the last shift still open on the session: lights off, gates
+ *  locked and the rest are for whoever leaves last, not someone finishing
+ *  while a colleague carries on. */
 async function endOfShiftLeft(shiftId: string, date: string, part: Part): Promise<EndOfShiftTask[]> {
   const supabase = await createClient();
   const { count } = await supabase
@@ -323,23 +333,20 @@ async function endOfShiftLeft(shiftId: string, date: string, part: Part): Promis
     .is("signed_out_at", null)
     .neq("id", shiftId);
   if ((count ?? 0) > 0) return [];
-  const { data, error } = await supabase
-    .from("task_instance")
-    .select("id, title, note")
-    .eq("date", date)
-    .eq("part", part)
-    .eq("category", "end_of_day")
-    .eq("status", "open")
-    .order("sort_order");
-  if (error) console.error("endOfShiftLeft failed", error);
-  return ((data ?? []) as Array<{ id: string; title: string; note: string | null }>).map((t) => ({
+  const rows = await getRequiredLeft(date, part);
+  return rows.map((t) => ({
     id: t.id,
     title: t.title,
-    reason: t.note?.trim() || null,
+    reason: t.carriedOver ? (t.reasonShiftId === shiftId ? t.note?.trim() || null : null) : t.note?.trim() || null,
+    from: t.carriedOver
+      ? t.date === date
+        ? `from this ${t.part}`
+        : `from ${parseYmd(t.date).toLocaleDateString("en-AU", { weekday: "short" })} ${t.part}`
+      : null,
   }));
 }
 
-/** Asked when END SHIFT is pressed: the End of Shift tasks not ticked yet. */
+/** Asked when END SHIFT is pressed: the required tasks not ticked yet. */
 export async function getEndOfShiftLeft(): Promise<{ error: string } | { error?: undefined; tasks: EndOfShiftTask[] }> {
   const me = await requireOnShift();
   if (!me) return { error: NO_OPEN_SHIFT };
@@ -348,8 +355,10 @@ export async function getEndOfShiftLeft(): Promise<{ error: string } | { error?:
   return { tasks: await endOfShiftLeft(open.id, open.date, open.part) };
 }
 
-/** The End of Shift box: each unticked task is either ticked now or given a
- *  reason (which goes in the shift email). All of them must be answered. */
+/** The END SHIFT box: each unticked required task is either ticked now or
+ *  given a reason (which goes in the shift email, with the name of whoever
+ *  gave it, and shows on the task for the next shift). All of them must be
+ *  answered. */
 export async function saveEndOfShift(answers: { id: string; done: boolean; reason: string }[]): Promise<Result> {
   const me = await requireOnShift();
   if (!me) return { error: NO_OPEN_SHIFT };
@@ -364,14 +373,17 @@ export async function saveEndOfShift(answers: { id: string; done: boolean; reaso
   }
   const supabase = await createClient();
   const now = new Date().toISOString();
+  const who = firstName(me.name);
   for (const t of left) {
     const a = byId.get(t.id)!;
+    const typed = a.reason.trim();
+    const reason = typed.endsWith(`(${who})`) ? typed : `${typed} (${who})`;
     const { error } = await supabase
       .from("task_instance")
       .update(
         a.done
           ? { status: "done", note: null, actioned_by: me.id, actioned_at: now }
-          : { note: a.reason.trim() },
+          : { note: reason, reason_shift_id: open.id },
       )
       .eq("id", t.id)
       .eq("status", "open");

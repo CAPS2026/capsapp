@@ -166,6 +166,8 @@ export type ShiftTaskRow = {
   note: string | null;
   isExtra: boolean;
   skippable: boolean;
+  /** Must be done each shift (all but the three optional tasks). */
+  required: boolean;
   claimedById: string | null;
   claimedByName: string | null;
   actionedByName: string | null;

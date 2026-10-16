@@ -90,8 +90,9 @@ export function EndEarlyDialog({
   );
 }
 
-/** END SHIFT with End of Shift tasks still unticked: each one must be
- *  ticked here or given a reason (the reason goes in the shift email). */
+/** END SHIFT with required tasks still unticked: each one must be ticked
+ *  here or given a reason. The reason goes in the shift email, and the next
+ *  shift sees it on the task. */
 export function EndOfShiftDialog({
   tasks,
   onClose,
@@ -102,7 +103,7 @@ export function EndOfShiftDialog({
   onSaved: () => void;
 }) {
   const [answers, setAnswers] = useState(() =>
-    tasks.map((t) => ({ id: t.id, title: t.title, done: false, reason: t.reason ?? "" })),
+    tasks.map((t) => ({ id: t.id, title: t.title, from: t.from, done: false, reason: t.reason ?? "" })),
   );
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -125,9 +126,10 @@ export function EndOfShiftDialog({
   }
 
   return (
-    <Modal title="End of Shift tasks not ticked">
+    <Modal title="Tasks not ticked">
       <p className="m-0 text-sm leading-relaxed text-ink-muted">
-        Tick each one you have done. If you haven&rsquo;t done it, say why. Reasons go in the shift email.
+        Tick each one you have done. If you haven&rsquo;t done it, say why. Your reason goes in the shift email, and the
+        next shift will see what was not done.
       </p>
       <ul className="m-0 flex list-none flex-col gap-3 p-0">
         {answers.map((a) => (
@@ -139,7 +141,14 @@ export function EndOfShiftDialog({
                 onChange={(e) => set(a.id, { done: e.target.checked })}
                 className="h-6 w-6 shrink-0"
               />
-              <span className={a.done ? "line-through" : ""}>{a.title}</span>
+              <span className={a.done ? "line-through" : ""}>
+                {a.title}
+                {a.from && (
+                  <span className="ml-1.5 inline-block rounded-[5px] border border-[#F0D69A] bg-white px-[5px] py-px align-middle text-[10px] font-extrabold text-warm-ink">
+                    {a.from}
+                  </span>
+                )}
+              </span>
             </label>
             {!a.done && (
               <input
