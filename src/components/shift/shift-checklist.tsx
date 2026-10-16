@@ -14,8 +14,9 @@ import { MedicationAlert, MedicationSection } from "@/components/shift/medicatio
 import type { DueDose, VetAppointment } from "@/lib/care-data";
 
 /** The Checklist tab's content: today's tasks by category, each section
- *  colour-coded, anything carried over from an earlier day sitting inside
- *  its own section (tinted, tagged "from Fri"), and off-list extras.
+ *  colour-coded, anything the last shift left undone in a red box at the very
+ *  top ("Not done last shift", each tagged "from Fri" with its reason), and
+ *  off-list extras.
  *  Identity and shift status live in the sidebar, visible from every tab. */
 export function ShiftChecklist({
   byCategory,
@@ -50,39 +51,19 @@ export function ShiftChecklist({
     });
   };
 
-  // Carried-over tasks go in with their own category's tasks, oldest
-  // first, like the mockup. Only ones with no category at all (very rare)
-  // fall back to a box of their own at the top.
-  const carriedByCategory = new Map<TaskCategory, ShiftTaskRow[]>();
-  const carriedUncategorised: ShiftTaskRow[] = [];
-  for (const t of carriedOver) {
-    if (!t.category) {
-      carriedUncategorised.push(t);
-      continue;
-    }
-    carriedByCategory.set(t.category, [...(carriedByCategory.get(t.category) ?? []), t]);
-  }
-
   return (
     <div className="flex max-w-5xl flex-col gap-3">
       {error && <p className="text-sm text-danger">{error}</p>}
 
-      {carriedUncategorised.length > 0 && (
-        <div className="overflow-hidden rounded-[var(--radius)] border border-[#F0D69A] bg-warm-tint">
-          <p className="px-3 pt-2.5 text-[11px] font-extrabold uppercase tracking-wide text-warm-ink">
-            Carried over, still open from earlier
-          </p>
-          <Checklist tasks={carriedUncategorised} busy={isPending} run={run} readOnly={readOnly} />
-        </div>
-      )}
+      <NotDoneLastShift rows={carriedOver} busy={isPending} run={run} readOnly={readOnly} />
 
-      <DoFirst rows={[...(carriedByCategory.get("do_first") ?? []), ...byCategory.do_first]} busy={isPending} run={run} readOnly={readOnly} />
+      <DoFirst rows={byCategory.do_first} busy={isPending} run={run} readOnly={readOnly} />
 
       <MedicationAlert doses={doses} vet={vet} />
 
       <div className="columns-1 gap-3 lg:columns-2">
         {CATEGORY_ORDER.filter((c) => c !== "do_first").map((cat) => {
-          const rows = [...(carriedByCategory.get(cat) ?? []), ...byCategory[cat]];
+          const rows = byCategory[cat];
           const doneCount = rows.filter((t) => t.status !== "open").length;
           const complete = rows.length > 0 && doneCount === rows.length;
           const style = CATEGORY_STYLE[cat];
@@ -212,6 +193,43 @@ function ExtrasSection({
         {extras.length === 0 ? "Nothing extra logged yet. " : ""}For anything a caretaker does that isn&rsquo;t on the
         standard list. It still lands in this shift&rsquo;s email, tagged EXTRA.
       </p>
+    </div>
+  );
+}
+
+/** Required tasks the last shift left undone (with their reason), and
+ *  anything still open from earlier days: full width at the very top so the
+ *  next person sees it before anything else. Ticking one here clears it for
+ *  everyone. Hidden when there is nothing. */
+function NotDoneLastShift({
+  rows,
+  busy,
+  run,
+  readOnly,
+}: {
+  rows: ShiftTaskRow[];
+  busy: boolean;
+  run: (fn: () => Promise<{ error?: string }>) => void;
+  readOnly: boolean;
+}) {
+  if (rows.length === 0) return null;
+  const style = CATEGORY_STYLE.do_first;
+  const stillOpen = rows.filter((t) => t.status === "open").length;
+  return (
+    <div className="overflow-hidden rounded-[var(--radius)] border-2 bg-card" style={{ borderColor: style.accent }}>
+      <h2 className="m-0 flex items-center gap-2 px-3 py-2.5 text-[15px] font-extrabold" style={{ background: style.tint, color: style.ink }}>
+        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" className="shrink-0">
+          <path d="M12 2.5 1.5 21h21L12 2.5Z" fill={style.accent} />
+          <rect x="11" y="9" width="2" height="6.5" rx="1" fill="#fff" />
+          <circle cx="12" cy="18" r="1.25" fill="#fff" />
+        </svg>
+        Not done last shift{stillOpen > 0 ? `: ${stillOpen} to do first` : ""}
+      </h2>
+      <div className="grid grid-cols-1 border-t border-line md:grid-cols-2">
+        {rows.map((t) => (
+          <Checklist key={t.id} tasks={[t]} busy={busy} run={run} readOnly={readOnly} />
+        ))}
+      </div>
     </div>
   );
 }

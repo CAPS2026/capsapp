@@ -258,10 +258,11 @@ function buildBlocks(
       blockFor(t.actionedByName).notNeeded.push(doneLabel(t, date, endsAtMs, graceMin));
     } else if (t.status === "open") {
       const from = t.carriedOver ? `, from ${t.date === date ? "this morning" : dayShort(t.date)}` : "";
-      // Any note shows. On an End of Shift task it is the reason it was not
-      // done (asked at END SHIFT).
-      const why = t.note ? (t.category === "end_of_day" ? `, not done because: ${t.note}` : `, note: ${t.note}`) : "";
-      const claim = `${t.claimedByName ? `, claimed by ${t.claimedByName}` : ""}${why}`;
+      // Any note shows. On a required task it is the reason it was not done
+      // (asked at END SHIFT, with the name of whoever gave it).
+      const optional = !t.required && !t.isExtra && !t.isHealth ? ", optional" : "";
+      const why = t.note ? (t.required ? `, not done because: ${t.note}` : `, note: ${t.note}`) : t.required && !t.isExtra ? ", no reason given" : "";
+      const claim = `${t.claimedByName ? `, claimed by ${t.claimedByName}` : ""}${optional}${why}`;
       const detail = `${from}${claim}`.replace(/^, /, "");
       const label = t.category
         ? `${t.title} (${CATEGORY_LABEL[t.category]}${from}${claim})`

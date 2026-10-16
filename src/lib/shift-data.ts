@@ -370,6 +370,8 @@ type TemplateForGen = {
   day_of_month: number | null;
   sort_order: number;
   skippable: boolean;
+  required: boolean;
+  carry_over: boolean;
   /** First day this task appears (a new checklist switches over on a date). */
   active_from: string | null;
 };
@@ -403,6 +405,8 @@ type InstanceRow = {
   note: string | null;
   is_extra: boolean;
   skippable: boolean;
+  required: boolean;
+  carry_over: boolean;
   actioned_at: string | null;
   actioned_by: { first_name: string; surname: string } | null;
   claimed_by: { id: string; first_name: string; surname: string } | null;
@@ -412,7 +416,7 @@ type InstanceRow = {
 };
 
 const INSTANCE_SELECT =
-  "id, template_id, date, part, category, title, status, note, is_extra, skippable, actioned_at, vet_appointment_id, vet_task_kind, health_concern_id, " +
+  "id, template_id, date, part, category, title, status, note, is_extra, skippable, required, carry_over, actioned_at, vet_appointment_id, vet_task_kind, health_concern_id, " +
   "actioned_by:people!task_instance_actioned_by_fkey(first_name, surname), " +
   "claimed_by:people!task_instance_claimed_by_fkey(id, first_name, surname)";
 
@@ -428,6 +432,7 @@ function toRow(r: InstanceRow, carriedOver: boolean): ShiftTaskRow {
     note: r.note,
     isExtra: r.is_extra,
     skippable: r.skippable,
+    required: r.required,
     claimedById: r.claimed_by?.id ?? null,
     claimedByName: r.claimed_by ? `${r.claimed_by.first_name} ${r.claimed_by.surname}`.trim() : null,
     actionedByName: r.actioned_by ? `${r.actioned_by.first_name} ${r.actioned_by.surname}`.trim() : null,
@@ -531,6 +536,8 @@ async function ensureHealthWatchTasks(date: string, today: InstanceRow[]): Promi
       title: healthWatchTitle(c.dog_name, c.body),
       sort_order: 0,
       skippable: false,
+      required: false,
+      carry_over: false,
       health_concern_id: c.id,
     });
     if (insErr && insErr.code !== "23505") console.error("ensureHealthWatchTasks: insert failed", insErr);
@@ -561,12 +568,12 @@ function carriedFilter(date: string, part: Part): string {
   return groups.join(",");
 }
 
-/** "Do this first!" and "End of Shift" tasks (lights, gates, sprinklers,
- *  bringing dogs in) belong to their own shift only: the next shift has its
- *  own copies, so they are never carried over. */
-const SHIFT_ONLY_CATEGORIES: ReadonlySet<TaskCategory> = new Set<TaskCategory>(["do_first", "end_of_day"]);
+/** Whether a task left undone goes on to the next shift. Every required
+ *  task does, except the ones that only matter at their own time of day
+ *  (lights, gates, sprinklers, dogs in and out, bins, handover notes): the
+ *  flag is copied from the template when the day's tasks are made. */
 function carriesOver(r: InstanceRow): boolean {
-  return !r.category || !SHIFT_ONLY_CATEGORIES.has(r.category);
+  return r.carry_over;
 }
 
 /** The checklist for one session (morning or afternoon) of today, grouped
@@ -603,7 +610,7 @@ export async function getShiftChecklist(part: Part): Promise<{
     getGoLiveDate(),
     supabase
       .from("task_template")
-      .select("id, title, part, category, repeat, weekdays, day_of_month, sort_order, skippable, active_from")
+      .select("id, title, part, category, repeat, weekdays, day_of_month, sort_order, skippable, required, carry_over, active_from")
       .eq("active", true),
     readToday(),
     // From before this session: still open, or ticked during this session
@@ -644,6 +651,8 @@ export async function getShiftChecklist(part: Part): Promise<{
         title: t.title,
         sort_order: t.sort_order,
         skippable: t.skippable,
+        required: t.required,
+        carry_over: t.carry_over,
       })),
     );
     if (insErr && insErr.code !== "23505") console.error("shift checklist materialise failed", insErr);
@@ -675,7 +684,7 @@ export async function getShiftChecklist(part: Part): Promise<{
   const templateById = new Map(((templatesRes.data ?? []) as TemplateForGen[]).map((t) => [t.id, t]));
   const heal = (r: InstanceRow): InstanceRow => {
     const t = r.template_id ? templateById.get(r.template_id) : undefined;
-    return t && !r.category && !r.is_extra ? { ...r, category: t.category, skippable: t.skippable } : r;
+    return t && !r.category && !r.is_extra ? { ...r, category: t.category, skippable: t.skippable, required: t.required, carry_over: t.carry_over } : r;
   };
 
   const byCategory = Object.fromEntries(CATEGORY_ORDER.map((c) => [c, [] as ShiftTaskRow[]])) as Record<
@@ -1078,6 +1087,68 @@ export async function getSessionTasks(date: string, part: Part): Promise<Session
     if (!rows.has(r.id) && (!goLive || r.date >= goLive) && isCurrent(r) && carriesOver(r))
       rows.set(r.id, toRow(r, true));
   for (const r of doneCarried) if (!rows.has(r.id)) rows.set(r.id, toRow(r, true));
+  return [...rows.values()];
+}
+
+export type RequiredLeftRow = {
+  id: string;
+  title: string;
+  date: string;
+  part: Part;
+  note: string | null;
+  /** The shift that gave the reason now in `note`, if one did. */
+  reasonShiftId: string | null;
+  /** From an earlier shift (still open), not this session's own list. */
+  carriedOver: boolean;
+};
+
+/** Required tasks still unticked for this session: its own, plus anything
+ *  carried in from earlier that nobody has done (the "Not done last shift"
+ *  box). Each needs a tick or a reason at END SHIFT. */
+export async function getRequiredLeft(date: string, part: Part): Promise<RequiredLeftRow[]> {
+  const supabase = await shiftDb();
+  const cols = "id, title, date, part, note, template_id, reason_shift_id";
+  const [goLive, templates, own, older] = await Promise.all([
+    getGoLiveDate(),
+    supabase.from("task_template").select("id").eq("active", true),
+    supabase
+      .from("task_instance")
+      .select(cols)
+      .eq("date", date)
+      .eq("part", part)
+      .eq("status", "open")
+      .eq("required", true)
+      .eq("is_extra", false)
+      .order("sort_order"),
+    supabase
+      .from("task_instance")
+      .select(cols)
+      .eq("status", "open")
+      .eq("required", true)
+      .eq("carry_over", true)
+      .or(part === "afternoon" ? `date.lt.${date},and(date.eq.${date},part.eq.morning)` : `date.lt.${date}`)
+      .order("date")
+      .order("sort_order"),
+  ]);
+  if (own.error) console.error("getRequiredLeft: own read failed", own.error);
+  if (older.error) console.error("getRequiredLeft: carried read failed", older.error);
+
+  type Raw = { id: string; title: string; date: string; part: Part; note: string | null; template_id: string | null; reason_shift_id: string | null };
+  const current = new Set(((templates.data ?? []) as Array<{ id: string }>).map((t) => t.id));
+  const map = (carriedOver: boolean) => (r: Raw): RequiredLeftRow => ({
+    id: r.id,
+    title: r.title,
+    date: r.date,
+    part: r.part,
+    note: r.note,
+    reasonShiftId: r.reason_shift_id,
+    carriedOver,
+  });
+  const rows = new Map<string, RequiredLeftRow>();
+  for (const r of (older.data ?? []) as unknown as Raw[]) {
+    if ((!goLive || r.date >= goLive) && (!r.template_id || current.has(r.template_id))) rows.set(r.id, map(true)(r));
+  }
+  for (const r of (own.data ?? []) as unknown as Raw[]) rows.set(r.id, map(false)(r));
   return [...rows.values()];
 }
 
