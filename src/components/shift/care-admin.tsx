@@ -65,11 +65,14 @@ const dayLabel = (d: string) =>
 /** One day only (start and end on the same date). */
 const isOneDay = (m: Medication) => m.endDate !== null && m.endDate === m.startDate;
 
-/** The dates, in plain words: "Sun 18 Oct only", "Mon 19 Oct to Fri 23 Oct", "From Thu 15 Oct, ongoing". */
+/** The dates, in plain words: "Sun 18 Oct only", "Mon 19 Oct to Fri 23 Oct",
+ *  "Ongoing". A start date is only shown while it is still to come ("Starts
+ *  Mon 19 Oct, ongoing"): once it has begun, the date says nothing useful
+ *  (for medications already running it is just when the app started). */
 function medDates(m: Medication): string {
   if (isOneDay(m)) return `${dayLabel(m.startDate)} only`;
   if (m.endDate) return `${dayLabel(m.startDate)} to ${dayLabel(m.endDate)}`;
-  return `From ${dayLabel(m.startDate)}, ongoing`;
+  return m.startDate > shelterToday() ? `Starts ${dayLabel(m.startDate)}, ongoing` : "Ongoing";
 }
 
 // ---------------------------------------------------------------------------
