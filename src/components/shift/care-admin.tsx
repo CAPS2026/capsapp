@@ -3,7 +3,7 @@
 import { useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { hhmm, parseYmd, shelterToday } from "@/lib/shift";
+import { hhmm, parseYmd, shelterToday, shiftDay } from "@/lib/shift";
 import {
   deleteVetAppointment,
   saveMedication,
@@ -17,6 +17,7 @@ import type { Medication, VetAppointment } from "@/lib/care-data";
 const FIELD = "h-11 w-full rounded-[var(--radius)] border border-line-cool bg-white px-3 text-base font-normal";
 const AREA = "w-full rounded-[var(--radius)] border border-line-cool bg-white px-3 py-2 text-base font-normal";
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const FULL_DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 // Julie's colours for these two admin pages: Edit bright purple, Stop and
 // Delete bright green, both filled with white bold writing; the Add button
@@ -83,10 +84,24 @@ function medWhen(m: Medication): string {
       : m.frequency === "every_second_day"
         ? "every second day"
         : m.frequency === "weekly"
-        ? m.weekdays.map((d) => DAYS[d]).join(", ")
+        ? `every ${m.weekdays.map((d) => FULL_DAYS[d]).join(", ").replace(/, ([^,]*)$/, " and $1")}`
         : `monthly, the ${m.dayOfMonth}${[1, 21, 31].includes(m.dayOfMonth ?? 0) ? "st" : [2, 22].includes(m.dayOfMonth ?? 0) ? "nd" : [3, 23].includes(m.dayOfMonth ?? 0) ? "rd" : "th"}`;
   // A one-day row is just that day, so it never says "every day".
   return isOneDay(m) ? shift : `${shift}, ${often}`;
+}
+
+/** For an every-second-day medication: the next day a dose is due, today
+ *  included, or null if the course has ended. Counted from the start date,
+ *  which is a dose day. */
+function nextDoseDay(m: Medication, today: string): string | null {
+  for (let i = 0; i < 3; i++) {
+    const d = shiftDay(today, i);
+    if (m.endDate && d > m.endDate) return null;
+    if (d < m.startDate) continue;
+    const days = Math.round((parseYmd(d).getTime() - parseYmd(m.startDate).getTime()) / 86400000);
+    if (days % 2 === 0) return d;
+  }
+  return null;
 }
 
 /** Current medications, one card per dog, with Edit and Stop. Courses whose
@@ -116,6 +131,15 @@ export function MedicationList({ meds }: { meds: Medication[] }) {
                 {m.howGiven && <div className="text-ink-muted">{m.howGiven}</div>}
                 <div>{medWhen(m)}</div>
                 <div className="text-ink-muted">{medDates(m)}</div>
+                {m.frequency === "every_second_day" &&
+                  !isFinished &&
+                  (() => {
+                    const next = nextDoseDay(m, today);
+                    if (!next) return null;
+                    return (
+                      <div className="font-bold">{next === today ? `Due today, ${dayLabel(next)}` : `Next dose: ${dayLabel(next)}`}</div>
+                    );
+                  })()}
                 {m.notes && <div className="text-ink-muted">{m.notes}</div>}
                 {m.finishFlaggedAt && (
                   <div className="mt-1 rounded-md bg-warm-tint px-2.5 py-1.5 font-bold text-warm-ink">
