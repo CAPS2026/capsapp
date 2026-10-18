@@ -3,7 +3,7 @@
 import { useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { hhmm, parseYmd } from "@/lib/shift";
+import { hhmm, parseYmd, shelterToday } from "@/lib/shift";
 import {
   deleteVetAppointment,
   saveMedication,
@@ -57,7 +57,19 @@ function DogNames({ names }: { names: string[] }) {
   );
 }
 
-const dayLabel = (d: string) => parseYmd(d).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" });
+/** "Sun 18 Oct". */
+const dayLabel = (d: string) =>
+  parseYmd(d).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" }).replace(",", "");
+
+/** One day only (start and end on the same date). */
+const isOneDay = (m: Medication) => m.endDate !== null && m.endDate === m.startDate;
+
+/** The dates, in plain words: "Sun 18 Oct only", "Mon 19 Oct to Fri 23 Oct", "From Thu 15 Oct, ongoing". */
+function medDates(m: Medication): string {
+  if (isOneDay(m)) return `${dayLabel(m.startDate)} only`;
+  if (m.endDate) return `${dayLabel(m.startDate)} to ${dayLabel(m.endDate)}`;
+  return `From ${dayLabel(m.startDate)}, ongoing`;
+}
 
 // ---------------------------------------------------------------------------
 // Medications
@@ -73,52 +85,52 @@ function medWhen(m: Medication): string {
         : m.frequency === "weekly"
         ? m.weekdays.map((d) => DAYS[d]).join(", ")
         : `monthly, the ${m.dayOfMonth}${[1, 21, 31].includes(m.dayOfMonth ?? 0) ? "st" : [2, 22].includes(m.dayOfMonth ?? 0) ? "nd" : [3, 23].includes(m.dayOfMonth ?? 0) ? "rd" : "th"}`;
-  return `${shift}, ${often}`;
+  // A one-day row is just that day, so it never says "every day".
+  return isOneDay(m) ? shift : `${shift}, ${often}`;
 }
 
-/** Every current medication, one card per dog, with Edit and Stop. */
+/** Current medications, one card per dog, with Edit and Stop. Courses whose
+ *  end date has passed are tucked into a "Finished courses" section below,
+ *  so the list only shows what is still being given. */
 export function MedicationList({ meds }: { meds: Medication[] }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [confirm, setConfirm] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const dogs = [...new Set(meds.map((m) => m.dogName))];
+  const today = shelterToday();
+  const current = meds.filter((m) => !m.endDate || m.endDate >= today);
+  const finished = meds.filter((m) => m.endDate && m.endDate < today);
 
-  if (meds.length === 0) return <p className="m-0 text-sm text-ink-muted">No dogs are on medication.</p>;
-  return (
-    <div className="flex flex-col gap-2.5">
-      {error && <p className="m-0 text-sm font-semibold text-danger">{error}</p>}
-      {dogs.map((dog) => (
-        <div key={dog} className="overflow-hidden rounded-[var(--radius)] border border-line bg-card" style={{ borderLeft: `6px solid ${PINK}` }}>
-          <h3 className="m-0 px-3.5 py-2.5 text-[17px] font-extrabold" style={{ background: PINK_TINT, color: PINK_INK }}>
-            {dog}
-          </h3>
-          {meds
-            .filter((m) => m.dogName === dog)
-            .map((m) => (
-              <div key={m.id} className="flex flex-wrap items-start justify-between gap-2 border-t border-line px-3.5 py-2.5">
-                <div className="min-w-0 text-sm">
-                  <div className="font-extrabold">{m.medicine}</div>
-                  {m.howGiven && <div className="text-ink-muted">{m.howGiven}</div>}
-                  <div>{medWhen(m)}</div>
-                  <div className="text-ink-muted">
-                    From {dayLabel(m.startDate)}
-                    {m.endDate ? ` until ${dayLabel(m.endDate)}` : ", ongoing"}
+  const group = (list: Medication[], isFinished: boolean) =>
+    [...new Set(list.map((m) => m.dogName))].map((dog) => (
+      <div key={dog} className="overflow-hidden rounded-[var(--radius)] border border-line bg-card" style={{ borderLeft: `6px solid ${PINK}` }}>
+        <h3 className="m-0 px-3.5 py-2.5 text-[17px] font-extrabold" style={{ background: PINK_TINT, color: PINK_INK }}>
+          {dog}
+        </h3>
+        {list
+          .filter((m) => m.dogName === dog)
+          .map((m) => (
+            <div key={m.id} className="flex flex-wrap items-start justify-between gap-2 border-t border-line px-3.5 py-2.5">
+              <div className="min-w-0 text-sm">
+                <div className="font-extrabold">{m.medicine}</div>
+                {m.howGiven && <div className="text-ink-muted">{m.howGiven}</div>}
+                <div>{medWhen(m)}</div>
+                <div className="text-ink-muted">{medDates(m)}</div>
+                {m.notes && <div className="text-ink-muted">{m.notes}</div>}
+                {m.finishFlaggedAt && (
+                  <div className="mt-1 rounded-md bg-warm-tint px-2.5 py-1.5 font-bold text-warm-ink">
+                    Course finished? {m.finishFlaggedBy ?? "A caretaker"} told Shayna on{" "}
+                    {new Date(m.finishFlaggedAt).toLocaleDateString("en-AU", { timeZone: "Australia/Brisbane", day: "numeric", month: "short" })}
+                    {m.finishNote ? `: ${m.finishNote}` : ""}. Press Stop if it is.
                   </div>
-                  {m.notes && <div className="text-ink-muted">{m.notes}</div>}
-                  {m.finishFlaggedAt && (
-                    <div className="mt-1 rounded-md bg-warm-tint px-2.5 py-1.5 font-bold text-warm-ink">
-                      Course finished? {m.finishFlaggedBy ?? "A caretaker"} told Shayna on{" "}
-                      {new Date(m.finishFlaggedAt).toLocaleDateString("en-AU", { timeZone: "Australia/Brisbane", day: "numeric", month: "short" })}
-                      {m.finishNote ? `: ${m.finishNote}` : ""}. Press Stop if it is.
-                    </div>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <Link href={`/shift/medications?edit=${m.id}`} className={EDIT_BTN}>
-                    Edit
-                  </Link>
-                  {confirm === m.id ? (
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Link href={`/shift/medications?edit=${m.id}`} className={EDIT_BTN}>
+                  Edit
+                </Link>
+                {!isFinished &&
+                  (confirm === m.id ? (
                     <button
                       type="button"
                       disabled={isPending}
@@ -140,12 +152,24 @@ export function MedicationList({ meds }: { meds: Medication[] }) {
                     <button type="button" onClick={() => setConfirm(m.id)} className={STOP_BTN}>
                       Stop
                     </button>
-                  )}
-                </div>
+                  ))}
               </div>
-            ))}
-        </div>
-      ))}
+            </div>
+          ))}
+      </div>
+    ));
+
+  if (meds.length === 0) return <p className="m-0 text-sm text-ink-muted">No dogs are on medication.</p>;
+  return (
+    <div className="flex flex-col gap-2.5">
+      {error && <p className="m-0 text-sm font-semibold text-danger">{error}</p>}
+      {current.length === 0 ? <p className="m-0 text-sm text-ink-muted">No medication is being given right now.</p> : group(current, false)}
+      {finished.length > 0 && (
+        <details className="mt-2">
+          <summary className="cursor-pointer text-sm font-bold text-ink-muted">Finished courses ({finished.length})</summary>
+          <div className="mt-2.5 flex flex-col gap-2.5">{group(finished, true)}</div>
+        </details>
+      )}
     </div>
   );
 }
