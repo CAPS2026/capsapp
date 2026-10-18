@@ -2,9 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { MEDS_STYLE, clockTime, hhmm } from "@/lib/shift";
+import { MEDS_STYLE, clockTime, hhmm, parseYmd, shelterToday } from "@/lib/shift";
 import { doseNotGiven, flagCourseFinished, giveDose, undoDose } from "@/lib/actions/shift";
-import type { DoseReason, DueDose, VetAppointment } from "@/lib/care-data";
+import type { DoseReason, DueDose, Medication, VetAppointment } from "@/lib/care-data";
 
 const REASONS: { key: DoseReason; label: string }[] = [
   { key: "refused", label: "Refused" },
@@ -12,6 +12,23 @@ const REASONS: { key: DoseReason; label: string }[] = [
   { key: "away", label: "Dog is away (vet, foster)" },
   { key: "other", label: "Other" },
 ];
+
+/** Where a course ends, in plain words, so staff can see it coming:
+ *  "Last dose today, afternoon", "Last dose Fri 23 Oct, afternoon" (a daily
+ *  course), or "Course ends Fri 23 Oct" (every second day, weekly, monthly).
+ *  Nothing for a course with no end date or a single day. */
+function courseEnd(m: Medication): string | null {
+  if (!m.endDate || m.endDate === m.startDate) return null;
+  if (m.frequency !== "daily") {
+    return `Course ends ${parseYmd(m.endDate).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" }).replace(",", "")}`;
+  }
+  const part = m.parts === "both" ? "afternoon" : m.parts;
+  const day =
+    m.endDate === shelterToday()
+      ? "today"
+      : parseYmd(m.endDate).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" }).replace(",", "");
+  return `Last dose ${day}, ${part}`;
+}
 
 /** "MEDICATION ALERT: check who gets fed" at the top of the checklist:
  *  today's doses for this shift and anything from the vet that affects
@@ -34,6 +51,7 @@ export function MedicationAlert({ doses, vet }: { doses: DueDose[]; vet: VetAppo
           <li key={d.medication.id}>
             <b>{d.medication.dogName}:</b> {d.medication.medicine}
             {d.medication.howGiven ? `, ${d.medication.howGiven}` : ""}
+            {courseEnd(d.medication) ? ` (${courseEnd(d.medication)})` : ""}
           </li>
         ))}
       </ul>
@@ -105,6 +123,7 @@ export function MedicationSection({ doses, readOnly = false }: { doses: DueDose[
                 {d.medication.medicine}
                 {d.medication.howGiven ? `, ${d.medication.howGiven}` : ""}
               </div>
+              {courseEnd(d.medication) && <div className="text-xs font-bold text-foreground">{courseEnd(d.medication)}</div>}
               {d.medication.notes && <div className="text-xs text-ink-muted">{d.medication.notes}</div>}
               {d.medication.finishFlaggedAt ? (
                 <div className="mt-[3px] text-[11px] font-bold" style={{ color: MEDS_STYLE.ink }}>
