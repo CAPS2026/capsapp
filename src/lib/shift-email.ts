@@ -185,8 +185,12 @@ function doneLabel(t: SessionTasksRow, date: string, endsAtMs: number, graceMin:
     new Intl.DateTimeFormat("en-CA", { timeZone: SHELTER_TZ }).format(new Date(t.actionedAt)) === date;
   const when = sameDay ? clockTime(t.actionedAt) : whenLabel(t.actionedAt);
   if (t.carriedOver) {
-    const origin = t.date === date ? `${t.part} task` : `${dayShort(t.date)} ${t.part} task`;
-    return `${t.title} (${origin}, ticked at ${when})${note}`;
+    // A leftover from an earlier shift: the note on it is that shift's reason
+    // for not doing it, so say so ("Not done Fri morning: ..."), not as if it
+    // were a reason for ticking it.
+    const origin = t.date === date ? `this ${t.part}` : `${dayShort(t.date)} ${t.part}`;
+    if (t.note) return `${t.title} (Not done ${origin}: ${t.note}. Ticked ${when})`;
+    return `${t.title} (${origin} task, ticked at ${when})`;
   }
   if (new Date(t.actionedAt).getTime() > endsAtMs + graceMin * 60000) {
     return `${t.title} (ticked at ${when}, after the shift)${note}`;
@@ -250,7 +254,12 @@ function buildBlocks(
   // earlier shift, and who (if anyone) had claimed them.
   const outstanding: string[] = [];
   for (const t of tasks) {
-    if (t.status === "done" && t.actionedByName) {
+    if (t.missed && t.status === "not_required") {
+      // Closed as "can't be done now": listed with the tasks not completed,
+      // never as done.
+      const origin = t.date === date ? `this ${t.part}` : `${dayShort(t.date)} ${t.part}`;
+      outstanding.push(`${t.title} (MISSED, from ${origin}, can't be done now${t.note ? `: ${t.note}` : ""})`);
+    } else if (t.status === "done" && t.actionedByName) {
       (t.isExtra ? blockFor(t.actionedByName).extraDone : blockFor(t.actionedByName).done).push(
         doneLabel(t, date, endsAtMs, graceMin),
       );

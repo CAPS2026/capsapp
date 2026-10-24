@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { clockTime, firstName, parseYmd, shelterToday, type ShiftTaskRow, type TaskStatus } from "@/lib/shift";
 import {
   claimTask,
+  markTaskMissed,
   markTaskNotRequired,
   reopenTask,
   signOffTask,
@@ -85,6 +86,10 @@ function TaskRow({
   const [hint, setHint] = useState<string | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
   const noteRef = useRef<HTMLInputElement>(null);
+  // "Can't be done now" for a leftover from an earlier shift: its own reason
+  // box (the note box holds the earlier shift's reason, not this one's).
+  const [missedOpen, setMissedOpen] = useState(false);
+  const [missedReason, setMissedReason] = useState("");
 
   function saveNote() {
     const next = note.trim();
@@ -134,7 +139,8 @@ function TaskRow({
         )}
         {notReq && (
           <div className="mt-[3px] text-[10.5px] font-semibold text-ink-muted">
-            not needed{task.note ? `, ${task.note}` : ""}
+            {task.missed ? "can't be done now" : "not needed"}
+            {task.note ? `, ${task.note}` : ""}
           </div>
         )}
         {!notReq && task.note && !noteOpen && (
@@ -211,7 +217,49 @@ function TaskRow({
                 Not needed
               </button>
             )}
+            {task.carriedOver && !missedOpen && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setMissedOpen(true)}
+                className="text-[10.5px] font-bold text-warm-ink disabled:opacity-50"
+              >
+                Can&rsquo;t be done now
+              </button>
+            )}
             {hint && <span className="text-[10.5px] font-semibold text-warm-ink">{hint}</span>}
+          </div>
+        )}
+
+        {!readOnly && open && task.carriedOver && missedOpen && (
+          <div className="mt-1.5 flex max-w-72 flex-col gap-1.5">
+            <input
+              value={missedReason}
+              disabled={busy}
+              autoFocus
+              onChange={(e) => setMissedReason(e.target.value)}
+              placeholder="Why can't it be done now? (required)"
+              className="h-8 w-full rounded-[var(--radius)] border border-line-cool bg-white px-2 text-sm"
+            />
+            <div className="flex gap-3">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  if (!missedReason.trim()) {
+                    setHint("Say why it can't be done now");
+                    return;
+                  }
+                  run(() => markTaskMissed(task.id, missedReason));
+                }}
+                className="rounded-md border border-warm-ink px-[7px] py-0.5 text-[10.5px] font-extrabold text-warm-ink disabled:opacity-50"
+              >
+                Close it as missed
+              </button>
+              <button type="button" onClick={() => setMissedOpen(false)} className="text-[10.5px] font-bold text-ink-muted">
+                Cancel
+              </button>
+            </div>
           </div>
         )}
       </div>

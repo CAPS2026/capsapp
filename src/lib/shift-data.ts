@@ -407,6 +407,7 @@ type InstanceRow = {
   skippable: boolean;
   required: boolean;
   carry_over: boolean;
+  missed: boolean;
   actioned_at: string | null;
   actioned_by: { first_name: string; surname: string } | null;
   claimed_by: { id: string; first_name: string; surname: string } | null;
@@ -416,7 +417,7 @@ type InstanceRow = {
 };
 
 const INSTANCE_SELECT =
-  "id, template_id, date, part, category, title, status, note, is_extra, skippable, required, carry_over, actioned_at, vet_appointment_id, vet_task_kind, health_concern_id, " +
+  "id, template_id, date, part, category, title, status, note, is_extra, skippable, required, carry_over, missed, actioned_at, vet_appointment_id, vet_task_kind, health_concern_id, " +
   "actioned_by:people!task_instance_actioned_by_fkey(first_name, surname), " +
   "claimed_by:people!task_instance_claimed_by_fkey(id, first_name, surname)";
 
@@ -433,6 +434,7 @@ function toRow(r: InstanceRow, carriedOver: boolean): ShiftTaskRow {
     isExtra: r.is_extra,
     skippable: r.skippable,
     required: r.required,
+    missed: r.missed,
     claimedById: r.claimed_by?.id ?? null,
     claimedByName: r.claimed_by ? `${r.claimed_by.first_name} ${r.claimed_by.surname}`.trim() : null,
     actionedByName: r.actioned_by ? `${r.actioned_by.first_name} ${r.actioned_by.surname}`.trim() : null,

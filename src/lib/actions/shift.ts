@@ -514,6 +514,40 @@ export async function markTaskNotRequired(instanceId: string, note: string): Pro
   return {};
 }
 
+/** "Can't be done now" on a task left by an earlier shift: some leftovers can
+ *  never be done late ("Put cookers on overnight" for last night). It closes
+ *  the task with a reason, as MISSED, not done: the shift email lists it under
+ *  tasks not completed, and the next shift no longer sees it. Only for tasks
+ *  from before this shift, never for your own. */
+export async function markTaskMissed(instanceId: string, reason: string): Promise<Result> {
+  const me = await requireOnShift();
+  if (!me) return { error: NO_OPEN_SHIFT };
+  if (me.lateBlocked) return { error: LATE_REASON_REQUIRED };
+  const clean = reason.trim();
+  if (!clean) return { error: "Say why it can't be done now." };
+  const open = await getOpenShift(me.id);
+  if (!open) return { error: "You don't have an open shift." };
+  const supabase = await createClient();
+  const { data: t } = await supabase
+    .from("task_instance")
+    .select("id, date, part, status")
+    .eq("id", instanceId)
+    .maybeSingle();
+  if (!t || t.status !== "open") return { error: "That task is already closed." };
+  const earlier = t.date < open.date || (t.date === open.date && t.part === "morning" && open.part === "afternoon");
+  if (!earlier) return { error: "That is one of this shift's own tasks. Tick it, or give a reason at END SHIFT." };
+  const who = firstName(me.name);
+  const note = clean.endsWith(`(${who})`) ? clean : `${clean} (${who})`;
+  const { error } = await supabase
+    .from("task_instance")
+    .update({ status: "not_required", missed: true, note, actioned_by: me.id, actioned_at: new Date().toISOString() })
+    .eq("id", instanceId)
+    .eq("status", "open");
+  if (error) return { error: error.message };
+  bust();
+  return {};
+}
+
 export async function reopenTask(instanceId: string): Promise<Result> {
   const me = await requireOnShift();
   if (!me) return { error: NO_OPEN_SHIFT };
@@ -521,7 +555,7 @@ export async function reopenTask(instanceId: string): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase
     .from("task_instance")
-    .update({ status: "open", actioned_by: null, actioned_at: null })
+    .update({ status: "open", missed: false, actioned_by: null, actioned_at: null })
     .eq("id", instanceId);
   if (error) return { error: error.message };
   bust();

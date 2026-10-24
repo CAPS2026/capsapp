@@ -168,6 +168,8 @@ export type ShiftTaskRow = {
   skippable: boolean;
   /** Must be done each shift (all but the three optional tasks). */
   required: boolean;
+  /** Closed as "can't be done now" (a leftover that can no longer be done), not done. */
+  missed: boolean;
   claimedById: string | null;
   claimedByName: string | null;
   actionedByName: string | null;
