@@ -72,6 +72,8 @@ export type EmailPreview = {
   meds: { text: string; problem: boolean }[];
   /** This shift's vet appointments. */
   vet: string[];
+  /** Ticks that came faster than the task can be done (see quickTicks). */
+  checks: string[];
   /** False when nobody's configured to receive it (so preview still works). */
   hasRecipients: boolean;
 };
@@ -79,7 +81,7 @@ export type EmailPreview = {
 /** How long the photo links in the end-of-shift email keep working. */
 const SHIFT_EMAIL_PHOTO_DAYS = 14;
 
-type Built = Pick<EmailPreview, "people" | "outstanding" | "handover" | "health" | "volunteers" | "meds" | "vet">;
+type Built = Pick<EmailPreview, "people" | "outstanding" | "handover" | "health" | "volunteers" | "meds" | "vet" | "checks">;
 
 function timeLabel(iso: string) {
   return clockTime(iso);
@@ -198,6 +200,40 @@ function doneLabel(t: SessionTasksRow, date: string, endsAtMs: number, graceMin:
   return `${t.title}${note}`;
 }
 
+/** Tasks that take real time (feeding, cleaning the kennels, the cookers):
+ *  one ticked within this many minutes of the person signing in cannot have
+ *  been done, so the email says so and Shayna knows where to look. Batch
+ *  ticking at the end of a shift is normal and is not flagged. */
+const QUICK_TICK_MINUTES = 10;
+const TAKES_TIME = [
+  /^Complete (morning|afternoon) feed/,
+  /^Scoop poop/,
+  /hosed and disinfected/,
+  /^Wash food bowls/,
+  /^Drains cleaned/,
+  /^Lift astro turf/,
+  /^Replace linen/,
+  /^Shred meat/,
+  /^Clean cookers/,
+];
+
+function quickTicks(tasks: SessionTasksRow[], shifts: SessionShiftRow[], shown: (name: string) => string): string[] {
+  const out: { at: number; text: string }[] = [];
+  for (const t of tasks) {
+    if (t.status !== "done" || t.carriedOver || t.isExtra || !t.actionedAt || !t.actionedByName) continue;
+    if (!TAKES_TIME.some((re) => re.test(t.title))) continue;
+    const starts = shifts.filter((s) => s.personKey === t.actionedByName).map((s) => new Date(s.startedAt).getTime());
+    if (starts.length === 0) continue;
+    const at = new Date(t.actionedAt).getTime();
+    const minutes = (at - Math.min(...starts)) / 60000;
+    if (minutes < 0 || minutes >= QUICK_TICK_MINUTES) continue;
+    const secs = Math.round(minutes * 60);
+    const label = secs < 90 ? `${secs} seconds` : `${Math.round(minutes)} minutes`;
+    out.push({ at, text: `${shown(t.actionedByName)}: "${t.title.split(". ")[0]}" was ticked ${label} after signing in` });
+  }
+  return out.sort((a, b) => a.at - b.at).map((o) => o.text);
+}
+
 function buildBlocks(
   date: string,
   shifts: SessionShiftRow[],
@@ -207,7 +243,7 @@ function buildBlocks(
   radiusM: number,
   graceMin: number,
   endsAtMs: number,
-): Pick<Built, "people" | "outstanding" | "handover" | "health"> {
+): Pick<Built, "people" | "outstanding" | "handover" | "health" | "checks"> {
   const people = new Map<string, PersonBlock>();
   // Ticks carry the plain name from people; a guest's shift shows the name
   // they typed. This sends "Guest" ticks to that guest's block.
@@ -284,7 +320,7 @@ function buildBlocks(
     }
   }
 
-  return { people: [...people.values()], outstanding, handover, health };
+  return { people: [...people.values()], outstanding, handover, health, checks: quickTicks(tasks, shifts, shown) };
 }
 
 function textBody(date: string, part: Part, b: Built, updateNote?: string): string {
@@ -311,6 +347,12 @@ function textBody(date: string, part: Part, b: Built, updateNote?: string): stri
       lines.push(`  ${h.urgent ? "URGENT: " : ""}${h.dogName ? `${h.dogName}: ` : ""}${h.body} (${h.personName}, ${timeLabel(h.createdAt)})`);
       for (const u of h.photoUrls ?? []) lines.push(`    Photo: ${u}`);
     }
+    lines.push("");
+  }
+
+  if (b.checks.length) {
+    lines.push("WORTH CHECKING (ticked faster than the task can be done)");
+    for (const c of b.checks) lines.push(`  - ${c}`);
     lines.push("");
   }
 
@@ -376,6 +418,14 @@ function htmlBody(date: string, part: Part, b: Built, updateNote?: string): stri
       </div>`
     : "";
 
+  const checks = b.checks.length
+    ? `<div style="border:1px solid #F0D69A;background:#FEF3DC;border-radius:10px;padding:14px;margin-bottom:12px;">
+        <p style="margin:0 0 6px;font-weight:800;color:#8A5A00;">Worth checking</p>
+        <p style="margin:0 0 6px;font-size:12px;color:#6B6B68;">Ticked faster than the task can be done.</p>
+        <ul style="margin:0;padding-left:20px;font-size:14px;line-height:1.6;">${b.checks.map((c) => `<li>${esc(c)}</li>`).join("")}</ul>
+      </div>`
+    : "";
+
   const meds = b.meds.length
     ? `<div style="border:1px solid #E9B8CF;background:#FBE9F1;border-radius:10px;padding:14px;margin-bottom:12px;">
         <p style="margin:0 0 6px;font-weight:800;color:#7E1F4A;">Medications</p>
@@ -436,6 +486,7 @@ function htmlBody(date: string, part: Part, b: Built, updateNote?: string): stri
       ${meds}
       ${vet}
       ${health}
+      ${checks}
       ${b.people.map(person).join("")}
       ${h3(`Tasks not completed (${b.outstanding.length})`)}
       ${outstanding}

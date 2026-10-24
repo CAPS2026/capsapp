@@ -137,6 +137,18 @@ function EmailModal({ preview, onClose }: { preview: EmailPreview; onClose: () =
           </div>
         )}
 
+        {preview.checks.length > 0 && (
+          <div className="rounded-[var(--radius)] border border-[#F0D69A] bg-warm-tint p-3 text-xs leading-relaxed">
+            <b className="font-extrabold">Worth checking</b>
+            <p className="m-0 mt-0.5 text-ink-muted">Ticked faster than the task can be done.</p>
+            <ul className="m-0 mt-1 list-disc pl-5">
+              {preview.checks.map((c, i) => (
+                <li key={i}>{c}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {preview.people.map((p) => (
           <PersonEmailBlock key={p.name} block={p} />
         ))}
