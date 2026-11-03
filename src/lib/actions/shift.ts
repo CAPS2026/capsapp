@@ -199,7 +199,17 @@ export async function pickPerson(
     .eq("session_id", session.id)
     .eq("person_id", personId)
     .maybeSingle();
-  const late = assignment ? minutesLate(now, session.starts) : 0;
+  // Signing back in to a session they already worked (signed out, then tapped
+  // their name again) is a return, not a late arrival: the first sign-in of the
+  // session is the one that counts for lateness.
+  const { data: earlier } = await supabase
+    .from("shift_log")
+    .select("guest_name")
+    .eq("person_id", personId)
+    .eq("roster_session_id", session.id)
+    .limit(10);
+  const returning = (earlier ?? []).some((r) => sameGuest(r.guest_name));
+  const late = assignment && !returning ? minutesLate(now, session.starts) : 0;
   const lateMinutes = late > 0 ? late : null;
 
   let distanceM: number | null = null;
