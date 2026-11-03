@@ -135,7 +135,7 @@ function statusLines(s: SessionShiftRow, graceMin: number): string[] {
   }
 
   if (s.reopenedAt) {
-    lines.push(`Shift closed automatically, then reopened at ${timeLabel(s.reopenedAt)} because they were still working`);
+    lines.push(`Shift ended, then reopened at ${timeLabel(s.reopenedAt)} because they were still working`);
   }
 
   if (!s.endedAt) {

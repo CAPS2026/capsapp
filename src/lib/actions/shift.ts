@@ -95,6 +95,8 @@ const LATE_REASON_REQUIRED = "Please give your reason for being late first.";
  *  longer than the auto-close wait, or the shift would never still be
  *  reopenable by the time it had been closed. */
 const REOPEN_MINUTES_AFTER_AUTOCLOSE = 180;
+/** Signing back in this soon after pressing END SHIFT carries on the same shift. */
+const REOPEN_MINUTES_AFTER_MANUAL_END = 30;
 
 function bust() {
   revalidatePath("/shift");
@@ -159,30 +161,40 @@ export async function pickPerson(
   // a second one. A second one would show them hours "late" and would then
   // be closed as zero length. Only within a few hours of the session's end:
   // after that, tapping a name is a genuinely new sign-in.
-  const { data: autoClosed } = await supabase
+  // The same goes for a shift they ended themselves a moment ago (END SHIFT
+  // then straight back in): within REOPEN_MINUTES_AFTER_MANUAL_END it is the
+  // same shift carrying on, not a second row.
+  const { data: lastShift } = await supabase
     .from("shift_log")
-    .select("id, extended_minutes, guest_name")
+    .select("id, extended_minutes, guest_name, auto_closed, signed_out_at")
     .eq("person_id", personId)
     .eq("date", date)
     .eq("part", part)
-    .eq("auto_closed", true)
+    .not("signed_out_at", "is", null)
     .order("signed_in_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   // A different guest on the same tile is a new sign-in, never a reopen.
-  if (autoClosed && sameGuest(autoClosed.guest_name)) {
-    const endAt = sessionInstant(date, session.ends).getTime() + (autoClosed.extended_minutes ?? 0) * 60000;
-    const windowMin = settings.autocloseGraceMinutes + REOPEN_MINUTES_AFTER_AUTOCLOSE;
-    if (now.getTime() <= endAt + windowMin * 60000) {
+  if (lastShift && sameGuest(lastShift.guest_name)) {
+    let canReopen = false;
+    if (lastShift.auto_closed) {
+      const endAt = sessionInstant(date, session.ends).getTime() + (lastShift.extended_minutes ?? 0) * 60000;
+      const windowMin = settings.autocloseGraceMinutes + REOPEN_MINUTES_AFTER_AUTOCLOSE;
+      canReopen = now.getTime() <= endAt + windowMin * 60000;
+    } else if (lastShift.signed_out_at) {
+      canReopen = now.getTime() - new Date(lastShift.signed_out_at).getTime() <= REOPEN_MINUTES_AFTER_MANUAL_END * 60000;
+    }
+    if (canReopen) {
       const { error: reopenErr } = await supabase
         .from("shift_log")
         .update({
           signed_out_at: null,
           auto_closed: false,
+          ended_early_reason: null,
           reopened_at: now.toISOString(),
           last_activity_at: now.toISOString(),
         })
-        .eq("id", autoClosed.id);
+        .eq("id", lastShift.id);
       if (reopenErr) return { error: reopenErr.message };
       await setActiveShiftPerson(personId);
       bust();
