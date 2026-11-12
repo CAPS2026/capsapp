@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentPerson } from "@/lib/auth";
 import { markLeaveNoticesForShift } from "@/lib/leave-data";
 import { cleanPhotoPaths } from "@/lib/shift-photos";
-import { getAllDogNames, getMedication, medDueOn, type DoseReason } from "@/lib/care-data";
+import { getAllDogNames, getMedication, medDueOn, rollsIntoAfternoon, type DoseReason } from "@/lib/care-data";
 import {
   getActiveShiftPerson,
   setActiveShiftPerson,
@@ -856,7 +856,23 @@ async function dueDoseForShift(medicationId: string) {
   const open = await getOpenShift(me.id);
   if (!open) return { error: NO_OPEN_SHIFT } as const;
   const med = await getMedication(medicationId);
-  if (!med || !medDueOn(med, open.date, open.part)) return { error: "That dose isn't due on this shift." } as const;
+  if (!med) return { error: "That dose isn't due on this shift." } as const;
+  if (!medDueOn(med, open.date, open.part)) {
+    // A morning dose nobody recorded this morning, now on the afternoon list.
+    const rolled = open.part === "afternoon" && rollsIntoAfternoon(med, open.date);
+    if (rolled) {
+      const supabase = await createClient();
+      const { data: morning } = await supabase
+        .from("medication_dose")
+        .select("id")
+        .eq("medication_id", medicationId)
+        .eq("date", open.date)
+        .eq("part", "morning")
+        .maybeSingle();
+      if (!morning) return { me, open, med } as const;
+    }
+    return { error: "That dose isn't due on this shift." } as const;
+  }
   return { me, open, med } as const;
 }
 

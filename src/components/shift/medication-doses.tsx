@@ -52,6 +52,7 @@ export function MedicationAlert({ doses, vet }: { doses: DueDose[]; vet: VetAppo
             <b>{d.medication.dogName}:</b> {d.medication.medicine}
             {d.medication.howGiven ? `, ${d.medication.howGiven}` : ""}
             {courseEnd(d.medication) ? ` (${courseEnd(d.medication)})` : ""}
+            {d.fromMorning ? " (NOT DONE THIS MORNING)" : ""}
           </li>
         ))}
       </ul>
@@ -119,6 +120,9 @@ export function MedicationSection({ doses, readOnly = false }: { doses: DueDose[
               <div className={`text-[13.5px] font-extrabold leading-[1.35] ${d.status === "given" ? "text-ink-muted line-through" : "text-foreground"}`}>
                 {d.medication.dogName}
               </div>
+              {d.fromMorning && (
+                <div className="text-xs font-extrabold text-danger">Not done this morning. Please do it now.</div>
+              )}
               <div className="text-xs text-ink-muted">
                 {d.medication.medicine}
                 {d.medication.howGiven ? `, ${d.medication.howGiven}` : ""}
