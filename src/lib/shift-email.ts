@@ -528,7 +528,7 @@ async function buildSession(date: string, part: Part): Promise<Built> {
   // Every dose due this shift, and what happened to it. A dose nobody
   // recorded is called out, not left out.
   const meds = doses.map((d) => {
-    const what = `${d.medication.dogName}, ${d.medication.medicine}`;
+    const what = `${d.medication.dogName}, ${d.medication.medicine}${d.fromMorning ? " (not done this morning)" : ""}`;
     if (d.status === "given") return { text: `${what}: given by ${d.byName ?? "someone"}, ${d.at ? timeLabel(d.at) : ""}`.trim(), problem: false };
     if (d.status === "not_given") {
       const why = d.reason ? DOSE_REASON_LABEL[d.reason] : "no reason";

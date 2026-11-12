@@ -2,7 +2,7 @@
 // the staff app's own reads (never the dog app's data). Server only.
 
 import { shiftDb } from "@/lib/shift-db";
-import { initials, parseYmd, type Part } from "@/lib/shift";
+import { SHELTER_TZ, initials, parseYmd, type Part } from "@/lib/shift";
 
 // ---------------------------------------------------------------------------
 // Medications
@@ -28,10 +28,11 @@ export type Medication = {
   finishFlaggedAt: string | null;
   finishFlaggedBy: string | null;
   finishNote: string | null;
+  createdAt: string;
 };
 
 // One plain string (not joined pieces), so the query's result type stays simple.
-const MED_SELECT = "id, dog_name, medicine, how_given, parts, frequency, weekdays, day_of_month, start_date, end_date, notes, stopped_at, finish_flagged_at, finish_flagged_by, finish_note";
+const MED_SELECT = "id, dog_name, medicine, how_given, parts, frequency, weekdays, day_of_month, start_date, end_date, notes, stopped_at, finish_flagged_at, finish_flagged_by, finish_note, created_at";
 
 type RawMed = {
   id: string;
@@ -49,6 +50,7 @@ type RawMed = {
   finish_flagged_at: string | null;
   finish_flagged_by: string | null;
   finish_note: string | null;
+  created_at: string;
 };
 
 function toMed(r: RawMed): Medication {
@@ -68,6 +70,7 @@ function toMed(r: RawMed): Medication {
     finishFlaggedAt: r.finish_flagged_at,
     finishFlaggedBy: r.finish_flagged_by,
     finishNote: r.finish_note,
+    createdAt: r.created_at,
   };
 }
 
@@ -94,6 +97,17 @@ export function medDueOn(m: Medication, date: string, part: Part): boolean {
     return d.getDate() === Math.min(m.dayOfMonth, last);
   }
   return true;
+}
+
+/** A morning-only dose nobody recorded this morning rolls into the afternoon
+ *  shift as "not done this morning" (Julie, 12 Nov). Only morning-only
+ *  medications: a twice-daily one would end up with two doses in one shift.
+ *  Not for a medication added on the same day it starts (it was loaded after
+ *  the morning shift, so there was nothing to tick). */
+export function rollsIntoAfternoon(m: Medication, date: string): boolean {
+  if (m.parts !== "morning" || !medDueOn(m, date, "morning")) return false;
+  const addedOn = new Intl.DateTimeFormat("en-CA", { timeZone: SHELTER_TZ }).format(new Date(m.createdAt));
+  return addedOn < date;
 }
 
 /** Every medication not stopped (for the admin page), by dog. */
@@ -132,36 +146,49 @@ export type DueDose = {
   byName: string | null;
   byInitials: string | null;
   at: string | null;
+  /** A morning dose nobody recorded this morning, now on the afternoon list. */
+  fromMorning: boolean;
 };
 
-/** Doses due on (date, part), with what has been recorded for each. */
+/** Doses due on (date, part), with what has been recorded for each. On the
+ *  afternoon list, also any morning-only dose nobody recorded this morning
+ *  (a dose marked "not given" in the morning is NOT put back: no double
+ *  doses). A rolled dose is recorded against the afternoon. */
 export async function getDueDoses(date: string, part: Part): Promise<DueDose[]> {
   const supabase = await shiftDb();
   const [{ data: meds, error }, { data: doses }] = await Promise.all([
     supabase.from("medication").select(MED_SELECT).is("stopped_at", null).lte("start_date", date),
     supabase
       .from("medication_dose")
-      .select("medication_id, status, reason, note, actioned_at, person:people!medication_dose_actioned_by_fkey(first_name, surname)")
-      .eq("date", date)
-      .eq("part", part),
+      .select("medication_id, part, status, reason, note, actioned_at, person:people!medication_dose_actioned_by_fkey(first_name, surname)")
+      .eq("date", date),
   ]);
   if (error) console.error("getDueDoses failed", error);
-  const byMed = new Map(
-    ((doses ?? []) as unknown as Array<{
-      medication_id: string;
-      status: "given" | "not_given";
-      reason: DoseReason | null;
-      note: string | null;
-      actioned_at: string;
-      person: { first_name: string; surname: string } | null;
-    }>).map((d) => [d.medication_id, d]),
-  );
-  return ((meds ?? []) as unknown as RawMed[])
-    .map(toMed)
+  type RawDose = {
+    medication_id: string;
+    part: Part;
+    status: "given" | "not_given";
+    reason: DoseReason | null;
+    note: string | null;
+    actioned_at: string;
+    person: { first_name: string; surname: string } | null;
+  };
+  const key = (id: string, p: Part) => `${id}:${p}`;
+  const byMed = new Map(((doses ?? []) as unknown as RawDose[]).map((d) => [key(d.medication_id, d.part), d]));
+  const all = ((meds ?? []) as unknown as RawMed[]).map(toMed);
+  const due: Array<{ m: Medication; fromMorning: boolean }> = all
     .filter((m) => medDueOn(m, date, part))
-    .sort((a, b) => a.dogName.localeCompare(b.dogName))
-    .map((m) => {
-      const d = byMed.get(m.id);
+    .map((m) => ({ m, fromMorning: false }));
+  if (part === "afternoon") {
+    for (const m of all) {
+      // Still open, or already dealt with this afternoon; a morning record (given or not given) closes it.
+      if (rollsIntoAfternoon(m, date) && !byMed.has(key(m.id, "morning"))) due.push({ m, fromMorning: true });
+    }
+  }
+  return due
+    .sort((a, b) => a.m.dogName.localeCompare(b.m.dogName) || Number(a.fromMorning) - Number(b.fromMorning))
+    .map(({ m, fromMorning }) => {
+      const d = byMed.get(key(m.id, part));
       return {
         medication: m,
         status: d?.status ?? null,
@@ -170,6 +197,7 @@ export async function getDueDoses(date: string, part: Part): Promise<DueDose[]> 
         byName: d?.person ? `${d.person.first_name} ${d.person.surname}`.trim() : null,
         byInitials: d?.person ? initials(d.person.first_name, d.person.surname) : null,
         at: d?.actioned_at ?? null,
+        fromMorning,
       };
     });
 }
