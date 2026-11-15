@@ -6,6 +6,7 @@ import {
   endShift,
   extendShift,
   flagHealthConcern,
+  flagStockLow,
   saveEndOfShift,
   type EndOfShiftTask,
 } from "@/lib/actions/shift";
@@ -243,6 +244,79 @@ export function ExtendShiftDialog({ onClose, onSaved }: { onClose: () => void; o
           className="h-11 flex-1 rounded-[var(--radius)] bg-brand text-sm font-bold text-white disabled:opacity-50"
         >
           {isPending ? "Saving…" : "Save"}
+        </button>
+        <button type="button" onClick={onClose} className="h-11 rounded-[var(--radius)] border border-line px-4 text-sm font-bold text-ink-muted">
+          Cancel
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/** "Stocks low": type what is low (dry food or anything else); Shayna is
+ *  emailed straight away. Says so if the email did not go. */
+export function StocksLowDialog({ onClose }: { onClose: () => void }) {
+  const [what, setWhat] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ emailed: boolean } | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function submit() {
+    if (!what.trim()) {
+      setError("Say what is low.");
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const r = await flagStockLow(what);
+      if (r.error) setError(r.error);
+      else setResult({ emailed: r.emailed === true });
+    });
+  }
+
+  if (result) {
+    return (
+      <Modal title="Stocks low recorded">
+        {result.emailed ? (
+          <p className="m-0 text-sm leading-relaxed text-foreground">
+            Shayna has been emailed, and it is in the handover log for the next shift.
+          </p>
+        ) : (
+          <p className="m-0 rounded-md bg-warm-tint px-3 py-2 text-sm font-semibold leading-relaxed text-warm-ink">
+            It is in the handover log, but Shayna was NOT emailed. Please tell her directly.
+          </p>
+        )}
+        <button type="button" onClick={onClose} className="h-11 rounded-[var(--radius)] bg-brand text-sm font-bold text-white">
+          Done
+        </button>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal title="Stocks low">
+      <label className="flex flex-col gap-1 text-xs font-bold text-foreground">
+        What is low? (required)
+        <input
+          autoFocus
+          autoComplete="off"
+          maxLength={200}
+          placeholder="Dry food"
+          value={what}
+          onChange={(e) => setWhat(e.target.value)}
+          className={`${FIELD} h-10`}
+        />
+      </label>
+      <p className="m-0 text-xs text-ink-muted">Shayna is emailed straight away.</p>
+      {error && <p className="m-0 text-sm font-semibold text-danger">{error}</p>}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={submit}
+          className="h-11 flex-1 rounded-[var(--radius)] bg-brand text-sm font-bold text-white disabled:opacity-50"
+        >
+          {isPending ? "Sending…" : "Tell Shayna"}
         </button>
         <button type="button" onClick={onClose} className="h-11 rounded-[var(--radius)] border border-line px-4 text-sm font-bold text-ink-muted">
           Cancel

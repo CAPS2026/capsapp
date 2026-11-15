@@ -21,7 +21,7 @@ import type { VetAppointment } from "@/lib/care-data";
 import { formatLeaveDates } from "@/lib/leave";
 import { EmailPreviewLink } from "@/components/shift/email-preview";
 import { PersonAvatar } from "@/components/shift/person-avatar";
-import { EndEarlyDialog, EndOfShiftDialog, ExtendShiftDialog, HealthConcernDialog } from "@/components/shift/shift-dialogs";
+import { EndEarlyDialog, EndOfShiftDialog, ExtendShiftDialog, HealthConcernDialog, StocksLowDialog } from "@/components/shift/shift-dialogs";
 
 const SITE_LABEL = "Evans Landing";
 
@@ -31,6 +31,7 @@ const HANDOVER_BORDER = "#D9A800";
 const HANDOVER_INK = "#4A3A00";
 const HEALTH_ORANGE = "#F26B1D";
 const SWITCH_OLIVE = "#6B7A1F";
+const STOCKS_YELLOW = "#FFD400";
 const END_RED = "#C8102E";
 
 /** "Xh Ym" (or just "Ym" under an hour). */
@@ -91,6 +92,7 @@ export function ShiftSidebar({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [healthOpen, setHealthOpen] = useState(false);
+  const [stocksOpen, setStocksOpen] = useState(false);
 
   const run = (fn: () => Promise<{ error?: string }>) => {
     setError(null);
@@ -195,6 +197,14 @@ export function ShiftSidebar({
         </button>
         <button
           type="button"
+          onClick={() => setStocksOpen(true)}
+          className={`${btn} py-[13px] text-[19px]`}
+          style={{ background: STOCKS_YELLOW, color: "#2C2C2A" }}
+        >
+          Stocks low
+        </button>
+        <button
+          type="button"
           disabled={isPending}
           onClick={() => run(() => switchPerson().then(() => ({})))}
           className={`${btn} py-[13px] text-[19px]`}
@@ -218,6 +228,7 @@ export function ShiftSidebar({
       </div>
 
       {healthOpen && <HealthConcernDialog onClose={() => setHealthOpen(false)} />}
+      {stocksOpen && <StocksLowDialog onClose={() => setStocksOpen(false)} />}
       {endOfShiftTasks && (
         <EndOfShiftDialog
           tasks={endOfShiftTasks}
