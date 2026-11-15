@@ -264,6 +264,16 @@ export function minutesLate(at: Date, sessionStart: string): number {
 
 /** The Medications section and the Medication alert (and anything to do
  *  with the vet): one colour family, used for nothing else. */
+/** The colours of the caretaker buttons in the left-hand panel of the staff
+ *  app (also used by the view-only preview on the admin page). */
+export const BUTTON_COLOURS = {
+  health: "#F26B1D",
+  stocks: "#FFD400",
+  stocksInk: "#2C2C2A",
+  switchPerson: "#6B7A1F",
+  endShift: "#C8102E",
+};
+
 export const MEDS_STYLE = { accent: "#B0306A", tint: "#FBE9F1", ink: "#7E1F4A" };
 
 /** The shift card's colour: teal for a morning, indigo for an afternoon

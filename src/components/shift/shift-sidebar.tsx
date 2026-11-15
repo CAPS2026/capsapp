@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  BUTTON_COLOURS,
   MEDS_STYLE,
   PART_LABEL,
   PART_STYLE,
@@ -29,10 +30,10 @@ const SITE_LABEL = "Evans Landing";
 const HANDOVER_BG = "#FFE27A";
 const HANDOVER_BORDER = "#D9A800";
 const HANDOVER_INK = "#4A3A00";
-const HEALTH_ORANGE = "#F26B1D";
-const SWITCH_OLIVE = "#6B7A1F";
-const STOCKS_YELLOW = "#FFD400";
-const END_RED = "#C8102E";
+const HEALTH_ORANGE = BUTTON_COLOURS.health;
+const SWITCH_OLIVE = BUTTON_COLOURS.switchPerson;
+const STOCKS_YELLOW = BUTTON_COLOURS.stocks;
+const END_RED = BUTTON_COLOURS.endShift;
 
 /** "Xh Ym" (or just "Ym" under an hour). */
 function formatDuration(totalMinutes: number): string {
@@ -199,7 +200,7 @@ export function ShiftSidebar({
           type="button"
           onClick={() => setStocksOpen(true)}
           className={`${btn} py-[13px] text-[19px]`}
-          style={{ background: STOCKS_YELLOW, color: "#2C2C2A" }}
+          style={{ background: STOCKS_YELLOW, color: BUTTON_COLOURS.stocksInk }}
         >
           Stocks low
         </button>
