@@ -365,7 +365,7 @@ type TemplateForGen = {
   title: string;
   part: Part;
   category: TaskCategory | null;
-  repeat: "daily" | "weekly" | "monthly";
+  repeat: "daily" | "every_second_day" | "weekly" | "monthly";
   weekdays: number[] | null;
   day_of_month: number | null;
   sort_order: number;
@@ -384,6 +384,16 @@ function templateMatchesDate(t: TemplateForGen, ymdDate: string): boolean {
   if (t.active_from && ymdDate < t.active_from) return false;
   const date = parseYmd(ymdDate);
   if (t.repeat === "daily") return true;
+  // Every second day, counted from the day it starts (active_from is a task
+  // day): Tue 17 Nov, Thu 19 Nov, Sat 21 Nov and so on.
+  if (t.repeat === "every_second_day") {
+    if (!t.active_from) return false;
+    const s = parseYmd(t.active_from);
+    const days = Math.round(
+      (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - Date.UTC(s.getFullYear(), s.getMonth(), s.getDate())) / 86400000,
+    );
+    return days % 2 === 0;
+  }
   if (t.repeat === "weekly") return (t.weekdays ?? []).includes(date.getDay());
   if (t.repeat === "monthly" && t.day_of_month) {
     const dom = date.getDate();

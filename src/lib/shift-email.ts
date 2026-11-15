@@ -582,6 +582,32 @@ export async function sendMissedDoseEmail(opts: {
   return result.ok;
 }
 
+/** The immediate email when a caretaker presses "Stocks low": to whoever gets
+ *  health concerns (Shayna). Returns whether it went. */
+export async function sendStockLowEmail(opts: {
+  personName: string;
+  date: string;
+  part: Part;
+  what: string;
+}): Promise<boolean> {
+  const recipients = await getHealthConcernRecipients();
+  if (recipients.length === 0) return false;
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const day = parseYmd(opts.date).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" });
+  const line = `${opts.personName} reports stocks low on the ${PART_LABEL[opts.part].toLowerCase()} shift, ${day}: ${opts.what}`;
+  const result = await sendEmail({
+    to: recipients,
+    subject: `CAPS: stocks low (${opts.what.length > 40 ? `${opts.what.slice(0, 40)}...` : opts.what})`,
+    text: line,
+    html: `<div style="font-family:sans-serif;max-width:520px;">
+      <h2 style="color:#8A6D00;">Stocks low</h2>
+      <p style="font-size:14px;">${esc(line)}</p>
+    </div>`,
+  });
+  if (!result.ok) console.error("sendStockLowEmail: send failed", result.error);
+  return result.ok;
+}
+
 /** Tells Shayna a caretaker thinks a medication course is finished, with a
  *  "Stop this medication" button (a link to a page that changes nothing until
  *  the button on it is pressed). Returns whether it went. */

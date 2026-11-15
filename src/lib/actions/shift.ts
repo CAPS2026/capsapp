@@ -27,6 +27,7 @@ import {
   sendCourseFinishedEmail,
   sendHealthConcernEmail,
   sendMissedDoseEmail,
+  sendStockLowEmail,
   type EmailPreview,
 } from "@/lib/shift-email";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -488,6 +489,40 @@ export async function flagHealthConcern(input: {
     photoPaths,
   }).catch((e) => {
     console.error("flagHealthConcern: email failed", e);
+    return false;
+  });
+  return { emailed };
+}
+
+/** "Stocks low": what is running low (dry food or anything else), emailed to
+ *  Shayna straight away, and a note in the handover log for the next shift.
+ *  Not blocked by the late-reason prompt, like a health concern. `emailed`
+ *  says whether the email actually went. */
+export async function flagStockLow(what: string): Promise<{ error?: string; emailed?: boolean }> {
+  const me = await requireActingPerson();
+  if (!me) return { error: "Pick who you are first." };
+  const clean = what.trim().replace(/\s+/g, " ");
+  if (!clean) return { error: "Say what is low." };
+  if (clean.length > 200) return { error: "Please keep it under 200 characters." };
+  const open = await getOpenShift(me.id);
+  const part = open?.part ?? resolvePart(null);
+  const date = open?.date ?? shelterToday();
+
+  if (open) {
+    const supabase = await createClient();
+    const { error } = await supabase.from("handover_note").insert({
+      person_id: me.id,
+      shift_log_id: open.id,
+      date,
+      part,
+      body: `Stocks low: ${clean}. Shayna has been told.`,
+      is_auto: true,
+    });
+    if (error) return { error: error.message };
+    revalidatePath("/shift/handover");
+  }
+  const emailed = await sendStockLowEmail({ personName: me.name, date, part, what: clean }).catch((e) => {
+    console.error("flagStockLow: email failed", e);
     return false;
   });
   return { emailed };
