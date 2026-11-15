@@ -118,8 +118,7 @@ export default async function AdminViewPage({ searchParams }: { searchParams: Pr
 
       <section className="flex flex-col gap-2">
         <h2 className="m-0 text-base font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
-          Caretaker buttons{" "}
-          <span className="text-sm font-semibold text-ink-muted">(preview, nothing here can be pressed)</span>
+          Caretaker buttons
         </h2>
         <p className="m-0 text-xs font-semibold text-ink-muted">
           Caretakers see these at the bottom of the left-hand panel once they are signed in to a shift.
