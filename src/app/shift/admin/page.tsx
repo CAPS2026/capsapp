@@ -123,16 +123,16 @@ export default async function AdminViewPage({ searchParams }: { searchParams: Pr
         <p className="m-0 text-xs font-semibold text-ink-muted">
           Caretakers see these at the bottom of the left-hand panel once they are signed in to a shift.
         </p>
-        <div className="flex w-[300px] max-w-full flex-col gap-2.5" aria-hidden="true">
+        <div className="flex w-[200px] max-w-full flex-col gap-1.5" aria-hidden="true">
           {[
-            { label: "Flag a health concern", bg: BUTTON_COLOURS.health, ink: "#ffffff", size: "text-[19px] py-[13px]" },
-            { label: "Stocks low", bg: BUTTON_COLOURS.stocks, ink: BUTTON_COLOURS.stocksInk, size: "text-[19px] py-[13px]" },
-            { label: "Switch person", bg: BUTTON_COLOURS.switchPerson, ink: "#ffffff", size: "text-[19px] py-[13px]" },
-            { label: "END SHIFT", bg: BUTTON_COLOURS.endShift, ink: "#ffffff", size: "text-[23px] py-[15px] tracking-[0.06em]" },
+            { label: "Flag a health concern", bg: BUTTON_COLOURS.health, ink: "#ffffff", size: "text-[13px] py-2" },
+            { label: "Stocks low", bg: BUTTON_COLOURS.stocks, ink: BUTTON_COLOURS.stocksInk, size: "text-[13px] py-2" },
+            { label: "Switch person", bg: BUTTON_COLOURS.switchPerson, ink: "#ffffff", size: "text-[13px] py-2" },
+            { label: "END SHIFT", bg: BUTTON_COLOURS.endShift, ink: "#ffffff", size: "text-[14px] py-2 tracking-[0.06em]" },
           ].map((b) => (
             <div
               key={b.label}
-              className={`pointer-events-none flex w-full select-none items-center justify-center rounded-[var(--radius)] px-2.5 font-extrabold ${b.size}`}
+              className={`pointer-events-none flex w-full select-none items-center justify-center rounded-[var(--radius)] px-2 font-extrabold ${b.size}`}
               style={{ background: b.bg, color: b.ink }}
             >
               {b.label}
