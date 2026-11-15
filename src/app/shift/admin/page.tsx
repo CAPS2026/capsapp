@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentPerson } from "@/lib/auth";
 import { getShiftChecklist, getShiftSettings, getTodayShifts } from "@/lib/shift-data";
-import { PART_LABEL, PARTS, clockTime, parseYmd, partForTime, shelterToday, type Part } from "@/lib/shift";
+import { BUTTON_COLOURS, PART_LABEL, PARTS, clockTime, parseYmd, partForTime, shelterToday, type Part } from "@/lib/shift";
 import { ShiftChecklist } from "@/components/shift/shift-checklist";
 import { getDueDoses, getVetAppointments } from "@/lib/care-data";
 
@@ -114,6 +114,32 @@ export default async function AdminViewPage({ searchParams }: { searchParams: Pr
           vet={vet.filter((a) => a.part === part)}
           readOnly
         />
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="m-0 text-base font-extrabold" style={{ fontFamily: "var(--font-display)" }}>
+          Caretaker buttons{" "}
+          <span className="text-sm font-semibold text-ink-muted">(preview, nothing here can be pressed)</span>
+        </h2>
+        <p className="m-0 text-xs font-semibold text-ink-muted">
+          Caretakers see these at the bottom of the left-hand panel once they are signed in to a shift.
+        </p>
+        <div className="flex w-[300px] max-w-full flex-col gap-2.5" aria-hidden="true">
+          {[
+            { label: "Flag a health concern", bg: BUTTON_COLOURS.health, ink: "#ffffff", size: "text-[19px] py-[13px]" },
+            { label: "Stocks low", bg: BUTTON_COLOURS.stocks, ink: BUTTON_COLOURS.stocksInk, size: "text-[19px] py-[13px]" },
+            { label: "Switch person", bg: BUTTON_COLOURS.switchPerson, ink: "#ffffff", size: "text-[19px] py-[13px]" },
+            { label: "END SHIFT", bg: BUTTON_COLOURS.endShift, ink: "#ffffff", size: "text-[23px] py-[15px] tracking-[0.06em]" },
+          ].map((b) => (
+            <div
+              key={b.label}
+              className={`pointer-events-none flex w-full select-none items-center justify-center rounded-[var(--radius)] px-2.5 font-extrabold ${b.size}`}
+              style={{ background: b.bg, color: b.ink }}
+            >
+              {b.label}
+            </div>
+          ))}
+        </div>
       </section>
     </div>
   );
